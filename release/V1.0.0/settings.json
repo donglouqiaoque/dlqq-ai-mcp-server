@@ -1,10 +1,11 @@
+// 该文件用于配置Donglouqiaoque MCP Server，配置仅供参考。
 {
   "mcpServers": {
     "donglouqiaoque-ai-tools": {
-      "command": "java",
+      "command": "java.exe绝对路径，不要写相对路径！",
       "args": [
         "-jar",
-        "F:\\Code\\Java\\donglouqiaoque-ai-tools\\release\\V1.0.0\\aitools-1.0.0.jar"
+        "jar包绝对路径，不要写相对路径！"
       ],
       "env": {
         "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"
