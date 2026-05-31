@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(java-swing-chinese-font-fix)",
+      "Bash(mvn *)",
+      "Bash(copy *)",
+      "Bash(dir *)",
+      "Bash(rmdir *)"
+    ]
+  },
+  "$version": 4
+}

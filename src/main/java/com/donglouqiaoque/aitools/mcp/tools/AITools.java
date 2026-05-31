@@ -376,6 +376,25 @@ public class AITools {
         return result;
     }
 
+    /**
+     * 解析整数参数（兼容 Long 和 Integer）
+     */
+    private Integer parseInteger(Object value, Integer defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof Integer) {
+            return (Integer) value;
+        }
+        if (value instanceof Long) {
+            return ((Long) value).intValue();
+        }
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        return defaultValue;
+    }
+
     // ==================== GUI对话框工具 ====================
 
     /**
@@ -420,7 +439,8 @@ public class AITools {
                 Boolean showFileSelect = (Boolean) arguments.getOrDefault("show_file_select", false);
                 @SuppressWarnings("unchecked")
                 List<String> extensions = (List<String>) arguments.get("file_extensions");
-                Integer timeout = (Integer) arguments.getOrDefault("timeout", 0);
+                // 兼容 Long 和 Integer 类型的 timeout 参数
+                Integer timeout = parseInteger(arguments.get("timeout"), 0);
 
                 if (title == null || title.trim().isEmpty()) {
                     return errorResult("对话框标题不能为空");
@@ -695,12 +715,12 @@ public class AITools {
             inputSchema,
             arguments -> {
                 String portName = (String) arguments.get("port");
-                Integer baudRate = (Integer) arguments.getOrDefault("baud_rate", 115200);
-                Integer dataBits = (Integer) arguments.getOrDefault("data_bits", 8);
+                Integer baudRate = parseInteger(arguments.get("baud_rate"), 115200);
+                Integer dataBits = parseInteger(arguments.get("data_bits"), 8);
                 Number stopBitsNum = (Number) arguments.getOrDefault("stop_bits", 1.0);
                 double stopBits = stopBitsNum.doubleValue();
                 String parity = (String) arguments.getOrDefault("parity", "NONE");
-                Integer maxLogSize = (Integer) arguments.getOrDefault("max_log_size", 1000);
+                Integer maxLogSize = parseInteger(arguments.get("max_log_size"), 1000);
 
                 if (portName == null || portName.trim().isEmpty()) {
                     return errorResult("串口名称不能为空");
@@ -835,7 +855,7 @@ public class AITools {
             inputSchema,
             arguments -> {
                 String portName = (String) arguments.get("port");
-                Integer timeout = (Integer) arguments.getOrDefault("timeout", 0);
+                Integer timeout = parseInteger(arguments.get("timeout"), 0);
 
                 if (portName == null || portName.trim().isEmpty()) {
                     return errorResult("串口名称不能为空");
@@ -886,7 +906,7 @@ public class AITools {
             inputSchema,
             arguments -> {
                 String portName = (String) arguments.get("port");
-                Integer count = (Integer) arguments.getOrDefault("count", 100);
+                Integer count = parseInteger(arguments.get("count"), 100);
 
                 if (portName == null || portName.trim().isEmpty()) {
                     return errorResult("串口名称不能为空");
@@ -968,7 +988,7 @@ public class AITools {
             arguments -> {
                 String portName = (String) arguments.get("port");
                 String command = (String) arguments.get("command");
-                Integer timeout = (Integer) arguments.getOrDefault("timeout", 5000);
+                Integer timeout = parseInteger(arguments.get("timeout"), 5000);
 
                 if (portName == null || portName.trim().isEmpty()) {
                     return errorResult("串口名称不能为空");

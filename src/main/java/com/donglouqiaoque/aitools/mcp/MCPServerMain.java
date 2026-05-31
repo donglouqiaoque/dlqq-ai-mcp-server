@@ -12,8 +12,21 @@ import java.io.IOException;
 public class MCPServerMain {
 
     public static void main(String[] args) {
+        // 在最早阶段设置UTF-8编码
+        System.setProperty("file.encoding", "UTF-8");
+        System.setProperty("sun.stdout.encoding", "UTF-8");
+        System.setProperty("sun.stderr.encoding", "UTF-8");
+
+        // 重新初始化标准输入输出流的编码
+        try {
+            System.setOut(new java.io.PrintStream(System.out, true, "UTF-8"));
+            System.setErr(new java.io.PrintStream(System.err, true, "UTF-8"));
+        } catch (Exception ignored) {
+        }
+
         System.err.println("MCP Server starting...");
         System.err.println("Working directory: " + System.getProperty("user.dir"));
+        System.err.println("Default charset: " + java.nio.charset.Charset.defaultCharset().name());
         try {
             // 创建传输层（stdio）
             StdioTransport transport = new StdioTransport();

@@ -37,6 +37,111 @@ public class DialogTools {
     }
 
     /**
+     * 检查字体是否可用
+     */
+    private static boolean isFontAvailable(String fontName) {
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        for (String name : ge.getAvailableFontFamilyNames()) {
+            if (name.equalsIgnoreCase(fontName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 获取支持中文的UI字体
+     */
+    private static Font getChineseFont() {
+        // 尝试使用微软雅黑（Windows系统自带）
+        if (isFontAvailable("Microsoft YaHei")) {
+            return new Font("Microsoft YaHei", Font.PLAIN, 12);
+        }
+        // 尝试使用宋体
+        if (isFontAvailable("SimSun")) {
+            return new Font("SimSun", Font.PLAIN, 12);
+        }
+        // 尝试使用Dialog
+        return new Font("Dialog", Font.PLAIN, 12);
+    }
+
+    /**
+     * 获取支持中文的等宽字体
+     */
+    private static Font getMonospacedChineseFont() {
+        // 尝试使用 Consolas（Windows等宽字体）
+        if (isFontAvailable("Consolas")) {
+            return new Font("Consolas", Font.PLAIN, 12);
+        }
+        // 尝试使用 Courier New
+        if (isFontAvailable("Courier New")) {
+            return new Font("Courier New", Font.PLAIN, 12);
+        }
+        // 回退到 Dialog 字体
+        return new Font("Dialog", Font.PLAIN, 12);
+    }
+
+    /**
+     * 设置全局中文字体 - 必须在设置LookAndFeel之前调用
+     */
+    private static void setupChineseFont() {
+        Font uiFont = getChineseFont();
+
+        // 设置所有Swing组件的字体
+        UIManager.put("CheckBox.font", uiFont);
+        UIManager.put("CheckBoxMenuItem.font", uiFont);
+        UIManager.put("ColorChooser.font", uiFont);
+        UIManager.put("ComboBox.font", uiFont);
+        UIManager.put("DesktopIcon.font", uiFont);
+        UIManager.put("EditorPane.font", uiFont);
+        UIManager.put("FormattedTextField.font", uiFont);
+        UIManager.put("InternalFrame.titleFont", uiFont);
+        UIManager.put("Label.font", uiFont);
+        UIManager.put("List.font", uiFont);
+        UIManager.put("Menu.font", uiFont);
+        UIManager.put("MenuBar.font", uiFont);
+        UIManager.put("MenuItem.font", uiFont);
+        UIManager.put("OptionPane.buttonFont", uiFont);
+        UIManager.put("OptionPane.font", uiFont);
+        UIManager.put("OptionPane.messageFont", uiFont);
+        UIManager.put("Panel.font", uiFont);
+        UIManager.put("PasswordField.font", uiFont);
+        UIManager.put("PopupMenu.font", uiFont);
+        UIManager.put("ProgressBar.font", uiFont);
+        UIManager.put("RadioButton.font", uiFont);
+        UIManager.put("RadioButtonMenuItem.font", uiFont);
+        UIManager.put("ScrollPane.font", uiFont);
+        UIManager.put("Slider.font", uiFont);
+        UIManager.put("Spinner.font", uiFont);
+        UIManager.put("TabbedPane.font", uiFont);
+        UIManager.put("Table.font", uiFont);
+        UIManager.put("TableHeader.font", uiFont);
+        UIManager.put("TextArea.font", new Font("Monospaced", Font.PLAIN, 12));
+        UIManager.put("TextField.font", uiFont);
+        UIManager.put("TextPane.font", uiFont);
+        UIManager.put("TitledBorder.font", uiFont);
+        UIManager.put("ToggleButton.font", uiFont);
+        UIManager.put("ToolBar.font", uiFont);
+        UIManager.put("ToolTip.font", uiFont);
+        UIManager.put("Tree.font", uiFont);
+        UIManager.put("Viewport.font", uiFont);
+        UIManager.put("Button.font", uiFont);
+    }
+
+    /**
+     * 为组件及其子组件递归设置字体
+     */
+    private static void setFontRecursively(Component comp, Font font) {
+        if (comp == null) return;
+        comp.setFont(font);
+        if (comp instanceof Container) {
+            for (Component child : ((Container) comp).getComponents()) {
+                setFontRecursively(child, font);
+            }
+        }
+    }
+
+    /**
      * 显示输入对话框（支持文本输入和文件选择）
      *
      * @param title       窗口标题
@@ -54,6 +159,9 @@ public class DialogTools {
 
         SwingUtilities.invokeLater(() -> {
             try {
+                // 先设置全局字体，支持中文显示（必须在setLookAndFeel之前）
+                setupChineseFont();
+
                 // 设置外观为系统默认
                 try {
                     UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -75,11 +183,13 @@ public class DialogTools {
                 messageLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
                 mainPanel.add(messageLabel, BorderLayout.NORTH);
 
-                // 文本输入区域
+                // 文本输入区域 - 使用支持中文的等宽字体
                 JTextArea textArea = new JTextArea(8, 50);
                 textArea.setLineWrap(true);
                 textArea.setWrapStyleWord(true);
-                textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+                // 使用支持中文的等宽字体
+                Font monoFont = getMonospacedChineseFont();
+                textArea.setFont(monoFont);
                 JScrollPane scrollPane = new JScrollPane(textArea);
                 mainPanel.add(scrollPane, BorderLayout.CENTER);
 
@@ -177,6 +287,27 @@ public class DialogTools {
                 // 设置默认按钮
                 dialog.getRootPane().setDefaultButton(okButton);
 
+                // 所有组件添加完成后，递归设置中文字体
+                Font chineseFont = getChineseFont();
+                setFontRecursively(dialog, chineseFont);
+
+                // 添加窗口关闭监听器，防止用户点击X按钮时卡住
+                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent e) {
+                        dialog.dispose();
+                        future.complete(new DialogResult(false, null, null, null));
+                    }
+
+                    @Override
+                    public void windowClosed(java.awt.event.WindowEvent e) {
+                        // 确保future已完成（防止重复完成）
+                        if (!future.isDone()) {
+                            future.complete(new DialogResult(false, null, null, null));
+                        }
+                    }
+                });
+
                 dialog.setVisible(true);
 
             } catch (Exception ex) {
@@ -225,6 +356,9 @@ public class DialogTools {
 
         SwingUtilities.invokeLater(() -> {
             try {
+                // 先设置全局字体，支持中文显示（必须在setLookAndFeel之前）
+                setupChineseFont();
+
                 try {
                     UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
                 } catch (Exception ignored) {
@@ -288,6 +422,9 @@ public class DialogTools {
 
         SwingUtilities.invokeLater(() -> {
             try {
+                // 先设置全局字体，支持中文显示（必须在setLookAndFeel之前）
+                setupChineseFont();
+
                 try {
                     UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
                 } catch (Exception ignored) {
@@ -323,6 +460,9 @@ public class DialogTools {
     public static void showMessageDialog(String title, String message, String type) {
         SwingUtilities.invokeLater(() -> {
             try {
+                // 先设置全局字体，支持中文显示（必须在setLookAndFeel之前）
+                setupChineseFont();
+
                 try {
                     UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
                 } catch (Exception ignored) {

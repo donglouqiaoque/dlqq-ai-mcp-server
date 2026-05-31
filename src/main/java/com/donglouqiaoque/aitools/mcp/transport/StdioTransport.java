@@ -4,6 +4,7 @@ import com.donglouqiaoque.aitools.mcp.protocol.JsonRpcMessage;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayOutputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -25,11 +26,23 @@ public class StdioTransport implements McpTransport {
     private volatile boolean useContentLength = true;  // 是否使用Content-Length协议
 
     public StdioTransport() {
+        // 强制使用UTF-8编码的输入输出流
         this.inputStream = new BufferedInputStream(System.in);
         this.outputStream = new BufferedOutputStream(System.out);
         this.executor = Executors.newFixedThreadPool(2);
         this.running = new AtomicBoolean(false);
         this.messageQueue = new LinkedBlockingQueue<>();
+
+        // 设置系统属性确保UTF-8编码
+        System.setProperty("file.encoding", "UTF-8");
+        System.setProperty("sun.stdout.encoding", "UTF-8");
+        System.setProperty("sun.stderr.encoding", "UTF-8");
+
+        // 设置默认字符集
+        try {
+            java.nio.charset.Charset.defaultCharset();
+        } catch (Exception ignored) {
+        }
     }
     
     private void debug(String msg) {
@@ -88,15 +101,15 @@ public class StdioTransport implements McpTransport {
      * 读取一条完整的消息（根据Content-Length头）
      * 注意：Content-Length是字节长度，不是字符长度
      * 使用同一个InputStream读取头部和正文，避免BufferedReader预读问题
-     * 
+     *
      * 支持两种模式：
      * 1. 标准MCP模式：Content-Length头部 + 空行 + JSON正文
      * 2. 兼容模式：直接发送JSON（某些客户端如Qwen）
      */
     private String readMessage() throws IOException {
         debug("readMessage: 开始读取消息");
-        // 读取第一行
-        StringBuilder lineBuilder = new StringBuilder();
+        // 读取第一行（使用UTF-8编码的字节缓冲区）
+        ByteArrayOutputStream lineBuffer = new ByteArrayOutputStream();
         int b;
 
         while (true) {
@@ -110,11 +123,11 @@ public class StdioTransport implements McpTransport {
                 // 行结束
                 break;
             } else if (b != '\r') {
-                lineBuilder.append((char) b);
+                lineBuffer.write(b);
             }
         }
 
-        String firstLine = lineBuilder.toString().trim();
+        String firstLine = new String(lineBuffer.toByteArray(), StandardCharsets.UTF_8).trim();
         debug("readMessage: 读取到第一行: [" + firstLine + "]");
 
         // 检查是否是直接发送的JSON（以{开头）
@@ -139,7 +152,7 @@ public class StdioTransport implements McpTransport {
 
         // 继续读取头部直到空行
         while (true) {
-            lineBuilder.setLength(0);
+            ByteArrayOutputStream headerBuffer = new ByteArrayOutputStream();
             while (true) {
                 b = inputStream.read();
                 if (b == -1) {
@@ -147,9 +160,9 @@ public class StdioTransport implements McpTransport {
                     return null;
                 }
                 if (b == '\n') break;
-                if (b != '\r') lineBuilder.append((char) b);
+                if (b != '\r') headerBuffer.write(b);
             }
-            String line = lineBuilder.toString().trim();
+            String line = new String(headerBuffer.toByteArray(), StandardCharsets.UTF_8).trim();
             debug("readMessage: 读取到头部行: [" + line + "]");
             if (line.isEmpty()) {
                 debug("readMessage: 遇到空行，头部结束");
