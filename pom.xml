@@ -7,7 +7,7 @@
 
     <groupId>com.donglouqiaoque</groupId>
     <artifactId>aitools</artifactId>
-    <version>1.0.1</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>donglouqiaoque-ai-tools</name>
