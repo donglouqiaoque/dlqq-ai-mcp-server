@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "donglouqiaoque-ai-tools": {
+      "command": "java",
+      "args": [
+        "-jar",
+        "F:\\Code\\Java\\donglouqiaoque-ai-tools\\release\\V1.0.0\\aitools-1.0.0.jar"
+      ],
+      "env": {
+        "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"
+      },
+      "timeout": 60000
+    }
+  }
+}
