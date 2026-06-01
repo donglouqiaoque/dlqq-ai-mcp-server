@@ -4,21 +4,43 @@ import com.fazecast.jSerialComm.SerialPort;
 import com.fazecast.jSerialComm.SerialPortDataListener;
 import com.fazecast.jSerialComm.SerialPortEvent;
 
-import java.io.*;
+import javax.swing.*;
+import javax.swing.text.*;
+import java.awt.*;
+import java.awt.event.*;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * UART串口工具 - 支持CH340等USB转串口设备
- * 提供串口连接、发送接收数据、日志记录等功能
+ * 提供图形化串口通信界面
  */
 public class UartTools {
 
     // 存储所有打开的串口连接
     private static final Map<String, SerialPortConnection> activeConnections = new HashMap<>();
+    // 全局日志记录
+    private static final List<String> globalLogs = new CopyOnWriteArrayList<>();
+    private static final int MAX_GLOBAL_LOG_SIZE = 5000;
+
+    // GUI窗口实例（单例）
+    private static JFrame guiWindow = null;
+    private static JTextArea txArea;
+    private static JTextArea rxArea;
+    private static JTextArea logArea;
+    private static JComboBox<String> portCombo;
+    private static JComboBox<Integer> baudCombo;
+    private static JButton openButton;
+    private static JButton closeButton;
+    private static JButton sendButton;
+    private static JCheckBox newlineCheckBox;
+    private static SerialPort currentPort = null;
+    private static boolean isPortOpen = false;
 
     /**
      * 串口连接包装类
@@ -26,15 +48,13 @@ public class UartTools {
     public static class SerialPortConnection {
         private final SerialPort serialPort;
         private final String portName;
-        private final AtomicBoolean isOpen;
-        private final Queue<String> receiveBuffer;
+        private final java.util.Queue<String> receiveBuffer;
         private final List<String> logBuffer;
         private final int maxLogSize;
 
         public SerialPortConnection(SerialPort port, int maxLogSize) {
             this.serialPort = port;
             this.portName = port.getSystemPortName();
-            this.isOpen = new AtomicBoolean(false);
             this.receiveBuffer = new ConcurrentLinkedQueue<>();
             this.logBuffer = Collections.synchronizedList(new ArrayList<>());
             this.maxLogSize = maxLogSize;
@@ -42,19 +62,21 @@ public class UartTools {
 
         public SerialPort getSerialPort() { return serialPort; }
         public String getPortName() { return portName; }
-        public boolean isOpen() { return isOpen.get(); }
-        public void setOpen(boolean open) { isOpen.set(open); }
-        public Queue<String> getReceiveBuffer() { return receiveBuffer; }
+        public java.util.Queue<String> getReceiveBuffer() { return receiveBuffer; }
         public List<String> getLogBuffer() { return logBuffer; }
 
         public void addToLog(String direction, String data) {
-            String timestamp = java.time.LocalDateTime.now().toString();
-            String logEntry = String.format("[%s] %s: %s", timestamp, direction, data);
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+            String logEntry = String.format("[%s] %s: %s", timestamp, direction, data.trim());
             logBuffer.add(logEntry);
+            globalLogs.add("[" + portName + "] " + logEntry);
 
             // 限制日志大小
             while (logBuffer.size() > maxLogSize) {
                 logBuffer.remove(0);
+            }
+            while (globalLogs.size() > MAX_GLOBAL_LOG_SIZE) {
+                globalLogs.remove(0);
             }
         }
 
@@ -72,138 +94,247 @@ public class UartTools {
     }
 
     /**
-     * 获取所有可用串口列表
-     *
-     * @return 串口信息列表
+     * 打开图形化串口工具窗口
      */
-    public static List<PortInfo> getAvailablePorts() {
-        List<PortInfo> ports = new ArrayList<>();
-        SerialPort[] systemPorts = SerialPort.getCommPorts();
-
-        for (SerialPort port : systemPorts) {
-            PortInfo info = new PortInfo();
-            info.setPortName(port.getSystemPortName());
-            info.setDescriptivePortName(port.getDescriptivePortName());
-            info.setPortLocation(port.getPortLocation());
-            info.setVendorId(String.format("0x%04X", port.getVendorID()));
-            info.setProductId(String.format("0x%04X", port.getProductID()));
-            info.setOpen(port.isOpen());
-            ports.add(info);
+    public static void openGuiWindow() {
+        if (guiWindow != null && guiWindow.isVisible()) {
+            guiWindow.toFront();
+            guiWindow.requestFocus();
+            return;
         }
 
-        return ports;
+        SwingUtilities.invokeLater(() -> {
+            createGuiWindow();
+        });
     }
 
     /**
-     * 串口信息
+     * 创建GUI窗口
      */
-    public static class PortInfo {
-        private String portName;
-        private String descriptivePortName;
-        private String portLocation;
-        private String vendorId;
-        private String productId;
-        private boolean isOpen;
+    private static void createGuiWindow() {
+        // 设置中文字体
+        setupChineseFont();
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception ignored) {}
 
-        public String getPortName() { return portName; }
-        public void setPortName(String portName) { this.portName = portName; }
-        public String getDescriptivePortName() { return descriptivePortName; }
-        public void setDescriptivePortName(String descriptivePortName) { this.descriptivePortName = descriptivePortName; }
-        public String getPortLocation() { return portLocation; }
-        public void setPortLocation(String portLocation) { this.portLocation = portLocation; }
-        public String getVendorId() { return vendorId; }
-        public void setVendorId(String vendorId) { this.vendorId = vendorId; }
-        public String getProductId() { return productId; }
-        public void setProductId(String productId) { this.productId = productId; }
-        public boolean isOpen() { return isOpen; }
-        public void setOpen(boolean open) { isOpen = open; }
+        guiWindow = new JFrame("CH340 串口工具");
+        guiWindow.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        guiWindow.setSize(900, 700);
+        guiWindow.setLocationRelativeTo(null);
 
-        @Override
-        public String toString() {
-            return String.format("%s (%s, VID:%s PID:%s)",
-                    portName, descriptivePortName, vendorId, productId);
+        // 主面板
+        JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // ========== 顶部控制面板 ==========
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        controlPanel.setBorder(BorderFactory.createTitledBorder("串口设置"));
+
+        // 串口选择
+        controlPanel.add(new JLabel("串口:"));
+        portCombo = new JComboBox<>();
+        refreshPortList();
+        portCombo.setPreferredSize(new Dimension(120, 25));
+        controlPanel.add(portCombo);
+
+        // 刷新按钮
+        JButton refreshButton = new JButton("刷新");
+        refreshButton.addActionListener(e -> refreshPortList());
+        controlPanel.add(refreshButton);
+
+        // 波特率选择
+        controlPanel.add(new JLabel("波特率:"));
+        baudCombo = new JComboBox<>(new Integer[]{9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600});
+        baudCombo.setSelectedItem(115200);
+        baudCombo.setPreferredSize(new Dimension(100, 25));
+        controlPanel.add(baudCombo);
+
+        // 打开/关闭按钮
+        openButton = new JButton("打开串口");
+        closeButton = new JButton("关闭串口");
+        closeButton.setEnabled(false);
+
+        openButton.addActionListener(e -> openPort());
+        closeButton.addActionListener(e -> closePort());
+
+        controlPanel.add(openButton);
+        controlPanel.add(closeButton);
+
+        // CH340查找按钮
+        JButton ch340Button = new JButton("查找CH340");
+        ch340Button.addActionListener(e -> findCH340());
+        controlPanel.add(ch340Button);
+
+        mainPanel.add(controlPanel, BorderLayout.NORTH);
+
+        // ========== 中部数据面板 ==========
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        splitPane.setResizeWeight(0.5);
+
+        // 发送区域
+        JPanel txPanel = new JPanel(new BorderLayout(5, 5));
+        txPanel.setBorder(BorderFactory.createTitledBorder("发送数据 (TX)"));
+        txArea = new JTextArea(8, 60);
+        txArea.setLineWrap(true);
+        txArea.setFont(new Font("Consolas", Font.PLAIN, 12));
+        JScrollPane txScroll = new JScrollPane(txArea);
+        txPanel.add(txScroll, BorderLayout.CENTER);
+
+        JPanel txButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        sendButton = new JButton("发送");
+        sendButton.setEnabled(false);
+        sendButton.addActionListener(e -> sendData());
+        txButtonPanel.add(sendButton);
+
+        newlineCheckBox = new JCheckBox("添加换行符", true);
+        txButtonPanel.add(newlineCheckBox);
+
+        txPanel.add(txButtonPanel, BorderLayout.SOUTH);
+
+        // 接收区域
+        JPanel rxPanel = new JPanel(new BorderLayout(5, 5));
+        rxPanel.setBorder(BorderFactory.createTitledBorder("接收数据 (RX)"));
+        rxArea = new JTextArea(8, 60);
+        rxArea.setEditable(false);
+        rxArea.setLineWrap(true);
+        rxArea.setFont(new Font("Consolas", Font.PLAIN, 12));
+        JScrollPane rxScroll = new JScrollPane(rxArea);
+        rxPanel.add(rxScroll, BorderLayout.CENTER);
+
+        JPanel rxButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton clearRxButton = new JButton("清空接收区");
+        clearRxButton.addActionListener(e -> rxArea.setText(""));
+        rxButtonPanel.add(clearRxButton);
+        rxPanel.add(rxButtonPanel, BorderLayout.SOUTH);
+
+        splitPane.setTopComponent(txPanel);
+        splitPane.setBottomComponent(rxPanel);
+
+        mainPanel.add(splitPane, BorderLayout.CENTER);
+
+        // ========== 底部日志面板 ==========
+        JPanel logPanel = new JPanel(new BorderLayout(5, 5));
+        logPanel.setBorder(BorderFactory.createTitledBorder("通信日志"));
+        logPanel.setPreferredSize(new Dimension(0, 200));
+
+        logArea = new JTextArea(8, 60);
+        logArea.setEditable(false);
+        logArea.setFont(new Font("Consolas", Font.PLAIN, 11));
+        JScrollPane logScroll = new JScrollPane(logArea);
+        logPanel.add(logScroll, BorderLayout.CENTER);
+
+        JPanel logButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton clearLogButton = new JButton("清空日志");
+        clearLogButton.addActionListener(e -> {
+            logArea.setText("");
+            globalLogs.clear();
+        });
+        logButtonPanel.add(clearLogButton);
+        logPanel.add(logButtonPanel, BorderLayout.SOUTH);
+
+        mainPanel.add(logPanel, BorderLayout.SOUTH);
+
+        guiWindow.add(mainPanel);
+
+        // 关闭窗口处理
+        guiWindow.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                closePort();
+                guiWindow.dispose();
+                guiWindow = null;
+            }
+        });
+
+        // 设置默认按钮
+        guiWindow.getRootPane().setDefaultButton(sendButton);
+
+        guiWindow.setVisible(true);
+
+        // 设置字体
+        Font chineseFont = getChineseFont();
+        setFontRecursively(guiWindow, chineseFont);
+    }
+
+    /**
+     * 刷新串口列表
+     */
+    private static void refreshPortList() {
+        portCombo.removeAllItems();
+        SerialPort[] ports = SerialPort.getCommPorts();
+        for (SerialPort port : ports) {
+            String display = port.getSystemPortName() + " - " + port.getDescriptivePortName();
+            portCombo.addItem(display);
+        }
+        if (portCombo.getItemCount() == 0) {
+            portCombo.addItem("未找到串口");
         }
     }
 
     /**
-     * 打开串口连接（支持CH340等设备）
-     *
-     * @param portName     串口名称（如 COM3, /dev/ttyUSB0）
-     * @param baudRate     波特率（默认 115200）
-     * @param dataBits     数据位（5,6,7,8，默认8）
-     * @param stopBits     停止位（1,1.5,2，默认1）
-     * @param parity       校验位（NONE, EVEN, ODD, MARK, SPACE，默认NONE）
-     * @param maxLogSize   最大日志条数
-     * @return 连接是否成功
+     * 查找CH340设备
      */
-    public static boolean openPort(String portName, int baudRate, int dataBits,
-                                    double stopBits, String parity, int maxLogSize) {
-        // 先检查是否已连接
-        if (activeConnections.containsKey(portName)) {
-            SerialPortConnection existing = activeConnections.get(portName);
-            if (existing.isOpen()) {
-                return true; // 已经连接
-            } else {
-                activeConnections.remove(portName);
+    private static void findCH340() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("CH340设备查找结果:\n");
+
+        SerialPort[] ports = SerialPort.getCommPorts();
+        boolean found = false;
+
+        for (SerialPort port : ports) {
+            // CH340的VID是0x1A86，PID是0x7523
+            if (port.getVendorID() == 0x1A86 && port.getProductID() == 0x7523) {
+                found = true;
+                sb.append("✓ ").append(port.getSystemPortName())
+                  .append(" - ").append(port.getDescriptivePortName()).append("\n");
             }
         }
 
-        // 查找串口
+        if (!found) {
+            sb.append("未找到CH340设备\n");
+        }
+
+        JOptionPane.showMessageDialog(guiWindow, sb.toString(), "CH340查找结果", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /**
+     * 打开串口
+     */
+    private static void openPort() {
+        if (portCombo.getSelectedItem() == null) {
+            JOptionPane.showMessageDialog(guiWindow, "请先选择串口", "错误", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        String selected = (String) portCombo.getSelectedItem();
+        String portName = selected.split(" - ")[0];
+        int baudRate = (Integer) baudCombo.getSelectedItem();
+
         SerialPort port = findPortByName(portName);
         if (port == null) {
-            return false;
+            JOptionPane.showMessageDialog(guiWindow, "找不到指定的串口", "错误", JOptionPane.ERROR_MESSAGE);
+            return;
         }
 
-        // 配置串口参数
+        // 配置串口
         port.setBaudRate(baudRate);
-        port.setNumDataBits(dataBits);
-
-        // 设置停止位
-        if (stopBits == 1.5) {
-            port.setNumStopBits(SerialPort.ONE_POINT_FIVE_STOP_BITS);
-        } else if (stopBits == 2) {
-            port.setNumStopBits(SerialPort.TWO_STOP_BITS);
-        } else {
-            port.setNumStopBits(SerialPort.ONE_STOP_BIT);
-        }
-
-        // 设置校验位
-        int parityMode;
-        switch (parity.toUpperCase()) {
-            case "EVEN":
-                parityMode = SerialPort.EVEN_PARITY;
-                break;
-            case "ODD":
-                parityMode = SerialPort.ODD_PARITY;
-                break;
-            case "MARK":
-                parityMode = SerialPort.MARK_PARITY;
-                break;
-            case "SPACE":
-                parityMode = SerialPort.SPACE_PARITY;
-                break;
-            default:
-                parityMode = SerialPort.NO_PARITY;
-        }
-        port.setParity(parityMode);
-
-        // 设置流控制（默认无）
+        port.setNumDataBits(8);
+        port.setNumStopBits(SerialPort.ONE_STOP_BIT);
+        port.setParity(SerialPort.NO_PARITY);
         port.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
-
-        // 设置超时
         port.setComPortTimeouts(
-                SerialPort.TIMEOUT_READ_BLOCKING | SerialPort.TIMEOUT_WRITE_BLOCKING,
-                1000, 1000
+            SerialPort.TIMEOUT_READ_BLOCKING | SerialPort.TIMEOUT_WRITE_BLOCKING,
+            1000, 1000
         );
 
-        // 打开串口
         if (!port.openPort()) {
-            return false;
+            JOptionPane.showMessageDialog(guiWindow, "无法打开串口，可能已被占用", "错误", JOptionPane.ERROR_MESSAGE);
+            return;
         }
 
-        // 创建连接对象
-        SerialPortConnection connection = new SerialPortConnection(port, maxLogSize);
-        connection.setOpen(true);
+        currentPort = port;
+        isPortOpen = true;
 
         // 添加数据监听器
         port.addDataListener(new SerialPortDataListener() {
@@ -220,8 +351,10 @@ public class UartTools {
                         int numRead = port.readBytes(newData, newData.length);
                         if (numRead > 0) {
                             String received = new String(newData, 0, numRead, StandardCharsets.UTF_8);
-                            connection.getReceiveBuffer().offer(received);
-                            connection.addToLog("RX", received.trim());
+                            SwingUtilities.invokeLater(() -> {
+                                rxArea.append(received);
+                                addToLog("RX", received);
+                            });
                         }
                     } catch (Exception e) {
                         System.err.println("串口读取错误: " + e.getMessage());
@@ -230,184 +363,107 @@ public class UartTools {
             }
         });
 
-        activeConnections.put(portName, connection);
-        return true;
+        // 更新UI
+        openButton.setEnabled(false);
+        closeButton.setEnabled(true);
+        sendButton.setEnabled(true);
+        portCombo.setEnabled(false);
+        baudCombo.setEnabled(false);
+
+        addToLog("INFO", "串口 " + portName + " 已打开，波特率 " + baudRate);
     }
 
     /**
-     * 简化的串口打开方法（使用默认参数）
+     * 关闭串口
      */
-    public static boolean openPort(String portName) {
-        return openPort(portName, 115200, 8, 1, "NONE", 1000);
-    }
-
-    /**
-     * 关闭串口连接
-     *
-     * @param portName 串口名称
-     * @return 是否成功关闭
-     */
-    public static boolean closePort(String portName) {
-        SerialPortConnection connection = activeConnections.get(portName);
-        if (connection == null) {
-            return false;
+    private static void closePort() {
+        if (currentPort != null && currentPort.isOpen()) {
+            currentPort.removeDataListener();
+            currentPort.closePort();
+            addToLog("INFO", "串口 " + currentPort.getSystemPortName() + " 已关闭");
         }
 
-        SerialPort port = connection.getSerialPort();
-        if (port.isOpen()) {
-            port.removeDataListener();
-            port.closePort();
+        currentPort = null;
+        isPortOpen = false;
+
+        // 更新UI
+        if (openButton != null) {
+            openButton.setEnabled(true);
+            closeButton.setEnabled(false);
+            sendButton.setEnabled(false);
+            portCombo.setEnabled(true);
+            baudCombo.setEnabled(true);
         }
-        connection.setOpen(false);
-        activeConnections.remove(portName);
-        return true;
     }
 
     /**
-     * 发送数据到串口
-     *
-     * @param portName 串口名称
-     * @param data     要发送的数据
-     * @param addNewline 是否添加换行符
-     * @return 是否发送成功
+     * 发送数据
      */
-    public static boolean sendData(String portName, String data, boolean addNewline) {
-        SerialPortConnection connection = activeConnections.get(portName);
-        if (connection == null || !connection.isOpen()) {
-            return false;
+    private static void sendData() {
+        if (currentPort == null || !currentPort.isOpen()) {
+            return;
+        }
+
+        String data = txArea.getText();
+        if (data.isEmpty()) {
+            return;
         }
 
         try {
+            // 检查是否需要添加换行
+            boolean addNewline = newlineCheckBox != null && newlineCheckBox.isSelected();
+
             String sendData = addNewline ? data + "\r\n" : data;
             byte[] bytes = sendData.getBytes(StandardCharsets.UTF_8);
+            currentPort.writeBytes(bytes, bytes.length);
 
-            int bytesWritten = connection.getSerialPort().writeBytes(bytes, bytes.length);
-            boolean success = bytesWritten == bytes.length;
-
-            if (success) {
-                connection.addToLog("TX", data);
-            }
-
-            return success;
+            addToLog("TX", data);
+            txArea.setText("");
         } catch (Exception e) {
-            return false;
+            JOptionPane.showMessageDialog(guiWindow, "发送失败: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     /**
-     * 从串口接收数据（非阻塞）
-     *
-     * @param portName 串口名称
-     * @return 接收到的数据，如果没有数据则返回空字符串
+     * 添加日志
      */
-    public static String receiveData(String portName) {
-        SerialPortConnection connection = activeConnections.get(portName);
-        if (connection == null || !connection.isOpen()) {
-            return null;
+    private static void addToLog(String direction, String data) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+        String logEntry = String.format("[%s] %s: %s", timestamp, direction, data.trim());
+
+        globalLogs.add(logEntry);
+        while (globalLogs.size() > MAX_GLOBAL_LOG_SIZE) {
+            globalLogs.remove(0);
         }
 
+        if (logArea != null) {
+            logArea.append(logEntry + "\n");
+            logArea.setCaretPosition(logArea.getDocument().getLength());
+        }
+    }
+
+    /**
+     * 获取最近日志
+     */
+    public static String getRecentLogs(int lines) {
+        if (lines <= 0 || lines > globalLogs.size()) {
+            lines = globalLogs.size();
+        }
+        int start = Math.max(0, globalLogs.size() - lines);
         StringBuilder sb = new StringBuilder();
-        String data;
-        while ((data = connection.getReceiveBuffer().poll()) != null) {
-            sb.append(data);
+        for (int i = start; i < globalLogs.size(); i++) {
+            sb.append(globalLogs.get(i)).append("\n");
         }
         return sb.toString();
     }
 
     /**
-     * 等待并接收数据（带超时）
-     *
-     * @param portName      串口名称
-     * @param timeoutMillis 超时时间（毫秒）
-     * @return 接收到的数据
+     * 清除日志
      */
-    public static String receiveDataWithTimeout(String portName, int timeoutMillis) {
-        SerialPortConnection connection = activeConnections.get(portName);
-        if (connection == null || !connection.isOpen()) {
-            return null;
-        }
-
-        StringBuilder sb = new StringBuilder();
-        long startTime = System.currentTimeMillis();
-
-        while (System.currentTimeMillis() - startTime < timeoutMillis) {
-            String data = connection.getReceiveBuffer().poll();
-            if (data != null) {
-                sb.append(data);
-            } else {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    break;
-                }
-            }
-        }
-
-        return sb.toString();
-    }
-
-    /**
-     * 获取串口日志
-     *
-     * @param portName 串口名称
-     * @param count    获取最近的日志条数（0表示全部）
-     * @return 日志内容
-     */
-    public static String getLogs(String portName, int count) {
-        SerialPortConnection connection = activeConnections.get(portName);
-        if (connection == null) {
-            return "串口未连接: " + portName;
-        }
-        return connection.getLogs(count);
-    }
-
-    /**
-     * 清除日志缓冲区
-     *
-     * @param portName 串口名称
-     * @return 是否成功
-     */
-    public static boolean clearLogs(String portName) {
-        SerialPortConnection connection = activeConnections.get(portName);
-        if (connection == null) {
-            return false;
-        }
-        connection.getLogBuffer().clear();
-        return true;
-    }
-
-    /**
-     * 检查串口是否已连接
-     *
-     * @param portName 串口名称
-     * @return 是否已连接
-     */
-    public static boolean isConnected(String portName) {
-        SerialPortConnection connection = activeConnections.get(portName);
-        return connection != null && connection.isOpen();
-    }
-
-    /**
-     * 获取已连接的串口列表
-     *
-     * @return 已连接的串口名称列表
-     */
-    public static List<String> getConnectedPorts() {
-        List<String> ports = new ArrayList<>();
-        for (Map.Entry<String, SerialPortConnection> entry : activeConnections.entrySet()) {
-            if (entry.getValue().isOpen()) {
-                ports.add(entry.getKey());
-            }
-        }
-        return ports;
-    }
-
-    /**
-     * 关闭所有串口连接
-     */
-    public static void closeAllPorts() {
-        for (String portName : new ArrayList<>(activeConnections.keySet())) {
-            closePort(portName);
+    public static void clearLogs() {
+        globalLogs.clear();
+        if (logArea != null) {
+            logArea.setText("");
         }
     }
 
@@ -425,76 +481,47 @@ public class UartTools {
         return null;
     }
 
-    /**
-     * 检测CH340设备（Vendor ID: 0x1A86, Product ID: 0x7523）
-     *
-     * @return CH340设备列表
-     */
-    public static List<PortInfo> findCH340Devices() {
-        List<PortInfo> ch340Ports = new ArrayList<>();
-        SerialPort[] ports = SerialPort.getCommPorts();
+    // ==================== 字体设置 ====================
 
-        for (SerialPort port : ports) {
-            // CH340的VID是0x1A86，PID是0x7523
-            if (port.getVendorID() == 0x1A86 && port.getProductID() == 0x7523) {
-                PortInfo info = new PortInfo();
-                info.setPortName(port.getSystemPortName());
-                info.setDescriptivePortName(port.getDescriptivePortName());
-                info.setPortLocation(port.getPortLocation());
-                info.setVendorId(String.format("0x%04X", port.getVendorID()));
-                info.setProductId(String.format("0x%04X", port.getProductID()));
-                info.setOpen(port.isOpen());
-                ch340Ports.add(info);
+    private static boolean isFontAvailable(String fontName) {
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        for (String name : ge.getAvailableFontFamilyNames()) {
+            if (name.equalsIgnoreCase(fontName)) {
+                return true;
             }
         }
-
-        return ch340Ports;
+        return false;
     }
 
-    /**
-     * 发送AT指令并等待响应
-     *
-     * @param portName 串口名称
-     * @param command  AT指令
-     * @param timeout  等待超时（毫秒）
-     * @return 响应内容
-     */
-    public static String sendATCommand(String portName, String command, int timeout) {
-        // 清空接收缓冲区
-        SerialPortConnection connection = activeConnections.get(portName);
-        if (connection == null || !connection.isOpen()) {
-            return "错误：串口未连接";
+    private static Font getChineseFont() {
+        if (isFontAvailable("Microsoft YaHei")) {
+            return new Font("Microsoft YaHei", Font.PLAIN, 12);
         }
-        connection.getReceiveBuffer().clear();
-
-        // 发送指令
-        boolean sent = sendData(portName, command, true);
-        if (!sent) {
-            return "错误：发送失败";
+        if (isFontAvailable("SimSun")) {
+            return new Font("SimSun", Font.PLAIN, 12);
         }
+        return new Font("Dialog", Font.PLAIN, 12);
+    }
 
-        // 等待响应
-        StringBuilder response = new StringBuilder();
-        long startTime = System.currentTimeMillis();
+    private static void setupChineseFont() {
+        Font uiFont = getChineseFont();
+        UIManager.put("CheckBox.font", uiFont);
+        UIManager.put("ComboBox.font", uiFont);
+        UIManager.put("Label.font", uiFont);
+        UIManager.put("Panel.font", uiFont);
+        UIManager.put("Button.font", uiFont);
+        UIManager.put("TextArea.font", new Font("Monospaced", Font.PLAIN, 12));
+        UIManager.put("TextField.font", uiFont);
+        UIManager.put("TitledBorder.font", uiFont);
+    }
 
-        while (System.currentTimeMillis() - startTime < timeout) {
-            String data = connection.getReceiveBuffer().poll();
-            if (data != null) {
-                response.append(data);
-                // 检查是否收到OK或ERROR
-                if (response.toString().contains("OK") ||
-                    response.toString().contains("ERROR")) {
-                    break;
-                }
-            } else {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    break;
-                }
+    private static void setFontRecursively(Component comp, Font font) {
+        if (comp == null) return;
+        comp.setFont(font);
+        if (comp instanceof Container) {
+            for (Component child : ((Container) comp).getComponents()) {
+                setFontRecursively(child, font);
             }
         }
-
-        return response.toString();
     }
 }

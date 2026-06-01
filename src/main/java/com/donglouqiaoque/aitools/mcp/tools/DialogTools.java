@@ -142,7 +142,7 @@ public class DialogTools {
     }
 
     /**
-     * 显示输入对话框（支持文本输入和文件选择）
+     * 显示输入窗口（支持文本输入和文件选择）
      *
      * @param title       窗口标题
      * @param message     提示消息
@@ -168,20 +168,30 @@ public class DialogTools {
                 } catch (Exception ignored) {
                 }
 
-                // 创建对话框
-                JDialog dialog = new JDialog((Frame) null, title, true);
-                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-                dialog.setSize(600, 350);
-                dialog.setLocationRelativeTo(null);
+                // 创建独立窗口（使用JFrame而不是JDialog）
+                JFrame frame = new JFrame(title);
+                frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+                frame.setSize(600, 350);
+                frame.setLocationRelativeTo(null);
 
                 // 主面板
                 JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
                 mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-                // 消息标签
-                JLabel messageLabel = new JLabel(message);
-                messageLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
-                mainPanel.add(messageLabel, BorderLayout.NORTH);
+                // 消息标签 - 支持多行显示
+                JTextArea messageArea = new JTextArea(message);
+                messageArea.setEditable(false);
+                messageArea.setLineWrap(true);
+                messageArea.setWrapStyleWord(true);
+                messageArea.setOpaque(false);
+                messageArea.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
+                // 使用支持中文的字体
+                Font chineseFont = getChineseFont();
+                messageArea.setFont(chineseFont);
+                JScrollPane messageScroll = new JScrollPane(messageArea);
+                messageScroll.setBorder(null);
+                messageScroll.setPreferredSize(new Dimension(550, 60));
+                mainPanel.add(messageScroll, BorderLayout.NORTH);
 
                 // 文本输入区域 - 使用支持中文的等宽字体
                 JTextArea textArea = new JTextArea(8, 50);
@@ -221,7 +231,7 @@ public class DialogTools {
                             fileChooser.setFileFilter(filter);
                         }
 
-                        int result = fileChooser.showOpenDialog(dialog);
+                        int result = fileChooser.showOpenDialog(frame);
                         if (result == JFileChooser.APPROVE_OPTION) {
                             File selectedFile = fileChooser.getSelectedFile();
                             filePathField.setText(selectedFile.getAbsolutePath());
@@ -243,6 +253,11 @@ public class DialogTools {
                 // 存储读取的文件内容
                 final StringBuilder fileContent = new StringBuilder();
 
+                // 关闭窗口的通用方法
+                Runnable closeWindow = () -> {
+                    frame.dispose();
+                };
+
                 okButton.addActionListener(e -> {
                     // 读取选中的文件内容
                     String filePath = filePathField.getText();
@@ -254,13 +269,17 @@ public class DialogTools {
                             fileContent.append("[读取文件失败: ").append(ex.getMessage()).append("]");
                         }
                     }
-                    dialog.dispose();
-                    future.complete(new DialogResult(true, textArea.getText(), filePath, fileContent.toString()));
+                    closeWindow.run();
+                    if (!future.isDone()) {
+                        future.complete(new DialogResult(true, textArea.getText(), filePath, fileContent.toString()));
+                    }
                 });
 
                 cancelButton.addActionListener(e -> {
-                    dialog.dispose();
-                    future.complete(new DialogResult(false, null, null, null));
+                    closeWindow.run();
+                    if (!future.isDone()) {
+                        future.complete(new DialogResult(false, null, null, null));
+                    }
                 });
 
                 buttonPanel.add(okButton);
@@ -268,47 +287,40 @@ public class DialogTools {
                 bottomPanel.add(buttonPanel, BorderLayout.SOUTH);
 
                 mainPanel.add(bottomPanel, BorderLayout.SOUTH);
-                dialog.add(mainPanel);
+                frame.add(mainPanel);
 
-                // ESC键关闭对话框
-                dialog.getRootPane().registerKeyboardAction(
+                // ESC键关闭窗口
+                frame.getRootPane().registerKeyboardAction(
                         e -> cancelButton.doClick(),
                         KeyStroke.getKeyStroke("ESCAPE"),
                         JComponent.WHEN_IN_FOCUSED_WINDOW
                 );
 
                 // Enter键确认
-                dialog.getRootPane().registerKeyboardAction(
+                frame.getRootPane().registerKeyboardAction(
                         e -> okButton.doClick(),
                         KeyStroke.getKeyStroke("ENTER"),
                         JComponent.WHEN_IN_FOCUSED_WINDOW
                 );
 
                 // 设置默认按钮
-                dialog.getRootPane().setDefaultButton(okButton);
+                frame.getRootPane().setDefaultButton(okButton);
 
                 // 所有组件添加完成后，递归设置中文字体
-                Font chineseFont = getChineseFont();
-                setFontRecursively(dialog, chineseFont);
+                setFontRecursively(frame, chineseFont);
 
-                // 添加窗口关闭监听器，防止用户点击X按钮时卡住
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                // 添加窗口关闭监听器 - 关闭窗口等于取消
+                frame.addWindowListener(new java.awt.event.WindowAdapter() {
                     @Override
                     public void windowClosing(java.awt.event.WindowEvent e) {
-                        dialog.dispose();
-                        future.complete(new DialogResult(false, null, null, null));
-                    }
-
-                    @Override
-                    public void windowClosed(java.awt.event.WindowEvent e) {
-                        // 确保future已完成（防止重复完成）
                         if (!future.isDone()) {
                             future.complete(new DialogResult(false, null, null, null));
                         }
+                        frame.dispose();
                     }
                 });
 
-                dialog.setVisible(true);
+                frame.setVisible(true);
 
             } catch (Exception ex) {
                 future.completeExceptionally(ex);
@@ -411,7 +423,7 @@ public class DialogTools {
     }
 
     /**
-     * 确认对话框
+     * 确认对话框（独立窗口）
      *
      * @param title   窗口标题
      * @param message 提示消息
@@ -430,14 +442,86 @@ public class DialogTools {
                 } catch (Exception ignored) {
                 }
 
-                int result = JOptionPane.showConfirmDialog(
-                        null,
-                        message,
-                        title,
-                        JOptionPane.YES_NO_OPTION,
-                        JOptionPane.QUESTION_MESSAGE
+                // 创建独立窗口
+                JFrame frame = new JFrame(title);
+                frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+                frame.setSize(400, 200);
+                frame.setLocationRelativeTo(null);
+                frame.setResizable(false);
+
+                // 主面板
+                JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+                mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+                // 消息区域 - 支持多行显示
+                JTextArea messageArea = new JTextArea(message);
+                messageArea.setEditable(false);
+                messageArea.setLineWrap(true);
+                messageArea.setWrapStyleWord(true);
+                messageArea.setOpaque(false);
+                Font chineseFont = getChineseFont();
+                messageArea.setFont(chineseFont);
+                JScrollPane messageScroll = new JScrollPane(messageArea);
+                messageScroll.setBorder(null);
+                mainPanel.add(messageScroll, BorderLayout.CENTER);
+
+                // 按钮面板
+                JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 5));
+                JButton yesButton = new JButton("是");
+                JButton noButton = new JButton("否");
+
+                yesButton.addActionListener(e -> {
+                    frame.dispose();
+                    if (!future.isDone()) {
+                        future.complete(true);
+                    }
+                });
+
+                noButton.addActionListener(e -> {
+                    frame.dispose();
+                    if (!future.isDone()) {
+                        future.complete(false);
+                    }
+                });
+
+                buttonPanel.add(yesButton);
+                buttonPanel.add(noButton);
+                mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+                frame.add(mainPanel);
+
+                // ESC键选择"否"
+                frame.getRootPane().registerKeyboardAction(
+                        e -> noButton.doClick(),
+                        KeyStroke.getKeyStroke("ESCAPE"),
+                        JComponent.WHEN_IN_FOCUSED_WINDOW
                 );
-                future.complete(result == JOptionPane.YES_OPTION);
+
+                // Enter键选择"是"
+                frame.getRootPane().registerKeyboardAction(
+                        e -> yesButton.doClick(),
+                        KeyStroke.getKeyStroke("ENTER"),
+                        JComponent.WHEN_IN_FOCUSED_WINDOW
+                );
+
+                frame.getRootPane().setDefaultButton(yesButton);
+
+                // 设置字体
+                setFontRecursively(frame, chineseFont);
+
+                // 关闭窗口等于选择"否"
+                frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent e) {
+                        if (!future.isDone()) {
+                            future.complete(false);
+                        }
+                        frame.dispose();
+                    }
+                });
+
+                frame.setVisible(true);
+
             } catch (Exception ex) {
                 future.completeExceptionally(ex);
             }
@@ -451,7 +535,7 @@ public class DialogTools {
     }
 
     /**
-     * 消息提示对话框
+     * 消息提示对话框（独立窗口）
      *
      * @param title   窗口标题
      * @param message 消息内容
@@ -468,19 +552,56 @@ public class DialogTools {
                 } catch (Exception ignored) {
                 }
 
-                int messageType;
-                switch (type.toLowerCase()) {
-                    case "warning":
-                        messageType = JOptionPane.WARNING_MESSAGE;
-                        break;
-                    case "error":
-                        messageType = JOptionPane.ERROR_MESSAGE;
-                        break;
-                    default:
-                        messageType = JOptionPane.INFORMATION_MESSAGE;
-                }
+                // 创建独立窗口
+                JFrame frame = new JFrame(title);
+                frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+                frame.setSize(400, 200);
+                frame.setLocationRelativeTo(null);
 
-                JOptionPane.showMessageDialog(null, message, title, messageType);
+                // 主面板
+                JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+                mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+                // 消息区域 - 支持多行显示
+                JTextArea messageArea = new JTextArea(message);
+                messageArea.setEditable(false);
+                messageArea.setLineWrap(true);
+                messageArea.setWrapStyleWord(true);
+                messageArea.setOpaque(false);
+                Font chineseFont = getChineseFont();
+                messageArea.setFont(chineseFont);
+                JScrollPane messageScroll = new JScrollPane(messageArea);
+                messageScroll.setBorder(null);
+                mainPanel.add(messageScroll, BorderLayout.CENTER);
+
+                // 按钮面板
+                JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+                JButton okButton = new JButton("确定");
+                okButton.addActionListener(e -> frame.dispose());
+                buttonPanel.add(okButton);
+                mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+                frame.add(mainPanel);
+
+                // ESC键和Enter键都关闭窗口
+                frame.getRootPane().registerKeyboardAction(
+                        e -> okButton.doClick(),
+                        KeyStroke.getKeyStroke("ESCAPE"),
+                        JComponent.WHEN_IN_FOCUSED_WINDOW
+                );
+                frame.getRootPane().registerKeyboardAction(
+                        e -> okButton.doClick(),
+                        KeyStroke.getKeyStroke("ENTER"),
+                        JComponent.WHEN_IN_FOCUSED_WINDOW
+                );
+
+                frame.getRootPane().setDefaultButton(okButton);
+
+                // 设置字体
+                setFontRecursively(frame, chineseFont);
+
+                frame.setVisible(true);
+
             } catch (Exception ignored) {
             }
         });
