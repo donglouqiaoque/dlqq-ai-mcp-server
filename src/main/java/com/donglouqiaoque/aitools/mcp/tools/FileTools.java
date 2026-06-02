@@ -1,5 +1,7 @@
 package com.donglouqiaoque.aitools.mcp.tools;
 
+import com.donglouqiaoque.aitools.utils.FileUtils;
+
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.ArrayList;
@@ -24,6 +26,7 @@ public class FileTools {
      * @throws IOException 读取异常
      */
     public static String readFile(String filePath, int startLine, int endLine, int readLines) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -79,6 +82,7 @@ public class FileTools {
      * @throws IOException 创建异常
      */
     public static void createFile(String filePath, String content) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
 
         // 确保父目录存在
@@ -106,6 +110,7 @@ public class FileTools {
      * @throws IOException 删除异常
      */
     public static boolean deleteFile(String filePath) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -134,6 +139,8 @@ public class FileTools {
      * @throws IOException 复制异常
      */
     public static void copyFile(String sourcePath, String targetPath) throws IOException {
+        sourcePath = FileUtils.normalizePath(sourcePath);
+        targetPath = FileUtils.normalizePath(targetPath);
         Path source = Paths.get(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源文件不存在: " + sourcePath);
@@ -160,6 +167,8 @@ public class FileTools {
      * @throws IOException 移动异常
      */
     public static void moveFile(String sourcePath, String targetPath) throws IOException {
+        sourcePath = FileUtils.normalizePath(sourcePath);
+        targetPath = FileUtils.normalizePath(targetPath);
         Path source = Paths.get(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源文件不存在: " + sourcePath);
@@ -188,6 +197,7 @@ public class FileTools {
      * @throws IOException 操作异常
      */
     public static boolean removeLinesInFile(String filePath, int startLine, int endLine) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -241,6 +251,7 @@ public class FileTools {
      * @throws IOException 操作异常
      */
     public static boolean insertTextInFile(String filePath, int lineNum, String content) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -289,6 +300,7 @@ public class FileTools {
      * @throws IOException 操作异常
      */
     public static int replaceTextInFile(String filePath, String searchText, String replaceText, boolean useRegex) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -342,6 +354,7 @@ public class FileTools {
      * @throws IOException 创建异常
      */
     public static void createDirectory(String dirPath) throws IOException {
+        dirPath = FileUtils.normalizePath(dirPath);
         Path path = Paths.get(dirPath);
         if (Files.exists(path)) {
             if (!Files.isDirectory(path)) {
@@ -359,6 +372,7 @@ public class FileTools {
      * @throws IOException 创建异常
      */
     public static void createDirectories(String dirPath) throws IOException {
+        dirPath = FileUtils.normalizePath(dirPath);
         Path path = Paths.get(dirPath);
         if (Files.exists(path)) {
             if (!Files.isDirectory(path)) {
@@ -377,6 +391,7 @@ public class FileTools {
      * @throws IOException 删除异常
      */
     public static boolean deleteDirectory(String dirPath) throws IOException {
+        dirPath = FileUtils.normalizePath(dirPath);
         Path path = Paths.get(dirPath);
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + dirPath);
@@ -444,6 +459,8 @@ public class FileTools {
      * @throws IOException 复制异常
      */
     public static void copyDirectory(String sourcePath, String targetPath) throws IOException {
+        sourcePath = FileUtils.normalizePath(sourcePath);
+        targetPath = FileUtils.normalizePath(targetPath);
         Path source = Paths.get(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源目录不存在: " + sourcePath);
@@ -486,6 +503,8 @@ public class FileTools {
      * @throws IOException 移动异常
      */
     public static void moveDirectory(String sourcePath, String targetPath) throws IOException {
+        sourcePath = FileUtils.normalizePath(sourcePath);
+        targetPath = FileUtils.normalizePath(targetPath);
         Path source = Paths.get(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源目录不存在: " + sourcePath);
@@ -524,6 +543,7 @@ public class FileTools {
      * @throws IOException 读取异常
      */
     public static String readBinaryFileAsHex(String filePath, long startByte, long endByte, long readBytes) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -583,6 +603,7 @@ public class FileTools {
      * @throws IOException 写入异常
      */
     public static void writeBinaryFileFromHex(String filePath, String hexText, boolean append) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
 
         // 确保父目录存在
@@ -634,6 +655,7 @@ public class FileTools {
      * @throws IOException 搜索异常
      */
     public static List<String> searchFiles(String searchPath, String pattern, boolean useRegex) throws IOException {
+        searchPath = FileUtils.normalizePath(searchPath);
         Path path = Paths.get(searchPath);
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + searchPath);
@@ -676,6 +698,7 @@ public class FileTools {
      * @throws IOException 搜索异常
      */
     public static List<String> searchDirectories(String searchPath, String pattern, boolean useRegex) throws IOException {
+        searchPath = FileUtils.normalizePath(searchPath);
         Path path = Paths.get(searchPath);
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + searchPath);

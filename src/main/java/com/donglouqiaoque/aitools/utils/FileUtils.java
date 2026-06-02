@@ -12,6 +12,20 @@ import java.util.List;
 public class FileUtils {
 
     /**
+     * 规范化文件路径，将正斜杠转换为系统默认的分隔符
+     *
+     * @param filePath 原始文件路径
+     * @return 规范化后的路径
+     */
+    public static String normalizePath(String filePath) {
+        if (filePath == null || filePath.isEmpty()) {
+            return filePath;
+        }
+        // 将正斜杠替换为系统默认分隔符
+        return filePath.replace("/", java.io.File.separator);
+    }
+
+    /**
      * 读取文件内容为字符串
      *
      * @param filePath 文件路径
