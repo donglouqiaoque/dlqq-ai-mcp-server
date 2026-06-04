@@ -103,6 +103,56 @@ public class FileTools {
     }
 
     /**
+     * 覆盖文件内容（不管文件是否存在都直接写入）
+     *
+     * @param filePath 文件路径
+     * @param content  文件内容
+     * @throws IOException 写入异常
+     */
+    public static void overwriteFile(String filePath, String content) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
+        Path path = Paths.get(filePath);
+
+        // 确保父目录存在
+        Path parent = path.getParent();
+        if (parent != null && !Files.exists(parent)) {
+            Files.createDirectories(parent);
+        }
+
+        // 直接写入内容（覆盖原有内容或创建新文件）
+        Files.writeString(path, content != null ? content : "");
+    }
+
+    /**
+     * 在文件末尾追加内容
+     *
+     * @param filePath 文件路径
+     * @param content  追加的内容
+     * @throws IOException 写入异常
+     */
+    public static void appendFile(String filePath, String content) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
+        Path path = Paths.get(filePath);
+
+        if (content == null || content.isEmpty()) {
+            return;
+        }
+
+        // 确保父目录存在
+        Path parent = path.getParent();
+        if (parent != null && !Files.exists(parent)) {
+            Files.createDirectories(parent);
+        }
+
+        // 如果文件不存在，创建新文件；否则追加内容
+        if (!Files.exists(path)) {
+            Files.writeString(path, content);
+        } else {
+            Files.writeString(path, content, java.nio.file.StandardOpenOption.APPEND);
+        }
+    }
+
+    /**
      * 删除文件（带确认对话框）
      *
      * @param filePath 文件路径
@@ -188,6 +238,62 @@ public class FileTools {
     }
 
     /**
+     * 重命名文件
+     *
+     * @param sourcePath 源文件路径
+     * @param newName    新文件名（仅文件名，不包含路径）
+     * @throws IOException 重命名异常
+     */
+    public static void renameFile(String sourcePath, String newName) throws IOException {
+        sourcePath = FileUtils.normalizePath(sourcePath);
+        Path source = Paths.get(sourcePath);
+        if (!Files.exists(source)) {
+            throw new IOException("源文件不存在: " + sourcePath);
+        }
+        if (!Files.isRegularFile(source)) {
+            throw new IOException("源路径不是文件: " + sourcePath);
+        }
+
+        // 构建目标路径（同目录，新文件名）
+        Path target = source.getParent().resolve(newName);
+
+        // 如果目标已存在，抛出异常
+        if (Files.exists(target)) {
+            throw new IOException("目标文件已存在: " + target);
+        }
+
+        Files.move(source, target);
+    }
+
+    /**
+     * 重命名文件夹
+     *
+     * @param sourcePath 源文件夹路径
+     * @param newName    新文件夹名（仅文件夹名，不包含路径）
+     * @throws IOException 重命名异常
+     */
+    public static void renameDirectory(String sourcePath, String newName) throws IOException {
+        sourcePath = FileUtils.normalizePath(sourcePath);
+        Path source = Paths.get(sourcePath);
+        if (!Files.exists(source)) {
+            throw new IOException("源文件夹不存在: " + sourcePath);
+        }
+        if (!Files.isDirectory(source)) {
+            throw new IOException("源路径不是文件夹: " + sourcePath);
+        }
+
+        // 构建目标路径（同目录，新文件夹名）
+        Path target = source.getParent().resolve(newName);
+
+        // 如果目标已存在，抛出异常
+        if (Files.exists(target)) {
+            throw new IOException("目标文件夹已存在: " + target);
+        }
+
+        Files.move(source, target);
+    }
+
+    /**
      * 删除指定行范围的内容
      *
      * @param filePath  文件路径
@@ -233,6 +339,73 @@ public class FileTools {
         for (int i = 0; i < newLines.size(); i++) {
             result.append(newLines.get(i));
             if (i < newLines.size() - 1) {
+                result.append(System.lineSeparator());
+            }
+        }
+
+        Files.writeString(path, result.toString());
+        return true;
+    }
+
+    /**
+     * 替换指定行范围的内容
+     *
+     * @param filePath    文件路径
+     * @param startLine   起始行（1-based，包含）
+     * @param endLine     结束行（1-based，包含）
+     * @param newContent  新的内容（支持多行）
+     * @return 是否成功替换
+     * @throws IOException 操作异常
+     */
+    public static boolean replaceLinesInFile(String filePath, int startLine, int endLine, String newContent) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path)) {
+            throw new IOException("文件不存在: " + filePath);
+        }
+
+        List<String> lines = Files.readAllLines(path);
+        if (lines.isEmpty()) {
+            return false;
+        }
+
+        // 验证行号
+        if (startLine < 1) {
+            startLine = 1;
+        }
+        if (endLine > lines.size()) {
+            endLine = lines.size();
+        }
+        if (startLine > endLine) {
+            throw new IOException("起始行不能大于结束行");
+        }
+
+        // 准备新内容行
+        String[] newLines = newContent != null ? newContent.split("\\r?\\n") : new String[0];
+
+        // 构建新文件内容
+        List<String> resultLines = new ArrayList<>();
+
+        // 添加替换范围之前的行
+        for (int i = 0; i < startLine - 1; i++) {
+            resultLines.add(lines.get(i));
+        }
+
+        // 添加新内容行
+        for (String newLine : newLines) {
+            resultLines.add(newLine);
+        }
+
+        // 添加替换范围之后的行
+        for (int i = endLine; i < lines.size(); i++) {
+            resultLines.add(lines.get(i));
+        }
+
+        // 写回文件
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < resultLines.size(); i++) {
+            result.append(resultLines.get(i));
+            if (i < resultLines.size() - 1) {
                 result.append(System.lineSeparator());
             }
         }

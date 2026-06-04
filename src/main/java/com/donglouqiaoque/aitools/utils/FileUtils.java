@@ -12,7 +12,8 @@ import java.util.List;
 public class FileUtils {
 
     /**
-     * 规范化文件路径，将正斜杠转换为系统默认的分隔符
+     * 规范化文件路径，统一处理正斜杠和反斜杠
+     * 先将所有反斜杠替换为正斜杠，再根据系统转换为默认分隔符
      *
      * @param filePath 原始文件路径
      * @return 规范化后的路径
@@ -21,8 +22,10 @@ public class FileUtils {
         if (filePath == null || filePath.isEmpty()) {
             return filePath;
         }
-        // 将正斜杠替换为系统默认分隔符
-        return filePath.replace("/", java.io.File.separator);
+        // 先将反斜杠替换为正斜杠（处理JSON转义问题）
+        String normalized = filePath.replace("\\", "/");
+        // 再将正斜杠替换为系统默认分隔符
+        return normalized.replace("/", java.io.File.separator);
     }
 
     /**

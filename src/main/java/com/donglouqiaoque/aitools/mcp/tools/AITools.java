@@ -16,38 +16,49 @@ public class AITools {
      * 注册所有AI工具到MCP服务器
      */
     public void registerTools(McpServer server) {
-        // ========== 文件操作工具 (1-8) ==========
+        // ========== 文件操作工具 (1-11) ==========
         registerReadFileTool(server);           // dlqq_read_file
         registerCreateFileTool(server);           // dlqq_create_file
+        registerOverwriteFileTool(server);        // dlqq_overwrite_file
+        registerAppendFileTool(server);           // dlqq_append_file
         registerRemoveLinesTool(server);          // dlqq_remove_lines_in_file
+        registerReplaceLinesTool(server);         // dlqq_replace_lines_in_file
         registerInsertTextTool(server);           // dlqq_insert_text_in_file
         registerReplaceTextTool(server);          // dlqq_replace_text_in_file
         registerDeleteFileTool(server);           // dlqq_delete_file
         registerCopyFileTool(server);             // dlqq_copy_file
         registerMoveFileTool(server);             // dlqq_move_file
+        registerRenameFileTool(server);           // dlqq_rename_file
 
-        // ========== 目录操作工具 (9-13) ==========
+        // ========== 目录操作工具 (12-17) ==========
         registerCreateDirTool(server);            // dlqq_mdir
         registerCreateDirsTool(server);           // dlqq_mdirs
         registerDeleteDirTool(server);            // dlqq_delete_dir
         registerCopyDirTool(server);              // dlqq_copy_dir
         registerMoveDirTool(server);              // dlqq_move_dir
+        registerRenameDirTool(server);              // dlqq_rename_dir
 
-        // ========== 二进制文件操作工具 (14-15) ==========
+        // ========== 二进制文件操作工具 (18-19) ==========
         registerReadBinFileTool(server);          // dlqq_read_bin_file
         registerWriteBinFileTool(server);         // dlqq_write_bin_file
 
-        // ========== 搜索工具 (16-17) ==========
+        // ========== 搜索工具 (20-21) ==========
         registerSearchFileTool(server);           // dlqq_search_file
         registerSearchDirTool(server);            // dlqq_search_dir
 
-        // ========== 对话框工具 (18-20) ==========
+        // ========== 对话框工具 (22-24) ==========
         registerDialogTextTool(server);           // dlqq_dialog_text
         registerDialogCheckTool(server);          // dlqq_dialog_check
         registerDialogFilePathTool(server);       // dlqq_dialog_file_path
 
-        // ========== 串口工具 (21) ==========
-        registerUartTools(server);                // dlqq_uart_tools
+        // ========== 串口工具 (25-31) ==========
+        registerRunUartTool(server);              // dlqq_run_uart
+        registerUartGetComTool(server);         // dlqq_uart_get_com
+        registerUartOpenComTool(server);          // dlqq_uart_open_com
+        registerUartCloseComTool(server);         // dlqq_uart_close_com
+        registerUartGetTextTool(server);          // dlqq_uart_get_text
+        registerUartClearTextTool(server);        // dlqq_uart_clear_text
+        registerUartSetTextSizeTool(server);      // dlqq_uart_set_text_size
     }
 
     // ==================== 文件操作工具 ====================
@@ -143,6 +154,87 @@ public class AITools {
     }
 
     /**
+     * 2.5 dlqq_overwrite_file - 覆盖文件
+     */
+    private void registerOverwriteFileTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "文件路径（支持绝对路径和相对路径）");
+        properties.put("file_path", pathProp);
+
+        Map<String, Object> contentProp = new HashMap<>();
+        contentProp.put("type", "string");
+        contentProp.put("description", "文件内容（会完全覆盖原文件内容）");
+        properties.put("content", contentProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path"));
+
+        server.addTool("dlqq_overwrite_file",
+            "覆盖指定文件的内容，不管文件是否存在都会直接写入。自动创建父目录。",
+            inputSchema,
+            arguments -> {
+                String filePath = (String) arguments.get("file_path");
+                String content = (String) arguments.get("content");
+
+                if (filePath == null || filePath.trim().isEmpty()) {
+                    return errorResult("文件路径不能为空");
+                }
+
+                try {
+                    FileTools.overwriteFile(filePath, content);
+                    return textResult("文件覆盖成功: " + filePath);
+                } catch (IOException e) {
+                    return errorResult("覆盖文件失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 2.6 dlqq_append_file - 追加文件内容
+     */
+    private void registerAppendFileTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "文件路径（支持绝对路径和相对路径）");
+        properties.put("file_path", pathProp);
+
+        Map<String, Object> contentProp = new HashMap<>();
+        contentProp.put("type", "string");
+        contentProp.put("description", "要追加的内容");
+        properties.put("content", contentProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "content"));
+
+        server.addTool("dlqq_append_file",
+            "在文件末尾追加内容。如果文件不存在会自动创建。自动创建父目录。",
+            inputSchema,
+            arguments -> {
+                String filePath = (String) arguments.get("file_path");
+                String content = (String) arguments.get("content");
+
+                if (filePath == null || filePath.trim().isEmpty()) {
+                    return errorResult("文件路径不能为空");
+                }
+                if (content == null || content.isEmpty()) {
+                    return errorResult("追加内容不能为空");
+                }
+
+                try {
+                    FileTools.appendFile(filePath, content);
+                    return textResult("内容追加成功: " + filePath);
+                } catch (IOException e) {
+                    return errorResult("追加内容失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
      * 3. dlqq_remove_lines_in_file - 删除指定行
      */
     private void registerRemoveLinesTool(McpServer server) {
@@ -186,6 +278,67 @@ public class AITools {
                         return textResult("成功删除第 " + startLine + " 行至第 " + endLine + " 行");
                     } else {
                         return errorResult("删除失败");
+                    }
+                } catch (IOException e) {
+                    return errorResult("操作失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 3.5 dlqq_replace_lines_in_file - 替换指定行内容
+     */
+    private void registerReplaceLinesTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "文件路径");
+        properties.put("file_path", pathProp);
+
+        Map<String, Object> startProp = new HashMap<>();
+        startProp.put("type", "integer");
+        startProp.put("description", "起始行数（1-based，包含）");
+        properties.put("start_line", startProp);
+
+        Map<String, Object> endProp = new HashMap<>();
+        endProp.put("type", "integer");
+        endProp.put("description", "结束行数（1-based，包含）");
+        properties.put("end_line", endProp);
+
+        Map<String, Object> contentProp = new HashMap<>();
+        contentProp.put("type", "string");
+        contentProp.put("description", "替换的新内容（支持多行）");
+        properties.put("content", contentProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "start_line", "end_line", "content"));
+
+        server.addTool("dlqq_replace_lines_in_file",
+            "将文件中指定行范围的内容替换为新内容（包含起始行和结束行）。支持多行替换。",
+            inputSchema,
+            arguments -> {
+                String filePath = (String) arguments.get("file_path");
+                Integer startLine = parseInteger(arguments.get("start_line"), null);
+                Integer endLine = parseInteger(arguments.get("end_line"), null);
+                String content = (String) arguments.get("content");
+
+                if (filePath == null || filePath.trim().isEmpty()) {
+                    return errorResult("文件路径不能为空");
+                }
+                if (startLine == null || endLine == null) {
+                    return errorResult("起始行和结束行必须指定");
+                }
+                if (content == null) {
+                    content = "";
+                }
+
+                try {
+                    boolean success = FileTools.replaceLinesInFile(filePath, startLine, endLine, content);
+                    if (success) {
+                        return textResult("成功替换第 " + startLine + " 行至第 " + endLine + " 行的内容");
+                    } else {
+                        return errorResult("替换失败");
                     }
                 } catch (IOException e) {
                     return errorResult("操作失败: " + e.getMessage());
@@ -433,6 +586,48 @@ public class AITools {
         );
     }
 
+    /**
+     * 8.5 dlqq_rename_file - 重命名文件
+     */
+    private void registerRenameFileTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> sourceProp = new HashMap<>();
+        sourceProp.put("type", "string");
+        sourceProp.put("description", "源文件路径");
+        properties.put("source_path", sourceProp);
+
+        Map<String, Object> nameProp = new HashMap<>();
+        nameProp.put("type", "string");
+        nameProp.put("description", "新文件名（仅文件名，不包含路径）");
+        properties.put("new_name", nameProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("source_path", "new_name"));
+
+        server.addTool("dlqq_rename_file",
+            "重命名文件，在同一目录下修改文件名。",
+            inputSchema,
+            arguments -> {
+                String sourcePath = (String) arguments.get("source_path");
+                String newName = (String) arguments.get("new_name");
+
+                if (sourcePath == null || sourcePath.trim().isEmpty()) {
+                    return errorResult("源文件路径不能为空");
+                }
+                if (newName == null || newName.trim().isEmpty()) {
+                    return errorResult("新文件名不能为空");
+                }
+
+                try {
+                    FileTools.renameFile(sourcePath, newName);
+                    return textResult("文件重命名成功");
+                } catch (IOException e) {
+                    return errorResult("重命名失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
     // ==================== 目录操作工具 ====================
 
     /**
@@ -617,6 +812,48 @@ public class AITools {
                     return textResult("文件夹移动成功");
                 } catch (IOException e) {
                     return errorResult("移动失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 13.5 dlqq_rename_dir - 重命名文件夹
+     */
+    private void registerRenameDirTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> sourceProp = new HashMap<>();
+        sourceProp.put("type", "string");
+        sourceProp.put("description", "源文件夹路径");
+        properties.put("source_path", sourceProp);
+
+        Map<String, Object> nameProp = new HashMap<>();
+        nameProp.put("type", "string");
+        nameProp.put("description", "新文件夹名（仅文件夹名，不包含路径）");
+        properties.put("new_name", nameProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("source_path", "new_name"));
+
+        server.addTool("dlqq_rename_dir",
+            "重命名文件夹，在同一目录下修改文件夹名。",
+            inputSchema,
+            arguments -> {
+                String sourcePath = (String) arguments.get("source_path");
+                String newName = (String) arguments.get("new_name");
+
+                if (sourcePath == null || sourcePath.trim().isEmpty()) {
+                    return errorResult("源文件夹路径不能为空");
+                }
+                if (newName == null || newName.trim().isEmpty()) {
+                    return errorResult("新文件夹名不能为空");
+                }
+
+                try {
+                    FileTools.renameDirectory(sourcePath, newName);
+                    return textResult("文件夹重命名成功");
+                } catch (IOException e) {
+                    return errorResult("重命名失败: " + e.getMessage());
                 }
             }
         );
@@ -978,51 +1215,218 @@ public class AITools {
     // ==================== 串口工具 ====================
 
     /**
-     * 21. dlqq_uart_tools - 图形化串口工具
+     * 22. dlqq_run_uart - 启动串口服务器
      */
-    private void registerUartTools(McpServer server) {
+    private void registerRunUartTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
 
-        Map<String, Object> actionProp = new HashMap<>();
-        actionProp.put("type", "string");
-        actionProp.put("description", "操作类型：'open'（打开窗口）, 'get_logs'（获取日志）, 'clear_logs'（清除日志）");
-        actionProp.put("enum", Arrays.asList("open", "get_logs", "clear_logs"));
-        properties.put("action", actionProp);
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "服务器端口号（用于AI后续连接）");
+        properties.put("port", portProp);
 
-        Map<String, Object> logLinesProp = new HashMap<>();
-        logLinesProp.put("type", "integer");
-        logLinesProp.put("description", "获取日志时返回的行数（默认100行）");
-        properties.put("log_lines", logLinesProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("action"));
-
-        server.addTool("dlqq_uart_tools",
-            "打开图形化CH340串口工具界面，支持串口通信、数据收发、日志查看。action为'open'时打开界面，'get_logs'时返回指定行数的日志，'clear_logs'时清除日志。",
+        server.addTool("dlqq_run_uart",
+            "打开CH340串口工具，需要指定端口号，用于后续通讯，ip地址为localhost即可，打开后窗口保持运行，AI退出返回对话，继续与用户交互。后续交互使用localhost和指定端口与串口工具连接。",
             inputSchema,
             arguments -> {
-                String action = (String) arguments.get("action");
-                Integer logLines = parseInteger(arguments.get("log_lines"), 100);
+                Integer port = parseInteger(arguments.get("port"), null);
 
-                if (action == null || action.trim().isEmpty()) {
-                    action = "open";
+                if (port == null) {
+                    return errorResult("端口号必须指定");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
                 }
 
                 try {
-                    switch (action) {
-                        case "open":
-                            UartTools.openGuiWindow();
-                            return textResult("已打开串口工具图形界面");
-                        case "get_logs":
-                            String logs = UartTools.getRecentLogs(logLines);
-                            return textResult(logs);
-                        case "clear_logs":
-                            UartTools.clearLogs();
-                            return textResult("日志已清除");
-                        default:
-                            return errorResult("未知的操作类型: " + action);
-                    }
+                    String result = UartTools.runUart(port);
+                    return textResult(result);
                 } catch (Exception e) {
-                    return errorResult("串口工具操作失败: " + e.getMessage());
+                    return errorResult("启动串口工具失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 23. dlqq_uart_get_com - 获取串口通道列表
+     */
+    private void registerUartGetComTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        // 无需参数
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList());
+
+        server.addTool("dlqq_uart_get_com",
+            "获取当前所有的串口通道，如果当前已打开某个串口，还要返回当前已打开某个串口，让AI得知目前串口工具已处于打开状态。",
+            inputSchema,
+            arguments -> {
+                try {
+                    String result = UartTools.getUartComList();
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("获取串口列表失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 24. dlqq_uart_open_com - 打开串口通道
+     */
+    private void registerUartOpenComTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portNameProp = new HashMap<>();
+        portNameProp.put("type", "string");
+        portNameProp.put("description", "串口名称（如 COM3、ttyUSB0、USB Serial等）");
+        properties.put("port_name", portNameProp);
+
+        Map<String, Object> baudRateProp = new HashMap<>();
+        baudRateProp.put("type", "integer");
+        baudRateProp.put("description", "波特率（0~2000000，默认1000000）");
+        properties.put("baud_rate", baudRateProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port_name"));
+
+        server.addTool("dlqq_uart_open_com",
+            "打开某个通道的串口，开始捕获串口日志数据。一般情况下需要选择USB Serial，即USB转串口工具。还需要指定波特率，波特率范围为0~2000000，默认1000000。",
+            inputSchema,
+            arguments -> {
+                String portName = (String) arguments.get("port_name");
+                Integer baudRate = parseInteger(arguments.get("baud_rate"), 1000000);
+
+                if (portName == null || portName.trim().isEmpty()) {
+                    return errorResult("串口名称必须指定");
+                }
+
+                try {
+                    String result = UartTools.openUartCom(portName, baudRate);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("打开串口失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 25. dlqq_uart_close_com - 关闭串口通道
+     */
+    private void registerUartCloseComTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        // 无需参数
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList());
+
+        server.addTool("dlqq_uart_close_com",
+            "关闭当前打开的串口通道。",
+            inputSchema,
+            arguments -> {
+                try {
+                    String result = UartTools.closeUartCom();
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("关闭串口失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 26. dlqq_uart_get_text - 获取串口文本数据
+     */
+    private void registerUartGetTextTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "integer");
+        startLineProp.put("description", "起始行（1-based，默认为1）");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> endLineProp = new HashMap<>();
+        endLineProp.put("type", "integer");
+        endLineProp.put("description", "结束行（1-based，包含，-1表示到末尾）");
+        properties.put("end_line", endLineProp);
+
+        Map<String, Object> readLinesProp = new HashMap<>();
+        readLinesProp.put("type", "integer");
+        readLinesProp.put("description", "读取行数（与end_line互斥，end_line优先）");
+        properties.put("read_lines", readLinesProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList());
+
+        server.addTool("dlqq_uart_get_text",
+            "获取当前串口收到的文本数据，可以指定起始行和结束行，或者是起始行和阅读行数。",
+            inputSchema,
+            arguments -> {
+                Integer startLine = parseInteger(arguments.get("start_line"), 1);
+                Integer endLine = parseInteger(arguments.get("end_line"), -1);
+                Integer readLines = parseInteger(arguments.get("read_lines"), 0);
+
+                try {
+                    String result = UartTools.getUartText(startLine, endLine, readLines);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("获取串口数据失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 27. dlqq_uart_clear_text - 清除串口数据
+     */
+    private void registerUartClearTextTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        // 无需参数
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList());
+
+        server.addTool("dlqq_uart_clear_text",
+            "清除串口接收的数据。",
+            inputSchema,
+            arguments -> {
+                try {
+                    String result = UartTools.clearUartText();
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("清除串口数据失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 28. dlqq_uart_set_text_size - 设置串口缓冲区大小
+     */
+    private void registerUartSetTextSizeTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> sizeProp = new HashMap<>();
+        sizeProp.put("type", "integer");
+        sizeProp.put("description", "缓冲区大小（字节），默认5MB（5242880字节）");
+        properties.put("size_bytes", sizeProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("size_bytes"));
+
+        server.addTool("dlqq_uart_set_text_size",
+            "设置串口数据缓冲区大小，单位字节。大小无限制，默认5M Byte大小。超出缓冲区，最早接收到的串口数据需要丢弃。",
+            inputSchema,
+            arguments -> {
+                Integer sizeBytes = parseInteger(arguments.get("size_bytes"), null);
+
+                if (sizeBytes == null) {
+                    return errorResult("缓冲区大小必须指定");
+                }
+                if (sizeBytes <= 0) {
+                    return errorResult("缓冲区大小必须大于0");
+                }
+
+                try {
+                    String result = UartTools.setUartBufferSize(sizeBytes);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("设置缓冲区大小失败: " + e.getMessage());
                 }
             }
         );
