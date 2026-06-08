@@ -51,7 +51,7 @@ public class AITools {
         registerDialogCheckTool(server);          // dlqq_dialog_check
         registerDialogFilePathTool(server);       // dlqq_dialog_file_path
 
-        // ========== 串口工具 (25-31) ==========
+        // ========== 串口工具 (25-32) ==========
         registerRunUartTool(server);              // dlqq_run_uart
         registerUartGetComTool(server);         // dlqq_uart_get_com
         registerUartOpenComTool(server);          // dlqq_uart_open_com
@@ -59,6 +59,7 @@ public class AITools {
         registerUartGetTextTool(server);          // dlqq_uart_get_text
         registerUartClearTextTool(server);        // dlqq_uart_clear_text
         registerUartSetTextSizeTool(server);      // dlqq_uart_set_text_size
+        registerExitUartTool(server);             // dlqq_exit_uart
     }
 
     // ==================== 文件操作工具 ====================
@@ -1427,6 +1428,27 @@ public class AITools {
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("设置缓冲区大小失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 32. dlqq_exit_uart - 退出串口工具
+     */
+    private void registerExitUartTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList());
+
+        server.addTool("dlqq_exit_uart",
+            "关闭串口工具窗口及其进程，释放所有资源。调用后串口工具将完全停止运行。",
+            inputSchema,
+            arguments -> {
+                try {
+                    String result = UartTools.exitUart();
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("关闭串口工具失败: " + e.getMessage());
                 }
             }
         );

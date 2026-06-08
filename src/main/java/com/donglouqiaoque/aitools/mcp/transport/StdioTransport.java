@@ -623,15 +623,14 @@ public class StdioTransport implements McpTransport {
 
     /**
      * 反转义JSON字符串
+     * 注意：不处理 \b 和 \f，避免Windows路径中的\b被解析为退格符
      */
     private String unescapeJson(String s) {
         return s.replace("\\\"", "\"")
                 .replace("\\\\", "\\")
                 .replace("\\n", "\n")
                 .replace("\\r", "\r")
-                .replace("\\t", "\t")
-                .replace("\\b", "\b")
-                .replace("\\f", "\f");
+                .replace("\\t", "\t");
     }
 
     @Override

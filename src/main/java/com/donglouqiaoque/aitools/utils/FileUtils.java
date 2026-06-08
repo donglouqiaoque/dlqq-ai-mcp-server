@@ -36,6 +36,7 @@ public class FileUtils {
      * @throws IOException 读取异常
      */
     public static String readFile(String filePath) throws IOException {
+        filePath = normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -54,6 +55,7 @@ public class FileUtils {
      * @throws IOException 读取异常
      */
     public static List<String> readFileLines(String filePath) throws IOException {
+        filePath = normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -69,6 +71,7 @@ public class FileUtils {
      * @throws IOException 写入异常
      */
     public static void writeFile(String filePath, String content) throws IOException {
+        filePath = normalizePath(filePath);
         Path path = Paths.get(filePath);
         // 确保父目录存在
         Path parent = path.getParent();
@@ -86,6 +89,7 @@ public class FileUtils {
      * @throws IOException 写入异常
      */
     public static void appendFile(String filePath, String content) throws IOException {
+        filePath = normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             writeFile(filePath, content);
@@ -102,6 +106,7 @@ public class FileUtils {
      * @return 是否存在
      */
     public static boolean exists(String filePath) {
+        filePath = normalizePath(filePath);
         return Files.exists(Paths.get(filePath));
     }
 
@@ -113,6 +118,7 @@ public class FileUtils {
      * @throws IOException 读取异常
      */
     public static long getFileSize(String filePath) throws IOException {
+        filePath = normalizePath(filePath);
         return Files.size(Paths.get(filePath));
     }
 
@@ -137,6 +143,7 @@ public class FileUtils {
      * @return 文件名
      */
     public static String getFileNameWithoutExtension(String filePath) {
+        filePath = normalizePath(filePath);
         String fileName = Paths.get(filePath).getFileName().toString();
         int lastDot = fileName.lastIndexOf('.');
         if (lastDot == -1) {

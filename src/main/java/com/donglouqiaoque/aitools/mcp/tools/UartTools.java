@@ -48,8 +48,8 @@ public class UartTools {
     private JTextArea logArea;
     private JComboBox<String> portCombo;
     private JComboBox<Integer> baudCombo;
-    private JButton openButton;
-    private JButton closeButton;
+    private JButton openCloseButton;
+    private StatusIcon statusIcon;
 
     // 线程池
     private final ExecutorService executor;
@@ -216,11 +216,11 @@ public class UartTools {
 
         // 更新GUI
         SwingUtilities.invokeLater(() -> {
-            if (tools.openButton != null) {
-                tools.openButton.setEnabled(false);
+            if (tools.openCloseButton != null) {
+                tools.openCloseButton.setText("关闭串口");
             }
-            if (tools.closeButton != null) {
-                tools.closeButton.setEnabled(true);
+            if (tools.statusIcon != null) {
+                tools.statusIcon.setOpen(true);
             }
         });
 
@@ -244,11 +244,11 @@ public class UartTools {
 
             // 更新GUI
             SwingUtilities.invokeLater(() -> {
-                if (tools.openButton != null) {
-                    tools.openButton.setEnabled(true);
+                if (tools.openCloseButton != null) {
+                    tools.openCloseButton.setText("打开串口");
                 }
-                if (tools.closeButton != null) {
-                    tools.closeButton.setEnabled(false);
+                if (tools.statusIcon != null) {
+                    tools.statusIcon.setOpen(false);
                 }
             });
 
@@ -347,6 +347,62 @@ public class UartTools {
         }
 
         return "缓冲区大小已设置为 " + sizeBytes + " 字节 (" + (sizeBytes / 1024 / 1024) + " MB)";
+    }
+
+    /**
+     * 8. 退出串口工具 - 关闭窗口及进程
+     *
+     * @return 退出结果
+     */
+    public static String exitUart() {
+        UartTools tools = getInstance();
+
+        // 关闭GUI窗口
+        if (tools.guiWindow != null) {
+            SwingUtilities.invokeLater(() -> {
+                tools.guiWindow.dispose();
+                tools.guiWindow = null;
+            });
+        }
+
+        // 关闭串口
+        if (tools.currentPort != null && tools.currentPort.isOpen()) {
+            tools.currentPort.removeDataListener();
+            tools.currentPort.closePort();
+            tools.isPortOpen = false;
+            tools.currentPort = null;
+        }
+
+        // 关闭服务器
+        tools.isRunning = false;
+        if (tools.serverSocket != null && !tools.serverSocket.isClosed()) {
+            try {
+                tools.serverSocket.close();
+            } catch (IOException e) {
+                return "关闭服务器时出错: " + e.getMessage();
+            }
+        }
+
+        // 关闭线程池
+        tools.executor.shutdown();
+        try {
+            if (!tools.executor.awaitTermination(2, TimeUnit.SECONDS)) {
+                tools.executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            tools.executor.shutdownNow();
+        }
+
+        // 清空缓冲区
+        synchronized (tools.receiveBuffer) {
+            tools.receiveBuffer.clear();
+            tools.currentBufferSize = 0;
+        }
+
+        // 重置实例
+        instance = null;
+
+        return "串口工具已完全关闭";
     }
 
     // ==================== 内部实现 ====================
@@ -505,27 +561,32 @@ public class UartTools {
         baudCombo.setPreferredSize(new Dimension(100, 25));
         controlPanel.add(baudCombo);
 
-        openButton = new JButton("打开串口");
-        closeButton = new JButton("关闭串口");
-        closeButton.setEnabled(false);
+        // 状态指示圆圈（作为按钮图标）
+        statusIcon = new StatusIcon(false);
 
-        openButton.addActionListener(e -> {
-            String selected = (String) portCombo.getSelectedItem();
-            if (selected != null && !selected.equals("未找到串口")) {
-                String portName = selected.split(" - ")[0].trim();
-                int baud = (Integer) baudCombo.getSelectedItem();
-                String result = openUartCom(portName, baud);
+        // 打开/关闭串口按钮（合并为一个）
+        openCloseButton = new JButton("打开串口", statusIcon);
+        openCloseButton.setHorizontalTextPosition(SwingConstants.RIGHT);
+        openCloseButton.setHorizontalAlignment(SwingConstants.CENTER);
+
+        openCloseButton.addActionListener(e -> {
+            if (isPortOpen) {
+                // 当前已打开，执行关闭
+                String result = closeUartCom();
                 JOptionPane.showMessageDialog(guiWindow, result);
+            } else {
+                // 当前未打开，执行打开
+                String selected = (String) portCombo.getSelectedItem();
+                if (selected != null && !selected.equals("未找到串口")) {
+                    String portName = selected.split(" - ")[0].trim();
+                    int baud = (Integer) baudCombo.getSelectedItem();
+                    String result = openUartCom(portName, baud);
+                    JOptionPane.showMessageDialog(guiWindow, result);
+                }
             }
         });
 
-        closeButton.addActionListener(e -> {
-            String result = closeUartCom();
-            JOptionPane.showMessageDialog(guiWindow, result);
-        });
-
-        controlPanel.add(openButton);
-        controlPanel.add(closeButton);
+        controlPanel.add(openCloseButton);
 
         mainPanel.add(controlPanel, BorderLayout.NORTH);
 
@@ -633,6 +694,59 @@ public class UartTools {
                     setFontRecursively(child, font);
                 }
             }
+        }
+    }
+
+    /**
+     * 状态指示圆圈图标组件
+     * 红色表示关闭状态，绿色表示开启状态
+     */
+    private static class StatusIcon implements Icon {
+        private boolean isOpen = false;
+        private static final int SIZE = 16;
+        private static final Color COLOR_CLOSED = new Color(220, 53, 69);  // 红色
+        private static final Color COLOR_OPEN = new Color(40, 167, 69);   // 绿色
+
+        public StatusIcon(boolean open) {
+            this.isOpen = open;
+        }
+
+        public void setOpen(boolean open) {
+            this.isOpen = open;
+        }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2d = (Graphics2D) g.create();
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // 绘制圆点
+            int diameter = SIZE - 4;
+
+            // 绘制阴影
+            g2d.setColor(new Color(0, 0, 0, 50));
+            g2d.fillOval(x + 1, y + 1, diameter, diameter);
+
+            // 绘制实心圆
+            g2d.setColor(isOpen ? COLOR_OPEN : COLOR_CLOSED);
+            g2d.fillOval(x, y, diameter, diameter);
+
+            // 绘制高光效果
+            g2d.setColor(new Color(255, 255, 255, 100));
+            int highlightSize = diameter / 2;
+            g2d.fillOval(x + 2, y + 2, highlightSize, highlightSize);
+
+            g2d.dispose();
+        }
+
+        @Override
+        public int getIconWidth() {
+            return SIZE;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return SIZE;
         }
     }
 }
