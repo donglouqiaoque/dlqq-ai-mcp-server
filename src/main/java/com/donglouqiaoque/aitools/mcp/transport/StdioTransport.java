@@ -624,13 +624,48 @@ public class StdioTransport implements McpTransport {
     /**
      * 反转义JSON字符串
      * 注意：不处理 \b 和 \f，避免Windows路径中的\b被解析为退格符
+     * 使用逐字符处理方式，避免replace全局替换导致的二次转义问题
      */
     private String unescapeJson(String s) {
-        return s.replace("\\\"", "\"")
-                .replace("\\\\", "\\")
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\t", "\t");
+        StringBuilder result = new StringBuilder();
+        int i = 0;
+        while (i < s.length()) {
+            char c = s.charAt(i);
+            if (c == '\\' && i + 1 < s.length()) {
+                char next = s.charAt(i + 1);
+                switch (next) {
+                    case '"':
+                        result.append('"');
+                        i += 2;
+                        break;
+                    case '\\':
+                        result.append('\\');
+                        i += 2;
+                        break;
+                    case 'n':
+                        result.append('\n');
+                        i += 2;
+                        break;
+                    case 'r':
+                        result.append('\r');
+                        i += 2;
+                        break;
+                    case 't':
+                        result.append('\t');
+                        i += 2;
+                        break;
+                    default:
+                        // 未知的转义序列，保留原样
+                        result.append(c);
+                        i++;
+                        break;
+                }
+            } else {
+                result.append(c);
+                i++;
+            }
+        }
+        return result.toString();
     }
 
     @Override

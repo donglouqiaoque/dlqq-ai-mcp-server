@@ -54,10 +54,15 @@ public class AITools {
         // ========== 串口工具 (25-32) ==========
         registerRunUartTool(server);              // dlqq_run_uart
         registerUartGetComTool(server);         // dlqq_uart_get_com
+        registerUartRefreshComTool(server);       // dlqq_uart_refresh_com
         registerUartOpenComTool(server);          // dlqq_uart_open_com
+        registerUartReopenComTool(server);        // dlqq_uart_reopen_com
         registerUartCloseComTool(server);         // dlqq_uart_close_com
+        registerUartSendTextTool(server);         // dlqq_uart_send_text
+        registerUartSendHexTool(server);          // dlqq_uart_send_hex
         registerUartGetTextTool(server);          // dlqq_uart_get_text
         registerUartClearTextTool(server);        // dlqq_uart_clear_text
+        registerUartGetLineCountTool(server);     // dlqq_uart_get_line_count
         registerUartSetTextSizeTool(server);      // dlqq_uart_set_text_size
         registerExitUartTool(server);             // dlqq_exit_uart
     }
@@ -90,23 +95,29 @@ public class AITools {
         linesProp.put("description", "读取行数（与end_line互斥，end_line优先）");
         properties.put("read_lines", linesProp);
 
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path"));
 
         server.addTool("dlqq_read_file",
-            "读取指定文件的指定行范围的内容。支持通过start_line和end_line指定范围，或通过start_line和read_lines指定起始行和读取行数。",
+            "读取指定文件的指定行范围的内容。支持通过start_line和end_line指定范围，或通过start_line和read_lines指定起始行和读取行数。支持指定字符集编码（默认UTF-8）。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
                 Integer startLine = parseInteger(arguments.get("start_line"), 1);
                 Integer endLine = parseInteger(arguments.get("end_line"), -1);
                 Integer readLines = parseInteger(arguments.get("read_lines"), 0);
+                String charset = (String) arguments.get("charset");
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
                 }
 
                 try {
-                    String content = FileTools.readFile(filePath, startLine, endLine, readLines);
+                    String content = FileTools.readFile(filePath, startLine, endLine, readLines, charset);
                     return textResult(content);
                 } catch (IOException e) {
                     return errorResult("读取文件失败: " + e.getMessage());
@@ -131,21 +142,27 @@ public class AITools {
         contentProp.put("description", "文件内容（为空则创建空文件）");
         properties.put("content", contentProp);
 
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path"));
 
         server.addTool("dlqq_create_file",
-            "创建新文件，可指定文件内容。如果文件已存在，会覆盖原有内容。自动创建父目录。",
+            "创建新文件，可指定文件内容。如果文件已存在，会覆盖原有内容。自动创建父目录。支持指定字符集编码（默认UTF-8）。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
                 String content = (String) arguments.get("content");
+                String charset = (String) arguments.get("charset");
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
                 }
 
                 try {
-                    FileTools.createFile(filePath, content);
+                    FileTools.createFile(filePath, content, charset);
                     return textResult("文件创建成功: " + filePath);
                 } catch (IOException e) {
                     return errorResult("创建文件失败: " + e.getMessage());
@@ -170,21 +187,27 @@ public class AITools {
         contentProp.put("description", "文件内容（会完全覆盖原文件内容）");
         properties.put("content", contentProp);
 
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path"));
 
         server.addTool("dlqq_overwrite_file",
-            "覆盖指定文件的内容，不管文件是否存在都会直接写入。自动创建父目录。",
+            "覆盖指定文件的内容，不管文件是否存在都会直接写入。自动创建父目录。支持指定字符集编码（默认UTF-8）。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
                 String content = (String) arguments.get("content");
+                String charset = (String) arguments.get("charset");
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
                 }
 
                 try {
-                    FileTools.overwriteFile(filePath, content);
+                    FileTools.overwriteFile(filePath, content, charset);
                     return textResult("文件覆盖成功: " + filePath);
                 } catch (IOException e) {
                     return errorResult("覆盖文件失败: " + e.getMessage());
@@ -209,14 +232,20 @@ public class AITools {
         contentProp.put("description", "要追加的内容");
         properties.put("content", contentProp);
 
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "content"));
 
         server.addTool("dlqq_append_file",
-            "在文件末尾追加内容。如果文件不存在会自动创建。自动创建父目录。",
+            "在文件末尾追加内容。如果文件不存在会自动创建。自动创建父目录。支持指定字符集编码（默认UTF-8）。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
                 String content = (String) arguments.get("content");
+                String charset = (String) arguments.get("charset");
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
@@ -226,7 +255,7 @@ public class AITools {
                 }
 
                 try {
-                    FileTools.appendFile(filePath, content);
+                    FileTools.appendFile(filePath, content, charset);
                     return textResult("内容追加成功: " + filePath);
                 } catch (IOException e) {
                     return errorResult("追加内容失败: " + e.getMessage());
@@ -256,15 +285,21 @@ public class AITools {
         endProp.put("description", "结束行数（1-based，包含）");
         properties.put("end_line", endProp);
 
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "start_line", "end_line"));
 
         server.addTool("dlqq_remove_lines_in_file",
-            "删除文件中指定行范围的内容（包含起始行和结束行）。",
+            "删除文件中指定行范围的内容（包含起始行和结束行）。支持指定字符集编码（默认UTF-8）。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
+                String charset = (String) arguments.get("charset");
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
@@ -274,7 +309,7 @@ public class AITools {
                 }
 
                 try {
-                    boolean success = FileTools.removeLinesInFile(filePath, startLine, endLine);
+                    boolean success = FileTools.removeLinesInFile(filePath, startLine, endLine, charset);
                     if (success) {
                         return textResult("成功删除第 " + startLine + " 行至第 " + endLine + " 行");
                     } else {
@@ -313,16 +348,22 @@ public class AITools {
         contentProp.put("description", "替换的新内容（支持多行）");
         properties.put("content", contentProp);
 
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "start_line", "end_line", "content"));
 
         server.addTool("dlqq_replace_lines_in_file",
-            "将文件中指定行范围的内容替换为新内容（包含起始行和结束行）。支持多行替换。",
+            "将文件中指定行范围的内容替换为新内容（包含起始行和结束行）。支持多行替换。支持指定字符集编码（默认UTF-8）。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 String content = (String) arguments.get("content");
+                String charset = (String) arguments.get("charset");
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
@@ -335,7 +376,7 @@ public class AITools {
                 }
 
                 try {
-                    boolean success = FileTools.replaceLinesInFile(filePath, startLine, endLine, content);
+                    boolean success = FileTools.replaceLinesInFile(filePath, startLine, endLine, content, charset);
                     if (success) {
                         return textResult("成功替换第 " + startLine + " 行至第 " + endLine + " 行的内容");
                     } else {
@@ -369,15 +410,21 @@ public class AITools {
         contentProp.put("description", "要插入的内容（支持多行）");
         properties.put("content", contentProp);
 
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "line", "content"));
 
         server.addTool("dlqq_insert_text_in_file",
-            "在文件的指定行之前插入内容。支持插入多行文本。",
+            "在文件的指定行之前插入内容。支持插入多行文本。支持指定字符集编码（默认UTF-8）。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
                 Integer line = parseInteger(arguments.get("line"), null);
                 String content = (String) arguments.get("content");
+                String charset = (String) arguments.get("charset");
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
@@ -390,7 +437,7 @@ public class AITools {
                 }
 
                 try {
-                    boolean success = FileTools.insertTextInFile(filePath, line, content);
+                    boolean success = FileTools.insertTextInFile(filePath, line, content, charset);
                     if (success) {
                         return textResult("成功在第 " + line + " 行前插入内容");
                     } else {
@@ -430,16 +477,22 @@ public class AITools {
         modeProp.put("enum", Arrays.asList("text", "regex"));
         properties.put("mode", modeProp);
 
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "search_text", "replace_text"));
 
         server.addTool("dlqq_replace_text_in_file",
-            "替换文件中的指定文本。支持普通文本模式和正则表达式模式。",
+            "替换文件中的指定文本。支持普通文本模式和正则表达式模式。支持指定字符集编码（默认UTF-8）。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
                 String searchText = (String) arguments.get("search_text");
                 String replaceText = (String) arguments.get("replace_text");
                 String mode = (String) arguments.getOrDefault("mode", "text");
+                String charset = (String) arguments.get("charset");
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
@@ -453,7 +506,7 @@ public class AITools {
 
                 try {
                     boolean useRegex = "regex".equalsIgnoreCase(mode);
-                    int count = FileTools.replaceTextInFile(filePath, searchText, replaceText, useRegex);
+                    int count = FileTools.replaceTextInFile(filePath, searchText, replaceText, useRegex, charset);
                     if (count > 0) {
                         return textResult("成功替换 " + count + " 处内容");
                     } else {
@@ -1256,18 +1309,68 @@ public class AITools {
      */
     private void registerUartGetComTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
-        // 无需参数
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList());
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
         server.addTool("dlqq_uart_get_com",
-            "获取当前所有的串口通道，如果当前已打开某个串口，还要返回当前已打开某个串口，让AI得知目前串口工具已处于打开状态。",
+            "获取当前所有的串口通道。必须先指定要操作的串口工具的端口号。",
             inputSchema,
             arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
                 try {
-                    String result = UartTools.getUartComList();
+                    String result = UartTools.getUartComList(port);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取串口列表失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 23a. dlqq_uart_refresh_com - 刷新可用串口列表
+     */
+    private void registerUartRefreshComTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_uart_refresh_com",
+            "刷新可用串口列表。获取系统中当前可用的所有串口设备。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = UartTools.refreshComList(port);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("刷新串口列表失败: " + e.getMessage());
                 }
             }
         );
@@ -1279,34 +1382,103 @@ public class AITools {
     private void registerUartOpenComTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
 
-        Map<String, Object> portNameProp = new HashMap<>();
-        portNameProp.put("type", "string");
-        portNameProp.put("description", "串口名称（如 COM3、ttyUSB0、USB Serial等）");
-        properties.put("port_name", portNameProp);
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        Map<String, Object> comProp = new HashMap<>();
+        comProp.put("type", "string");
+        comProp.put("description", "串口号（如 COM3、ttyUSB0、USB Serial等）");
+        properties.put("com", comProp);
 
         Map<String, Object> baudRateProp = new HashMap<>();
         baudRateProp.put("type", "integer");
         baudRateProp.put("description", "波特率（0~2000000，默认1000000）");
         properties.put("baud_rate", baudRateProp);
 
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port_name"));
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "com"));
 
         server.addTool("dlqq_uart_open_com",
-            "打开某个通道的串口，开始捕获串口日志数据。一般情况下需要选择USB Serial，即USB转串口工具。还需要指定波特率，波特率范围为0~2000000，默认1000000。",
+            "打开某个通道的串口，开始捕获串口日志数据。必须指定串口工具的端口号和串口号，波特率可选，默认为1000000。",
             inputSchema,
             arguments -> {
-                String portName = (String) arguments.get("port_name");
+                Integer port = parseInteger(arguments.get("port"), null);
+                String com = (String) arguments.get("com");
                 Integer baudRate = parseInteger(arguments.get("baud_rate"), 1000000);
 
-                if (portName == null || portName.trim().isEmpty()) {
-                    return errorResult("串口名称必须指定");
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (com == null || com.trim().isEmpty()) {
+                    return errorResult("串口号必须指定");
+                }
+                if (baudRate < 0 || baudRate > 2000000) {
+                    return errorResult("波特率必须在 0~2000000 范围内");
                 }
 
                 try {
-                    String result = UartTools.openUartCom(portName, baudRate);
+                    String result = UartTools.openUartCom(port, com, baudRate);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("打开串口失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 24a. dlqq_uart_reopen_com - 重新打开串口（用于重新设置波特率）
+     */
+    private void registerUartReopenComTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        Map<String, Object> comProp = new HashMap<>();
+        comProp.put("type", "string");
+        comProp.put("description", "串口号（如 COM3、ttyUSB0等）");
+        properties.put("com", comProp);
+
+        Map<String, Object> baudRateProp = new HashMap<>();
+        baudRateProp.put("type", "integer");
+        baudRateProp.put("description", "波特率（0~2000000，默认1000000）");
+        properties.put("baud_rate", baudRateProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "com"));
+
+        server.addTool("dlqq_uart_reopen_com",
+            "重新打开串口，用于更改波特率。会先关闭当前串口，然后用新的波特率重新打开。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                String com = (String) arguments.get("com");
+                Integer baudRate = parseInteger(arguments.get("baud_rate"), 1000000);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (com == null || com.trim().isEmpty()) {
+                    return errorResult("串口号必须指定");
+                }
+                if (baudRate < 0 || baudRate > 2000000) {
+                    return errorResult("波特率必须在 0~2000000 范围内");
+                }
+
+                try {
+                    String result = UartTools.reopenUartCom(port, com, baudRate);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("重新打开串口失败: " + e.getMessage());
                 }
             }
         );
@@ -1317,15 +1489,29 @@ public class AITools {
      */
     private void registerUartCloseComTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
-        // 无需参数
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList());
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
         server.addTool("dlqq_uart_close_com",
-            "关闭当前打开的串口通道。",
+            "关闭指定串口工具的当前打开的串口通道。",
             inputSchema,
             arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
                 try {
-                    String result = UartTools.closeUartCom();
+                    String result = UartTools.closeUartCom(port);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("关闭串口失败: " + e.getMessage());
@@ -1335,38 +1521,155 @@ public class AITools {
     }
 
     /**
+     * 25a. dlqq_uart_send_text - 发送文本数据到串口
+     */
+    private void registerUartSendTextTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        Map<String, Object> textProp = new HashMap<>();
+        textProp.put("type", "string");
+        textProp.put("description", "要发送的文本内容");
+        properties.put("text", textProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "text"));
+
+        server.addTool("dlqq_uart_send_text",
+            "发送文本数据到指定串口。发送的内容会同时存入缓冲区，方便后续查看。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                String text = (String) arguments.get("text");
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (text == null || text.trim().isEmpty()) {
+                    return errorResult("发送内容不能为空");
+                }
+
+                try {
+                    String result = UartTools.sendUartText(port, text);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("发送文本失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 25b. dlqq_uart_send_hex - 发送16进制数据到串口
+     */
+    private void registerUartSendHexTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        Map<String, Object> hexArrayProp = new HashMap<>();
+        hexArrayProp.put("type", "array");
+        hexArrayProp.put("description", "16进制字符串数组（如 [\"FF\", \"01\", \"02\"]）");
+        properties.put("hex_array", hexArrayProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "hex_array"));
+
+        server.addTool("dlqq_uart_send_hex",
+            "发送16进制数据到指定串口。每个字符串应为偶数长度的16进制字符（如 \"FF01\"）。发送的内容会同时存入缓冲区。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                @SuppressWarnings("unchecked")
+                List<String> hexArray = (List<String>) arguments.get("hex_array");
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (hexArray == null || hexArray.isEmpty()) {
+                    return errorResult("16进制数据不能为空");
+                }
+
+                try {
+                    String result = UartTools.sendUartHex(port, hexArray);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("发送16进制数据失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
      * 26. dlqq_uart_get_text - 获取串口文本数据
+     * 支持3种模式：
+     * 模式1: start_line + end_line - 直接读取已有数据
+     * 模式2: start_line + line_count - 直接读取已有数据
+     * 模式3: start_line + timeout_ms + line_count - 等待模式读取新数据
      */
     private void registerUartGetTextTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
 
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
         Map<String, Object> startLineProp = new HashMap<>();
         startLineProp.put("type", "integer");
-        startLineProp.put("description", "起始行（1-based，默认为1）");
+        startLineProp.put("description", "起始行（1-based，模式1/2必需，模式3默认为-1表示从最后一行开始读取新数据）");
         properties.put("start_line", startLineProp);
 
         Map<String, Object> endLineProp = new HashMap<>();
         endLineProp.put("type", "integer");
-        endLineProp.put("description", "结束行（1-based，包含，-1表示到末尾）");
+        endLineProp.put("description", "结束行（1-based，模式1使用）");
         properties.put("end_line", endLineProp);
 
-        Map<String, Object> readLinesProp = new HashMap<>();
-        readLinesProp.put("type", "integer");
-        readLinesProp.put("description", "读取行数（与end_line互斥，end_line优先）");
-        properties.put("read_lines", readLinesProp);
+        Map<String, Object> lineCountProp = new HashMap<>();
+        lineCountProp.put("type", "integer");
+        lineCountProp.put("description", "读取行数（模式2和模式3使用，模式3必需）");
+        properties.put("line_count", lineCountProp);
 
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList());
+        Map<String, Object> timeoutProp = new HashMap<>();
+        timeoutProp.put("type", "integer");
+        timeoutProp.put("description", "超时时间（毫秒，模式3使用，默认0表示不等待）");
+        properties.put("timeout_ms", timeoutProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
         server.addTool("dlqq_uart_get_text",
-            "获取当前串口收到的文本数据，可以指定起始行和结束行，或者是起始行和阅读行数。",
+            "获取串口缓冲区日志数据。支持3种模式：\n" +
+            "模式1: 指定start_line和end_line，直接读取已有数据\n" +
+            "模式2: 指定start_line和line_count，直接读取已有数据\n" +
+            "模式3: 指定timeout_ms和line_count（start_line默认为-1），等待读取新数据",
             inputSchema,
             arguments -> {
-                Integer startLine = parseInteger(arguments.get("start_line"), 1);
-                Integer endLine = parseInteger(arguments.get("end_line"), -1);
-                Integer readLines = parseInteger(arguments.get("read_lines"), 0);
+                Integer port = parseInteger(arguments.get("port"), null);
+                Integer startLine = parseInteger(arguments.get("start_line"), null);
+                Integer endLine = parseInteger(arguments.get("end_line"), null);
+                Integer lineCount = parseInteger(arguments.get("line_count"), null);
+                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
 
                 try {
-                    String result = UartTools.getUartText(startLine, endLine, readLines);
+                    String result = UartTools.getUartText(port, startLine, endLine, lineCount, timeoutMs);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取串口数据失败: " + e.getMessage());
@@ -1380,18 +1683,68 @@ public class AITools {
      */
     private void registerUartClearTextTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
-        // 无需参数
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList());
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
         server.addTool("dlqq_uart_clear_text",
-            "清除串口接收的数据。",
+            "清除指定串口工具接收的数据。",
             inputSchema,
             arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
                 try {
-                    String result = UartTools.clearUartText();
+                    String result = UartTools.clearUartText(port);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("清除串口数据失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 27a. dlqq_uart_get_line_count - 获取缓冲区行数
+     */
+    private void registerUartGetLineCountTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_uart_get_line_count",
+            "获取指定串口工具缓冲区当前的日志行数。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = UartTools.getLineCount(port);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("获取行数失败: " + e.getMessage());
                 }
             }
         );
@@ -1403,19 +1756,31 @@ public class AITools {
     private void registerUartSetTextSizeTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
 
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
         Map<String, Object> sizeProp = new HashMap<>();
         sizeProp.put("type", "integer");
         sizeProp.put("description", "缓冲区大小（字节），默认5MB（5242880字节）");
         properties.put("size_bytes", sizeProp);
 
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("size_bytes"));
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "size_bytes"));
 
         server.addTool("dlqq_uart_set_text_size",
-            "设置串口数据缓冲区大小，单位字节。大小无限制，默认5M Byte大小。超出缓冲区，最早接收到的串口数据需要丢弃。",
+            "设置指定串口工具的数据缓冲区大小，单位字节。大小无限制，默认5M Byte大小。超出缓冲区，最早接收到的串口数据需要丢弃。",
             inputSchema,
             arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
                 Integer sizeBytes = parseInteger(arguments.get("size_bytes"), null);
 
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
                 if (sizeBytes == null) {
                     return errorResult("缓冲区大小必须指定");
                 }
@@ -1424,7 +1789,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = UartTools.setUartBufferSize(sizeBytes);
+                    String result = UartTools.setUartBufferSize(port, sizeBytes);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("设置缓冲区大小失败: " + e.getMessage());
@@ -1438,14 +1803,29 @@ public class AITools {
      */
     private void registerExitUartTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList());
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
         server.addTool("dlqq_exit_uart",
-            "关闭串口工具窗口及其进程，释放所有资源。调用后串口工具将完全停止运行。",
+            "关闭指定端口号的串口工具窗口及其进程，释放所有资源。调用后该端口的串口工具将完全停止运行。",
             inputSchema,
             arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
                 try {
-                    String result = UartTools.exitUart();
+                    String result = UartTools.exitUart(port);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("关闭串口工具失败: " + e.getMessage());

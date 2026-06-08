@@ -3,6 +3,8 @@ package com.donglouqiaoque.aitools.mcp.tools;
 import com.donglouqiaoque.aitools.utils.FileUtils;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,16 +18,17 @@ import java.util.regex.PatternSyntaxException;
 public class FileTools {
 
     /**
-     * 读取文件内容（支持行范围）
+     * 读取文件内容（支持行范围和字符集）
      *
      * @param filePath   文件路径
      * @param startLine  起始行（1-based，包含）
      * @param endLine    结束行（1-based，包含），-1表示到文件末尾
      * @param readLines  读取行数（与endLine互斥，优先使用endLine）
+     * @param charset    字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
      * @return 指定范围的文件内容
      * @throws IOException 读取异常
      */
-    public static String readFile(String filePath, int startLine, int endLine, int readLines) throws IOException {
+    public static String readFile(String filePath, int startLine, int endLine, int readLines, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
@@ -35,7 +38,17 @@ public class FileTools {
             throw new IOException("文件无法读取: " + filePath);
         }
 
-        List<String> lines = Files.readAllLines(path);
+        // 解析字符集，默认为 UTF-8
+        Charset cs = StandardCharsets.UTF_8;
+        if (charset != null && !charset.trim().isEmpty()) {
+            try {
+                cs = Charset.forName(charset.trim());
+            } catch (Exception e) {
+                throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+            }
+        }
+
+        List<String> lines = Files.readAllLines(path, cs);
         if (lines.isEmpty()) {
             return "";
         }
@@ -79,11 +92,22 @@ public class FileTools {
      *
      * @param filePath 文件路径
      * @param content  文件内容（null或空字符串则创建空文件）
+     * @param charset  字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
      * @throws IOException 创建异常
      */
-    public static void createFile(String filePath, String content) throws IOException {
+    public static void createFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
+
+        // 解析字符集，默认为 UTF-8
+        Charset cs = StandardCharsets.UTF_8;
+        if (charset != null && !charset.trim().isEmpty()) {
+            try {
+                cs = Charset.forName(charset.trim());
+            } catch (Exception e) {
+                throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+            }
+        }
 
         // 确保父目录存在
         Path parent = path.getParent();
@@ -98,7 +122,7 @@ public class FileTools {
 
         // 写入内容
         if (content != null && !content.isEmpty()) {
-            Files.writeString(path, content);
+            Files.writeString(path, content, cs);
         }
     }
 
@@ -107,11 +131,22 @@ public class FileTools {
      *
      * @param filePath 文件路径
      * @param content  文件内容
+     * @param charset  字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
      * @throws IOException 写入异常
      */
-    public static void overwriteFile(String filePath, String content) throws IOException {
+    public static void overwriteFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
+
+        // 解析字符集，默认为 UTF-8
+        Charset cs = StandardCharsets.UTF_8;
+        if (charset != null && !charset.trim().isEmpty()) {
+            try {
+                cs = Charset.forName(charset.trim());
+            } catch (Exception e) {
+                throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+            }
+        }
 
         // 确保父目录存在
         Path parent = path.getParent();
@@ -120,7 +155,7 @@ public class FileTools {
         }
 
         // 直接写入内容（覆盖原有内容或创建新文件）
-        Files.writeString(path, content != null ? content : "");
+        Files.writeString(path, content != null ? content : "", cs);
     }
 
     /**
@@ -128,14 +163,25 @@ public class FileTools {
      *
      * @param filePath 文件路径
      * @param content  追加的内容
+     * @param charset  字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
      * @throws IOException 写入异常
      */
-    public static void appendFile(String filePath, String content) throws IOException {
+    public static void appendFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
 
         if (content == null || content.isEmpty()) {
             return;
+        }
+
+        // 解析字符集，默认为 UTF-8
+        Charset cs = StandardCharsets.UTF_8;
+        if (charset != null && !charset.trim().isEmpty()) {
+            try {
+                cs = Charset.forName(charset.trim());
+            } catch (Exception e) {
+                throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+            }
         }
 
         // 确保父目录存在
@@ -146,9 +192,9 @@ public class FileTools {
 
         // 如果文件不存在，创建新文件；否则追加内容
         if (!Files.exists(path)) {
-            Files.writeString(path, content);
+            Files.writeString(path, content, cs);
         } else {
-            Files.writeString(path, content, java.nio.file.StandardOpenOption.APPEND);
+            Files.writeString(path, content, cs, java.nio.file.StandardOpenOption.APPEND);
         }
     }
 
@@ -299,17 +345,28 @@ public class FileTools {
      * @param filePath  文件路径
      * @param startLine 起始行（1-based，包含）
      * @param endLine   结束行（1-based，包含）
+     * @param charset   字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
      * @return 是否成功删除
      * @throws IOException 操作异常
      */
-    public static boolean removeLinesInFile(String filePath, int startLine, int endLine) throws IOException {
+    public static boolean removeLinesInFile(String filePath, int startLine, int endLine, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
 
-        List<String> lines = Files.readAllLines(path);
+        // 解析字符集，默认为 UTF-8
+        Charset cs = StandardCharsets.UTF_8;
+        if (charset != null && !charset.trim().isEmpty()) {
+            try {
+                cs = Charset.forName(charset.trim());
+            } catch (Exception e) {
+                throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+            }
+        }
+
+        List<String> lines = Files.readAllLines(path, cs);
         if (lines.isEmpty()) {
             return false;
         }
@@ -343,7 +400,7 @@ public class FileTools {
             }
         }
 
-        Files.writeString(path, result.toString());
+        Files.writeString(path, result.toString(), cs);
         return true;
     }
 
@@ -354,17 +411,28 @@ public class FileTools {
      * @param startLine   起始行（1-based，包含）
      * @param endLine     结束行（1-based，包含）
      * @param newContent  新的内容（支持多行）
+     * @param charset     字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
      * @return 是否成功替换
      * @throws IOException 操作异常
      */
-    public static boolean replaceLinesInFile(String filePath, int startLine, int endLine, String newContent) throws IOException {
+    public static boolean replaceLinesInFile(String filePath, int startLine, int endLine, String newContent, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
 
-        List<String> lines = Files.readAllLines(path);
+        // 解析字符集，默认为 UTF-8
+        Charset cs = StandardCharsets.UTF_8;
+        if (charset != null && !charset.trim().isEmpty()) {
+            try {
+                cs = Charset.forName(charset.trim());
+            } catch (Exception e) {
+                throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+            }
+        }
+
+        List<String> lines = Files.readAllLines(path, cs);
         if (lines.isEmpty()) {
             return false;
         }
@@ -410,7 +478,7 @@ public class FileTools {
             }
         }
 
-        Files.writeString(path, result.toString());
+        Files.writeString(path, result.toString(), cs);
         return true;
     }
 
@@ -420,17 +488,28 @@ public class FileTools {
      * @param filePath 文件路径
      * @param lineNum  插入位置（1-based，插入到该行之前）
      * @param content  要插入的内容
+     * @param charset  字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
      * @return 是否成功插入
      * @throws IOException 操作异常
      */
-    public static boolean insertTextInFile(String filePath, int lineNum, String content) throws IOException {
+    public static boolean insertTextInFile(String filePath, int lineNum, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
 
-        List<String> lines = Files.readAllLines(path);
+        // 解析字符集，默认为 UTF-8
+        Charset cs = StandardCharsets.UTF_8;
+        if (charset != null && !charset.trim().isEmpty()) {
+            try {
+                cs = Charset.forName(charset.trim());
+            } catch (Exception e) {
+                throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+            }
+        }
+
+        List<String> lines = Files.readAllLines(path, cs);
 
         // 验证行号
         if (lineNum < 1) {
@@ -458,7 +537,7 @@ public class FileTools {
             }
         }
 
-        Files.writeString(path, result.toString());
+        Files.writeString(path, result.toString(), cs);
         return true;
     }
 
@@ -469,17 +548,28 @@ public class FileTools {
      * @param searchText  搜索文本
      * @param replaceText 替换文本
      * @param useRegex    是否使用正则表达式
+     * @param charset     字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
      * @return 替换次数
      * @throws IOException 操作异常
      */
-    public static int replaceTextInFile(String filePath, String searchText, String replaceText, boolean useRegex) throws IOException {
+    public static int replaceTextInFile(String filePath, String searchText, String replaceText, boolean useRegex, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
 
-        String content = Files.readString(path);
+        // 解析字符集，默认为 UTF-8
+        Charset cs = StandardCharsets.UTF_8;
+        if (charset != null && !charset.trim().isEmpty()) {
+            try {
+                cs = Charset.forName(charset.trim());
+            } catch (Exception e) {
+                throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+            }
+        }
+
+        String content = Files.readString(path, cs);
         String newContent;
         int replaceCount = 0;
 
@@ -512,7 +602,7 @@ public class FileTools {
 
         // 如果有替换，写回文件
         if (replaceCount > 0) {
-            Files.writeString(path, newContent);
+            Files.writeString(path, newContent, cs);
         }
 
         return replaceCount;
