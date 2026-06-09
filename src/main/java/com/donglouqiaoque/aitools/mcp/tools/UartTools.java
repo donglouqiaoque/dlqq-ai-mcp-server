@@ -449,6 +449,11 @@ public class UartTools {
 
         UartTools tools = getInstance(port);
 
+        // 检查串口是否已打开
+        if (!tools.isPortOpen || tools.currentPort == null) {
+            return "错误：串口未打开，请先使用 dlqq_uart_open_com 打开串口";
+        }
+
         // 判断读取模式
         boolean isWaitMode = timeout_ms > 0;
 
@@ -579,6 +584,9 @@ public class UartTools {
                 }
             });
 
+            // 更新状态栏显示
+            tools.updateStatusLabel();
+
             return "已清除 " + clearedLines + " 行数据及所有统计数据";
         }
     }
@@ -600,6 +608,11 @@ public class UartTools {
         }
 
         UartTools tools = getInstance(port);
+
+        // 检查串口是否已打开
+        if (!tools.isPortOpen || tools.currentPort == null) {
+            return "错误：串口未打开，请先使用 dlqq_uart_open_com 打开串口";
+        }
 
         synchronized (tools.dataBuffer) {
             int lineCount = tools.dataBuffer.size();
@@ -1095,6 +1108,36 @@ public class UartTools {
         logPanel.add(logScroll, BorderLayout.CENTER);
 
         JPanel logButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+
+        // 显示当前缓冲区大小
+        JLabel bufferSizeLabel = new JLabel("缓冲区: " + maxBufferSize + " bytes");
+        bufferSizeLabel.setFont(new Font("Consolas", Font.PLAIN, 11));
+        logButtonPanel.add(bufferSizeLabel);
+
+        // 设置缓冲区大小按钮
+        JButton setBufferSizeButton = new JButton("设置缓冲区");
+        setBufferSizeButton.addActionListener(e -> {
+            String input = JOptionPane.showInputDialog(guiWindow,
+                "请输入缓冲区大小（字节）：\n(当前: " + maxBufferSize + " bytes, 默认: 5242880 bytes [5MB])",
+                String.valueOf(maxBufferSize));
+            if (input != null && !input.trim().isEmpty()) {
+                try {
+                    int sizeBytes = Integer.parseInt(input.trim());
+                    if (sizeBytes <= 0) {
+                        JOptionPane.showMessageDialog(guiWindow, "缓冲区大小必须大于0", "错误", JOptionPane.ERROR_MESSAGE);
+                    } else {
+                        String result = setUartBufferSize(serverPort, sizeBytes);
+                        JOptionPane.showMessageDialog(guiWindow, result);
+                        // 更新标签显示
+                        bufferSizeLabel.setText("缓冲区: " + maxBufferSize + " bytes");
+                    }
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(guiWindow, "请输入有效的数字", "错误", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        logButtonPanel.add(setBufferSizeButton);
+
         JButton clearLogButton = new JButton("清空日志");
         clearLogButton.addActionListener(e -> {
             logArea.setText("");
