@@ -5,6 +5,8 @@
 - 工程打包的jar文件要放在该目录下：工程目录\release\版本号
 - 每次修改完代码，都要构建一遍jar包，替换当前release目录下的文件。
 - QWEN的MCP服务器配置教程网页链接：https://qwenlm.github.io/qwen-code-docs/zh/users/features/mcp/
+- 增减修改MCP服务器工具以后，README.md也要更新：工程目录\README.md
+- 增减修改MCP服务器工具以后，QWEN.md也要更新：工程目录\release/debug\V1.x.x/V255.x.x\QWEN.md
 
 ## 自动构建脚本
 

@@ -54,6 +54,9 @@ public class UartTools {
     private JButton openCloseButton;
     private StatusIcon statusIcon;
 
+    // 显示格式控制（文本/HEX）
+    private boolean displayAsHex = false;  // 日志显示格式：false=文本, true=HEX
+
     // 线程池
     private final ExecutorService executor;
 
@@ -311,12 +314,11 @@ public class UartTools {
                             String received = new String(newData, 0, numRead, StandardCharsets.UTF_8);
                             tools.addToBuffer(received);
 
-                            // 更新GUI - 直接显示缓冲区中的格式化内容
+                            // 更新GUI - 根据显示格式设置显示内容
                             SwingUtilities.invokeLater(() -> {
                                 if (tools.logArea != null) {
-                                    String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss.SSS"));
-                                    String logLine = String.format("[%05d] [%s] RX: %s", tools.lineCounter, timestamp, received.trim());
-                                    tools.logArea.append(logLine + "\n");
+                                    String formattedLine = tools.dataBuffer.get(tools.dataBuffer.size() - 1);
+                                    tools.logArea.append(tools.convertLineForDisplay(formattedLine) + "\n");
                                 }
                             });
                         }
@@ -437,7 +439,7 @@ public class UartTools {
      * @param timeout_ms 等待超时毫秒（模式3使用，0表示不等待）
      * @return 文本数据
      */
-    public static String getUartText(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
+    public static String getUartLog(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
         String portError = checkPortParam(port);
         if (portError != null) {
             return portError;
@@ -498,7 +500,7 @@ public class UartTools {
 
                 StringBuilder sb = new StringBuilder();
                 for (int i = startFrom - 1; i < endAt; i++) {
-                    sb.append(tools.dataBuffer.get(i));
+                    sb.append(tools.convertLineForDisplay(tools.dataBuffer.get(i)));
                     if (i < endAt - 1) {
                         sb.append("\n");
                     }
@@ -540,7 +542,7 @@ public class UartTools {
 
                 StringBuilder sb = new StringBuilder();
                 for (int i = start - 1; i < end && i < totalLines; i++) {
-                    sb.append(tools.dataBuffer.get(i));
+                    sb.append(tools.convertLineForDisplay(tools.dataBuffer.get(i)));
                     if (i < end - 1) {
                         sb.append("\n");
                     }
@@ -659,12 +661,11 @@ public class UartTools {
             // 将发送的数据也存入缓冲区，用于调试追踪
             tools.addSentDataToBuffer(text, false);
 
-            // 更新GUI - 显示与缓冲区一致的格式
+            // 更新GUI - 根据显示格式设置显示内容
             SwingUtilities.invokeLater(() -> {
                 if (tools.logArea != null) {
-                    String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss.SSS"));
-                    String logLine = String.format("[%05d] [%s] TX: %s", tools.lineCounter, timestamp, text.trim());
-                    tools.logArea.append(logLine + "\n");
+                    String formattedLine = tools.dataBuffer.get(tools.dataBuffer.size() - 1);
+                    tools.logArea.append(tools.convertLineForDisplay(formattedLine) + "\n");
                 }
             });
 
@@ -739,12 +740,11 @@ public class UartTools {
             // 将发送的16进制数据也存入缓冲区
             tools.addSentDataToBuffer(hexString.toString().trim(), true);
 
-            // 更新GUI - 显示与缓冲区一致的格式
+            // 更新GUI - 根据显示格式设置显示内容
             SwingUtilities.invokeLater(() -> {
                 if (tools.logArea != null) {
-                    String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss.SSS"));
-                    String logLine = String.format("[%05d] [%s] TX[HEX]: %s", tools.lineCounter, timestamp, hexString.toString().trim());
-                    tools.logArea.append(logLine + "\n");
+                    String formattedLine = tools.dataBuffer.get(tools.dataBuffer.size() - 1);
+                    tools.logArea.append(tools.convertLineForDisplay(formattedLine) + "\n");
                 }
             });
 
@@ -858,6 +858,45 @@ public class UartTools {
         return "串口工具实例端口 " + port + " 已完全关闭";
     }
 
+    /**
+     * 9. 切换日志显示格式（文本/HEX）
+     *
+     * @param port 服务器端口号
+     * @param format 显示格式："text" 表示文本，"hex" 表示HEX
+     * @return 切换结果
+     */
+    public static String switchDisplayFormat(int port, String format) {
+        String portError = checkPortParam(port);
+        if (portError != null) {
+            return portError;
+        }
+
+        if (!isInstanceRunning(port)) {
+            return "错误：端口 " + port + " 的串口工具实例未启动，请先使用 dlqq_run_uart 启动";
+        }
+
+        UartTools tools = getInstance(port);
+
+        if (format == null || format.trim().isEmpty()) {
+            return "错误：请指定显示格式，'text' 表示文本，'hex' 表示HEX";
+        }
+
+        String fmt = format.trim().toLowerCase();
+        if (fmt.equals("text") || fmt.equals("txt") || fmt.equals("文本")) {
+            tools.displayAsHex = false;
+            // 刷新日志显示
+            tools.refreshLogDisplay();
+            return "显示格式已切换为：文本（Text）";
+        } else if (fmt.equals("hex") || fmt.equals("十六进制")) {
+            tools.displayAsHex = true;
+            // 刷新日志显示
+            tools.refreshLogDisplay();
+            return "显示格式已切换为：HEX（十六进制）";
+        } else {
+            return "错误：不支持的显示格式 '" + format + "'，请使用 'text' 或 'hex'";
+        }
+    }
+
     // ==================== 内部实现 ====================
 
     /**
@@ -929,7 +968,7 @@ public class UartTools {
                 String[] getArgs = args.split("\\s+", 2);
                 int start = getArgs.length > 0 ? Integer.parseInt(getArgs[0]) : 1;
                 int waitMs = getArgs.length > 1 ? Integer.parseInt(getArgs[1]) : 1000;
-                return getUartText(serverPort, start, null, null, waitMs);
+                return getUartLog(serverPort, start, null, null, waitMs);
             case "clear":
                 return clearUartText(serverPort);
             case "size":
@@ -1012,6 +1051,59 @@ public class UartTools {
     }
 
     /**
+     * 刷新日志显示 - 根据displayAsHex设置重新显示缓冲区内容
+     */
+    private void refreshLogDisplay() {
+        if (logArea == null) return;
+        SwingUtilities.invokeLater(() -> {
+            logArea.setText("");
+            synchronized (dataBuffer) {
+                for (String line : dataBuffer) {
+                    logArea.append(convertLineForDisplay(line) + "\n");
+                }
+            }
+        });
+    }
+
+    /**
+     * 将缓冲区行转换为显示格式（根据displayAsHex设置）
+     */
+    private String convertLineForDisplay(String line) {
+        if (!displayAsHex) {
+            return line;  // 文本模式直接返回
+        }
+        // HEX模式：提取RX/TX数据部分并转换为HEX
+        if (line.contains("RX: ")) {
+            int idx = line.indexOf("RX: ");
+            String prefix = line.substring(0, idx + 4);
+            String data = line.substring(idx + 4);
+            String hexData = bytesToHex(data.getBytes(StandardCharsets.UTF_8));
+            return prefix + hexData;
+        } else if (line.contains("TX: ")) {
+            int idx = line.indexOf("TX: ");
+            String prefix = line.substring(0, idx + 4);
+            String data = line.substring(idx + 4);
+            String hexData = bytesToHex(data.getBytes(StandardCharsets.UTF_8));
+            return prefix + hexData;
+        } else if (line.contains("TX[HEX]: ")) {
+            // 已经是HEX格式，直接返回
+            return line;
+        }
+        return line;
+    }
+
+    /**
+     * 字节数组转换为HEX字符串
+     */
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02X ", b & 0xFF));
+        }
+        return sb.toString().trim();
+    }
+
+    /**
      * 根据名称查找串口
      */
     private static SerialPort findPortByName(String portName) {
@@ -1055,7 +1147,7 @@ public class UartTools {
         controlPanel.add(new JLabel("串口:"));
         portCombo = new JComboBox<>();
         refreshPortList();
-        portCombo.setPreferredSize(new Dimension(150, 25));
+        portCombo.setPreferredSize(new Dimension(280, 25));
         controlPanel.add(portCombo);
 
         JButton refreshButton = new JButton("刷新");
@@ -1063,8 +1155,9 @@ public class UartTools {
         controlPanel.add(refreshButton);
 
         controlPanel.add(new JLabel("波特率:"));
-        baudCombo = new JComboBox<>(new Integer[]{9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600, 1000000});
+        baudCombo = new JComboBox<>(new Integer[]{9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600, 1000000, 2000000});
         baudCombo.setSelectedItem(1000000);
+        baudCombo.setEditable(true);
         baudCombo.setPreferredSize(new Dimension(100, 25));
         controlPanel.add(baudCombo);
 
@@ -1086,7 +1179,23 @@ public class UartTools {
                 String selected = (String) portCombo.getSelectedItem();
                 if (selected != null && !selected.equals("未找到串口")) {
                     String portName = selected.split(" - ")[0].trim();
-                    int baud = (Integer) baudCombo.getSelectedItem();
+                    // 处理自定义波特率输入
+                    int baud;
+                    try {
+                        Object selectedBaud = baudCombo.getSelectedItem();
+                        if (selectedBaud instanceof Integer) {
+                            baud = (Integer) selectedBaud;
+                        } else {
+                            baud = Integer.parseInt(selectedBaud.toString().trim());
+                        }
+                        if (baud <= 0 || baud > 2000000) {
+                            JOptionPane.showMessageDialog(guiWindow, "波特率必须在 1~2000000 范围内", "错误", JOptionPane.ERROR_MESSAGE);
+                            return;
+                        }
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(guiWindow, "请输入有效的波特率数值", "错误", JOptionPane.ERROR_MESSAGE);
+                        return;
+                    }
                     String result = openUartCom(serverPort, portName, baud);
                     JOptionPane.showMessageDialog(guiWindow, result);
                 }
@@ -1107,7 +1216,32 @@ public class UartTools {
         JScrollPane logScroll = new JScrollPane(logArea);
         logPanel.add(logScroll, BorderLayout.CENTER);
 
-        JPanel logButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel logButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+
+        // 显示格式选择 - 放在最左边，控制日志显示和AI返回格式
+        logButtonPanel.add(new JLabel("显示格式:"));
+        JRadioButton textDisplayRadio = new JRadioButton("文本", true);
+        JRadioButton hexDisplayRadio = new JRadioButton("HEX");
+        ButtonGroup displayFormatGroup = new ButtonGroup();
+        displayFormatGroup.add(textDisplayRadio);
+        displayFormatGroup.add(hexDisplayRadio);
+        logButtonPanel.add(textDisplayRadio);
+        logButtonPanel.add(hexDisplayRadio);
+
+        // 显示格式切换事件
+        textDisplayRadio.addActionListener(e -> {
+            displayAsHex = false;
+            // 刷新日志显示
+            refreshLogDisplay();
+        });
+        hexDisplayRadio.addActionListener(e -> {
+            displayAsHex = true;
+            // 刷新日志显示
+            refreshLogDisplay();
+        });
+
+        // 添加分隔
+        logButtonPanel.add(Box.createHorizontalStrut(20));
 
         // 显示当前缓冲区大小
         JLabel bufferSizeLabel = new JLabel("缓冲区: " + maxBufferSize + " bytes");
@@ -1148,11 +1282,85 @@ public class UartTools {
 
         mainPanel.add(logPanel, BorderLayout.CENTER);
 
-        // 底部状态栏（显示缓冲区占用率）
+        // 发送面板
+        JPanel sendPanel = new JPanel(new BorderLayout(5, 5));
+        sendPanel.setBorder(BorderFactory.createTitledBorder("发送数据"));
+
+        // 输入区域
+        JTextArea sendInputArea = new JTextArea(3, 60);
+        sendInputArea.setFont(new Font("Consolas", Font.PLAIN, 12));
+        sendInputArea.setLineWrap(true);
+        sendInputArea.setWrapStyleWord(true);
+        JScrollPane sendInputScroll = new JScrollPane(sendInputArea);
+        sendPanel.add(sendInputScroll, BorderLayout.CENTER);
+
+        // 发送控制面板（底部）
+        JPanel sendControlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+
+        // 发送格式选择 - 控制是以文本方式发送，还是将文本作为HEX数据发送
+        sendControlPanel.add(new JLabel("发送格式:"));
+        JRadioButton textSendRadio = new JRadioButton("文本", true);
+        JRadioButton hexSendRadio = new JRadioButton("HEX");
+        ButtonGroup sendFormatGroup = new ButtonGroup();
+        sendFormatGroup.add(textSendRadio);
+        sendFormatGroup.add(hexSendRadio);
+        sendControlPanel.add(textSendRadio);
+        sendControlPanel.add(hexSendRadio);
+
+        // 发送按钮 - 根据单选框选择决定发送方式
+        JButton sendButton = new JButton("发送");
+        sendButton.addActionListener(e -> {
+            if (!isPortOpen || currentPort == null) {
+                JOptionPane.showMessageDialog(guiWindow, "错误：串口未打开，请先打开串口", "错误", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            String text = sendInputArea.getText();
+            if (text == null || text.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(guiWindow, "请输入要发送的内容", "提示", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+
+            String result;
+            if (textSendRadio.isSelected()) {
+                // 以文本方式发送
+                result = sendUartText(serverPort, text);
+            } else {
+                // 将输入作为HEX数据发送
+                String[] hexParts = text.trim().split("[\\s,]+");
+                List<String> hexList = new ArrayList<>();
+                for (String part : hexParts) {
+                    if (!part.isEmpty()) {
+                        hexList.add(part);
+                    }
+                }
+                if (hexList.isEmpty()) {
+                    JOptionPane.showMessageDialog(guiWindow, "没有有效的HEX数据", "错误", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                result = sendUartHex(serverPort, hexList);
+            }
+            JOptionPane.showMessageDialog(guiWindow, result, "发送结果", JOptionPane.INFORMATION_MESSAGE);
+        });
+        sendControlPanel.add(sendButton);
+
+        // 清空输入按钮
+        JButton clearInputButton = new JButton("清空");
+        clearInputButton.addActionListener(e -> sendInputArea.setText(""));
+        sendControlPanel.add(clearInputButton);
+
+        sendPanel.add(sendControlPanel, BorderLayout.SOUTH);
+
+        // 底部面板：包含发送面板和状态栏
+        JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
+        bottomPanel.add(sendPanel, BorderLayout.CENTER);
+
+        // 状态栏（显示缓冲区占用率）
         statusLabel = new JLabel("行数: 0 | 缓冲区: 0/0 bytes (0.0%) | 发送: 0 bytes | 接收: 0 bytes");
         statusLabel.setBorder(BorderFactory.createEtchedBorder());
         statusLabel.setFont(new Font("Consolas", Font.PLAIN, 11));
-        mainPanel.add(statusLabel, BorderLayout.SOUTH);
+        bottomPanel.add(statusLabel, BorderLayout.SOUTH);
+
+        mainPanel.add(bottomPanel, BorderLayout.SOUTH);
 
         guiWindow.add(mainPanel);
 

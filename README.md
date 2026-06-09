@@ -1,6 +1,6 @@
 # 鸫楼桥鹊AI工具 (donglouqiaoque-ai-tools)
 
-一个Java编写的AI工具集，支持MCP（Model Context Protocol）协议，可与AI客户端（如Qwen Code、Claude、Cursor等）集成使用。
+一个Java编写的AI工具集，支持MCP（Model Context Protocol）协议，专为Qwen Code集成使用。
 
 ## 功能特性
 
@@ -14,7 +14,7 @@
 
 ## 工具列表
 
-本MCP服务器提供21个核心工具：
+本MCP服务器提供33个核心工具：
 
 ### 文件操作工具 (1-8)
 
@@ -61,11 +61,23 @@
 | `dlqq_dialog_check` | 确认对话框，用户选择是/否（独立窗口） |
 | `dlqq_dialog_file_path` | 文件选择对话框（独立窗口） |
 
-### 串口工具 (21)
+### 串口工具 (21-33)
 
 | 工具名称 | 描述 |
 |---------|------|
-| `dlqq_uart_tools` | CH340串口图形化工具（打开界面/获取日志/清除日志） |
+| `dlqq_run_uart` | 启动CH340串口工具（打开图形界面） |
+| `dlqq_uart_get_com` | 获取可用串口通道列表 |
+| `dlqq_uart_open_com` | 打开指定串口通道 |
+| `dlqq_uart_close_com` | 关闭当前串口通道 |
+| `dlqq_uart_reopen_com` | 重新打开串口（可更换波特率） |
+| `dlqq_uart_send_text` | 发送文本数据到串口 |
+| `dlqq_uart_send_hex` | 发送16进制数据到串口 |
+| `dlqq_uart_get_log` | 获取串口日志数据（支持文本/HEX格式） |
+| `dlqq_uart_clear_text` | 清除串口数据缓冲区 |
+| `dlqq_uart_get_line_count` | 获取当前缓冲区行数 |
+| `dlqq_uart_set_text_size` | 设置串口数据缓冲区大小 |
+| `dlqq_uart_switch_text_hex` | 切换日志显示格式（文本/HEX） |
+| `dlqq_exit_uart` | 退出串口工具（关闭窗口及进程） |
 
 ## 快速开始
 
@@ -104,45 +116,6 @@ mvn clean package
 ```
 
 **注意**：请将 JAR 路径修改为你本地的实际路径。
-
-#### Claude Desktop 配置
-
-编辑 `claude_desktop_config.json`：
-
-```json
-{
-  "mcpServers": {
-    "donglouqiaoque-ai-tools": {
-      "command": "java",
-      "args": [
-        "-jar",
-        "C:\\path\\to\\your\\project\\release\\V1.0.0\\aitools-1.0.0.jar"
-      ],
-      "env": {
-        "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"
-      }
-    }
-  }
-}
-```
-
-#### Cursor 配置
-
-编辑 `.cursor/mcp.json`：
-
-```json
-{
-  "mcpServers": {
-    "donglouqiaoque-ai-tools": {
-      "command": "java",
-      "args": [
-        "-jar",
-        "/path/to/your/project/release/V1.0.0/aitools-1.0.0.jar"
-      ]
-    }
-  }
-}
-```
 
 ## 工具详细说明
 
@@ -528,42 +501,247 @@ mvn clean package
 
 **返回**：选中的文件路径
 
-### 21. dlqq_uart_tools
+### 21. dlqq_run_uart
 
-CH340串口图形化工具，支持打开界面、获取日志、清除日志。
+启动CH340串口工具，打开图形界面。
 
 **参数**：
-- `action` (string, 必需): 操作类型
-  - `"open"`: 打开图形界面
-  - `"get_logs"`: 获取日志
-  - `"clear_logs"`: 清除日志
-- `log_lines` (integer, 可选): 获取日志时返回的行数（默认100）
+- `port` (integer, 必需): 服务器端口号（1~65535，用于AI后续连接）
 
 **示例**：
 ```json
-// 打开串口工具界面
 {
-  "action": "open"
-}
-
-// 获取最近50行日志
-{
-  "action": "get_logs",
-  "log_lines": 50
-}
-
-// 清除日志
-{
-  "action": "clear_logs"
+  "port": 8080
 }
 ```
 
-**串口工具功能**：
-- 自动查找系统中的CH340设备
-- 支持多种波特率（9600-921600）
-- 实时显示接收和发送数据
-- 记录完整的通信日志
-- 支持发送数据时自动添加换行符
+**说明**：启动后窗口保持运行，AI返回对话后用户可与UI交互。后续使用 `dlqq_uart_open_com` 等工具时需要指定相同的端口号。
+
+### 22. dlqq_uart_get_com
+
+获取系统中所有可用的串口通道列表。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+
+**示例**：
+```json
+{
+  "port": 8080
+}
+```
+
+**返回**：可用串口列表，自动标记CH340设备
+
+### 23. dlqq_uart_open_com
+
+打开指定串口通道，开始捕获数据。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+- `port_name` (string, 必需): 串口名称（如 COM3、ttyUSB0）
+- `baud_rate` (integer, 可选): 波特率（默认1000000，范围1~2000000）
+
+**示例**：
+```json
+{
+  "port": 8080,
+  "port_name": "COM3",
+  "baud_rate": 115200
+}
+```
+
+### 24. dlqq_uart_close_com
+
+关闭当前打开的串口通道。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+
+**示例**：
+```json
+{
+  "port": 8080
+}
+```
+
+### 25. dlqq_uart_reopen_com
+
+重新打开串口，用于更改波特率。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+- `port_name` (string, 可选): 串口名称（不指定则使用当前串口）
+- `baud_rate` (integer, 可选): 新的波特率（默认1000000）
+
+**示例**：
+```json
+{
+  "port": 8080,
+  "baud_rate": 9600
+}
+```
+
+### 26. dlqq_uart_send_text
+
+发送文本数据到串口。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+- `text` (string, 必需): 要发送的文本内容
+
+**示例**：
+```json
+{
+  "port": 8080,
+  "text": "Hello World"
+}
+```
+
+### 27. dlqq_uart_send_hex
+
+发送16进制数据到串口。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+- `hex_array` (array, 必需): 16进制字符串数组，如 `["FF", "01", "02"]`
+
+**示例**：
+```json
+{
+  "port": 8080,
+  "hex_array": ["FF", "01", "02", "03"]
+}
+```
+
+### 28. dlqq_uart_get_log
+
+获取串口缓冲区日志数据，支持3种读取模式。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+- `start_line` (integer, 可选): 起始行（1-based）
+- `end_line` (integer, 可选): 结束行（模式1使用）
+- `line_count` (integer, 可选): 读取行数（模式2和3使用）
+- `timeout_ms` (integer, 可选): 等待超时毫秒（模式3使用，默认0表示不等待）
+
+**模式说明**：
+- 模式1（直接范围）：`start_line` + `end_line`
+- 模式2（直接计数）：`start_line` + `line_count`
+- 模式3（等待读取）：`timeout_ms` + `line_count`（`start_line`默认为-1表示从最后一行开始读取新数据）
+
+**示例**：
+```json
+// 模式1：读取第1到第10行
+{
+  "port": 8080,
+  "start_line": 1,
+  "end_line": 10
+}
+
+// 模式2：从第5行开始读取20行
+{
+  "port": 8080,
+  "start_line": 5,
+  "line_count": 20
+}
+
+// 模式3：等待最多5000毫秒，读取至少10行新数据
+{
+  "port": 8080,
+  "timeout_ms": 5000,
+  "line_count": 10
+}
+```
+
+**说明**：返回格式取决于当前显示格式设置（文本/HEX），可使用 `dlqq_uart_switch_text_hex` 切换。
+
+### 29. dlqq_uart_clear_text
+
+清除串口数据缓冲区。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+
+**示例**：
+```json
+{
+  "port": 8080
+}
+```
+
+### 30. dlqq_uart_get_line_count
+
+获取当前缓冲区行数。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+
+**示例**：
+```json
+{
+  "port": 8080
+}
+```
+
+**返回**：当前缓冲区中的日志行数
+
+### 31. dlqq_uart_set_text_size
+
+设置串口数据缓冲区大小。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+- `size_bytes` (integer, 必需): 缓冲区大小（字节）
+
+**示例**：
+```json
+{
+  "port": 8080,
+  "size_bytes": 10485760
+}
+```
+
+**说明**：默认5MB，超出后旧数据会被自动丢弃。
+
+### 32. dlqq_uart_switch_text_hex
+
+切换日志显示格式（文本/HEX）。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+- `format` (string, 必需): 显示格式，`text` 表示文本，`hex` 表示HEX
+
+**示例**：
+```json
+// 切换为HEX显示
+{
+  "port": 8080,
+  "format": "hex"
+}
+
+// 切换为文本显示
+{
+  "port": 8080,
+  "format": "text"
+}
+```
+
+**说明**：切换后，UI日志显示和 `dlqq_uart_get_log` 返回的数据格式都会相应改变。
+
+### 33. dlqq_exit_uart
+
+完全退出串口工具，关闭窗口及进程，释放所有资源。
+
+**参数**：
+- `port` (integer, 必需): 串口工具的端口号
+
+**示例**：
+```json
+{
+  "port": 8080
+}
+```
 
 ## 使用示例
 
@@ -603,9 +781,16 @@ CH340串口图形化工具，支持打开界面、获取日志、清除日志。
 
 ### 串口操作示例
 
-- "打开串口工具界面"
+- "启动串口工具，端口8080"
+- "获取可用串口列表"
+- "打开COM3串口，波特率115200"
+- "发送文本 'Hello' 到串口"
+- "发送16进制数据 ['FF', '01', '02'] 到串口"
 - "获取串口最近100行日志"
-- "查找系统中的CH340设备"
+- "切换日志显示格式为HEX"
+- "设置缓冲区大小为10MB"
+- "关闭串口"
+- "退出串口工具"
 
 ## 技术栈
 
@@ -649,4 +834,4 @@ src/main/java/com/donglouqiaoque/aitools/
 
 ## 许可证
 
-本项目采用 MIT 许可证
+本项目采用 Apache License 2.0 许可证

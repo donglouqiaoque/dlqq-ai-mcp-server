@@ -498,9 +498,9 @@
 
 ---
 
-#### 34. `dlqq_uart_get_text` - 获取串口数据
+#### 34. `dlqq_uart_get_log` - 获取串口日志数据
 
-获取串口缓冲区中的文本数据，支持3种读取模式：
+获取串口缓冲区中的日志数据，支持3种读取模式。返回格式取决于当前显示格式设置（文本或HEX）。
 
 **模式1 - 直接范围读取**：`start_line` + `end_line`
 **模式2 - 直接计数读取**：`start_line` + `line_count`
@@ -514,6 +514,8 @@
 | `end_line` | integer | ✗ | 结束行号（模式1使用，-1表示到末尾） |
 | `line_count` | integer | ✗ | 读取行数（模式2和3使用） |
 | `timeout_ms` | integer | ✗ | 等待超时毫秒（模式3使用，0表示不等待） |
+
+**说明**：返回格式可通过 `dlqq_uart_switch_text_hex` 切换为文本或HEX格式。
 
 ---
 
@@ -545,7 +547,34 @@
 
 ---
 
-#### 38. `dlqq_exit_uart` - 退出串口工具
+#### 38. `dlqq_uart_switch_text_hex` - 切换显示格式
+
+切换日志显示格式（文本/HEX）。切换后，UI日志显示和 `dlqq_uart_get_log` 返回的数据格式都会相应改变。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `port` | integer | ✓ | 串口工具实例端口号 |
+| `format` | string | ✓ | 显示格式：`text` 或 `hex` |
+
+**示例**：
+```json
+// 切换为HEX显示
+{
+  "port": 8080,
+  "format": "hex"
+}
+
+// 切换为文本显示
+{
+  "port": 8080,
+  "format": "text"
+}
+```
+
+---
+
+#### 39. `dlqq_exit_uart` - 退出串口工具
 
 关闭串口工具窗口及进程，释放所有资源。
 
@@ -596,6 +625,10 @@
 打开 COM3 串口，波特率 115200
 发送文本 "Hello" 到串口
 获取最近 50 行串口日志
+切换日志显示格式为HEX
+设置缓冲区大小为10MB
+关闭串口
+退出串口工具
 ```
 
 ---
@@ -635,4 +668,4 @@ donglouqiaoque-ai-tools/
 
 ## 许可证
 
-MIT License
+Apache License 2.0

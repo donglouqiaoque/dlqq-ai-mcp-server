@@ -60,10 +60,11 @@ public class AITools {
         registerUartCloseComTool(server);         // dlqq_uart_close_com
         registerUartSendTextTool(server);         // dlqq_uart_send_text
         registerUartSendHexTool(server);          // dlqq_uart_send_hex
-        registerUartGetTextTool(server);          // dlqq_uart_get_text
+        registerUartGetLogTool(server);           // dlqq_uart_get_log
         registerUartClearTextTool(server);        // dlqq_uart_clear_text
         registerUartGetLineCountTool(server);     // dlqq_uart_get_line_count
         registerUartSetTextSizeTool(server);      // dlqq_uart_set_text_size
+        registerUartSwitchTextHexTool(server);    // dlqq_uart_switch_text_hex
         registerExitUartTool(server);             // dlqq_exit_uart
     }
 
@@ -1612,13 +1613,13 @@ public class AITools {
     }
 
     /**
-     * 26. dlqq_uart_get_text - 获取串口文本数据
+     * 26. dlqq_uart_get_log - 获取串口日志数据（支持文本/HEX格式）
      * 支持3种模式：
      * 模式1: start_line + end_line - 直接读取已有数据
      * 模式2: start_line + line_count - 直接读取已有数据
      * 模式3: start_line + timeout_ms + line_count - 等待模式读取新数据
      */
-    private void registerUartGetTextTool(McpServer server) {
+    private void registerUartGetLogTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
@@ -1648,11 +1649,12 @@ public class AITools {
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
-        server.addTool("dlqq_uart_get_text",
+        server.addTool("dlqq_uart_get_log",
             "获取串口缓冲区日志数据。支持3种模式：\n" +
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
-            "模式3: 指定timeout_ms和line_count（start_line默认为-1），等待读取新数据",
+            "模式3: 指定timeout_ms和line_count（start_line默认为-1），等待读取新数据\n" +
+            "返回格式取决于当前显示格式设置（文本/HEX），可使用 dlqq_uart_switch_text_hex 切换",
             inputSchema,
             arguments -> {
                 Integer port = parseInteger(arguments.get("port"), null);
@@ -1669,7 +1671,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = UartTools.getUartText(port, startLine, endLine, lineCount, timeoutMs);
+                    String result = UartTools.getUartLog(port, startLine, endLine, lineCount, timeoutMs);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取串口数据失败: " + e.getMessage());
@@ -1799,7 +1801,52 @@ public class AITools {
     }
 
     /**
-     * 32. dlqq_exit_uart - 退出串口工具
+     * 32. dlqq_uart_switch_text_hex - 切换日志显示格式（文本/HEX）
+     */
+    private void registerUartSwitchTextHexTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        Map<String, Object> formatProp = new HashMap<>();
+        formatProp.put("type", "string");
+        formatProp.put("description", "显示格式：'text' 表示文本，'hex' 表示HEX");
+        properties.put("format", formatProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "format"));
+
+        server.addTool("dlqq_uart_switch_text_hex",
+            "切换串口日志的显示格式。切换后，UI日志显示和 dlqq_uart_get_log 返回的数据格式都会相应改变。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                String format = parseString(arguments.get("format"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (format == null || format.trim().isEmpty()) {
+                    return errorResult("必须指定显示格式（format），'text' 或 'hex'");
+                }
+
+                try {
+                    String result = UartTools.switchDisplayFormat(port, format);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("切换显示格式失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 33. dlqq_exit_uart - 退出串口工具
      */
     private void registerExitUartTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
@@ -1896,5 +1943,18 @@ public class AITools {
             return ((Number) value).longValue();
         }
         return defaultValue;
+    }
+
+    /**
+     * 解析字符串参数
+     */
+    private String parseString(Object value, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof String) {
+            return (String) value;
+        }
+        return value.toString();
     }
 }
