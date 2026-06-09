@@ -2,10 +2,10 @@
 {
   "mcpServers": {
     "donglouqiaoque-ai-tools": {
-      "command": "java.exe绝对路径，不要写相对路径！",
+      "command": "~\\jre\\java",
       "args": [
         "-jar",
-        "jar包绝对路径，不要写相对路径！"
+        "~\\donglouqiaoque_ai_tools.jar"
       ],
       "env": {
         "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"

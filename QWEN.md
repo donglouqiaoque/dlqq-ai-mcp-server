@@ -18,8 +18,14 @@
 
 **配置文件示例：**
 ```properties
-# 版本号配置 - 修改此值会自动更新发布目录
-version=1.0.0
+# 版本号配置
+release_version=1.0.0
+debug_version=255.0.0
+
+# 打包模式配置
+# true  = 打包 debug 版本 (输出到 debug/V255.0.x)
+# false = 打包 release 版本 (输出到 release/V1.0.x)
+use_debug=true
 ```
 
 ### 1. build.bat - 普通构建
@@ -30,18 +36,35 @@ version=1.0.0
 util\build\build.bat
 ```
 
-### 2. build_release.bat - 发布构建
-执行 Maven 构建，并将生成的 JAR 文件复制到 `release/V{版本号}/` 目录。
+### 2. build_and_copy.bat - 构建并复制
+执行 Maven 构建，并将生成的 JAR 文件复制到发布目录（release 或 debug）。
 
 **使用方法：**
 ```cmd
-util\build\build_release.bat
+util\build\build_and_copy.bat
 ```
 
 **构建流程：**
-1. 从 `config.properties` 读取版本号（如 `1.0.0`）
-2. 执行 `mvn clean package -DskipTests`
-3. 创建发布目录 `release/V1.0.0/`
-4. 将 `target/aitools-1.0.0.jar` 复制到 `release/V1.0.0/aitools-1.0.0.jar`
+1. 从 `config.properties` 读取配置
+   - `use_debug=true`: 使用 `debug_version`，输出到 `debug/V{debug_version}/`
+   - `use_debug=false`: 使用 `release_version`，输出到 `release/V{release_version}/`
+2. 执行 `mvn clean package -DskipTests -Drevision={version}`
+3. 创建发布目录
+4. 将生成的 JAR 复制到对应目录
 
-> **提示：** 修改代码后，建议直接使用 `build_release.bat` 进行构建，它会自动处理文件复制。需要修改版本号时，只需编辑 `config.properties` 即可。
+**示例：**
+```properties
+# debug 版本配置
+release_version=1.0.0
+debug_version=255.0.0
+use_debug=true
+# 输出: debug/V255.0.0/donglouqiaoque_ai_tools.jar
+
+# release 版本配置
+release_version=1.0.0
+debug_version=255.0.0
+use_debug=false
+# 输出: release/V1.0.0/donglouqiaoque_ai_tools.jar
+```
+
+> **提示：** 修改代码后，建议直接使用 `build_and_copy.bat` 进行构建。需要修改版本号时，只需编辑 `config.properties`。

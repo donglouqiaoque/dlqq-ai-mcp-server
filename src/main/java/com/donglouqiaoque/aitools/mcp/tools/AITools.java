@@ -61,6 +61,8 @@ public class AITools {
         registerUartSendTextTool(server);         // dlqq_uart_send_text
         registerUartSendHexTool(server);          // dlqq_uart_send_hex
         registerUartGetLogTool(server);           // dlqq_uart_get_log
+        registerUartGetLogTextTool(server);       // dlqq_uart_get_log_text
+        registerUartGetLogHexTool(server);        // dlqq_uart_get_log_hex
         registerUartClearTextTool(server);        // dlqq_uart_clear_text
         registerUartGetLineCountTool(server);     // dlqq_uart_get_line_count
         registerUartSetTextSizeTool(server);      // dlqq_uart_set_text_size
@@ -1613,11 +1615,13 @@ public class AITools {
     }
 
     /**
-     * 26. dlqq_uart_get_log - 获取串口日志数据（支持文本/HEX格式）
+     * 26. dlqq_uart_get_log - 获取串口日志数据
+     * 根据当前显示格式设置（通过 dlqq_uart_switch_text_hex 切换）返回文本或HEX格式
      * 支持3种模式：
      * 模式1: start_line + end_line - 直接读取已有数据
      * 模式2: start_line + line_count - 直接读取已有数据
      * 模式3: start_line + timeout_ms + line_count - 等待模式读取新数据
+     * 如需固定格式，请使用 dlqq_uart_get_log_text（强制文本）或 dlqq_uart_get_log_hex（强制HEX）
      */
     private void registerUartGetLogTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
@@ -1654,7 +1658,8 @@ public class AITools {
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
             "模式3: 指定timeout_ms和line_count（start_line默认为-1），等待读取新数据\n" +
-            "返回格式取决于当前显示格式设置（文本/HEX），可使用 dlqq_uart_switch_text_hex 切换",
+            "返回格式根据 dlqq_uart_switch_text_hex 设置（文本/HEX），保证与UI显示一致\n" +
+            "如需固定格式，请使用 dlqq_uart_get_log_text（强制文本）或 dlqq_uart_get_log_hex（强制HEX）",
             inputSchema,
             arguments -> {
                 Integer port = parseInteger(arguments.get("port"), null);
@@ -1672,6 +1677,136 @@ public class AITools {
 
                 try {
                     String result = UartTools.getUartLog(port, startLine, endLine, lineCount, timeoutMs);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("获取串口数据失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 26a. dlqq_uart_get_log_text - 获取串口日志数据（强制文本格式）
+     * 支持3种模式（同dlqq_uart_get_log）
+     */
+    private void registerUartGetLogTextTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "integer");
+        startLineProp.put("description", "起始行（1-based，模式1/2必需，模式3默认为-1表示从最后一行开始读取新数据）");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> endLineProp = new HashMap<>();
+        endLineProp.put("type", "integer");
+        endLineProp.put("description", "结束行（1-based，模式1使用）");
+        properties.put("end_line", endLineProp);
+
+        Map<String, Object> lineCountProp = new HashMap<>();
+        lineCountProp.put("type", "integer");
+        lineCountProp.put("description", "读取行数（模式2和模式3使用，模式3必需）");
+        properties.put("line_count", lineCountProp);
+
+        Map<String, Object> timeoutProp = new HashMap<>();
+        timeoutProp.put("type", "integer");
+        timeoutProp.put("description", "超时时间（毫秒，模式3使用，默认0表示不等待）");
+        properties.put("timeout_ms", timeoutProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_uart_get_log_text",
+            "获取串口缓冲区日志数据（强制文本格式）。支持3种模式：\n" +
+            "模式1: 指定start_line和end_line，直接读取已有数据\n" +
+            "模式2: 指定start_line和line_count，直接读取已有数据\n" +
+            "模式3: 指定timeout_ms和line_count（start_line默认为-1），等待读取新数据\n" +
+            "无论当前显示格式设置如何，始终返回文本格式",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                Integer startLine = parseInteger(arguments.get("start_line"), null);
+                Integer endLine = parseInteger(arguments.get("end_line"), null);
+                Integer lineCount = parseInteger(arguments.get("line_count"), null);
+                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = UartTools.getUartLogText(port, startLine, endLine, lineCount, timeoutMs);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("获取串口数据失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 26b. dlqq_uart_get_log_hex - 获取串口日志数据（强制HEX格式）
+     * 支持3种模式（同dlqq_uart_get_log）
+     */
+    private void registerUartGetLogHexTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
+        properties.put("port", portProp);
+
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "integer");
+        startLineProp.put("description", "起始行（1-based，模式1/2必需，模式3默认为-1表示从最后一行开始读取新数据）");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> endLineProp = new HashMap<>();
+        endLineProp.put("type", "integer");
+        endLineProp.put("description", "结束行（1-based，模式1使用）");
+        properties.put("end_line", endLineProp);
+
+        Map<String, Object> lineCountProp = new HashMap<>();
+        lineCountProp.put("type", "integer");
+        lineCountProp.put("description", "读取行数（模式2和模式3使用，模式3必需）");
+        properties.put("line_count", lineCountProp);
+
+        Map<String, Object> timeoutProp = new HashMap<>();
+        timeoutProp.put("type", "integer");
+        timeoutProp.put("description", "超时时间（毫秒，模式3使用，默认0表示不等待）");
+        properties.put("timeout_ms", timeoutProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_uart_get_log_hex",
+            "获取串口缓冲区日志数据（强制HEX格式）。支持3种模式：\n" +
+            "模式1: 指定start_line和end_line，直接读取已有数据\n" +
+            "模式2: 指定start_line和line_count，直接读取已有数据\n" +
+            "模式3: 指定timeout_ms和line_count（start_line默认为-1），等待读取新数据\n" +
+            "无论当前显示格式设置如何，始终返回HEX格式",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                Integer startLine = parseInteger(arguments.get("start_line"), null);
+                Integer endLine = parseInteger(arguments.get("end_line"), null);
+                Integer lineCount = parseInteger(arguments.get("line_count"), null);
+                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = UartTools.getUartLogHex(port, startLine, endLine, lineCount, timeoutMs);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取串口数据失败: " + e.getMessage());

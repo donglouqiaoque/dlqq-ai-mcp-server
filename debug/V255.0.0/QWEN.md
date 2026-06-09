@@ -1,6 +1,6 @@
 # 鸫楼桥鹊 AI 工具 MCP 服务器
 
-一个功能丰富的 Java MCP 服务器，提供文件操作、目录管理、二进制文件处理、搜索、GUI对话框和串口通信等36个工具。
+一个功能丰富的 Java MCP 服务器，提供文件操作、目录管理、二进制文件处理、搜索、GUI对话框和串口通信等41个工具。
 
 ---
 
@@ -13,7 +13,7 @@
 | 二进制文件 | 2 | 读取二进制为十六进制、将十六进制写入二进制 |
 | 搜索工具 | 2 | 文件搜索、目录搜索（支持正则） |
 | 对话框工具 | 3 | 文本输入、确认对话框、文件选择 |
-| 串口工具 | 13 | CH340串口通信、数据收发、缓冲区管理 |
+| 串口工具 | 15 | CH340串口通信、数据收发、缓冲区管理、显示格式切换 |
 
 ---
 
@@ -28,7 +28,7 @@
       "command": "java",
       "args": [
         "-jar",
-        "A:\\MyProject\\Java\\donglouqiaoque_ai_tools\\release\\V1.0.0\\aitools-1.0.0.jar"
+        "A:\\MyProject\\Java\\donglouqiaoque_ai_tools\\debug\\V255.0.0\\donglouqiaoque_ai_tools.jar"
       ],
       "env": {
         "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"
@@ -402,7 +402,7 @@
 
 ---
 
-### 六、串口工具（13个）
+### 六、串口工具（15个）
 
 串口工具支持多实例管理，每个实例通过**端口号**区分。
 
@@ -453,7 +453,7 @@
 | 参数 | 类型 | 必需 | 说明 |
 |------|------|------|------|
 | `port` | integer | ✓ | 串口工具实例端口号 |
-| `port_name` | string | ✓ | 串口名称，如 "COM3"、"ttyUSB0" |
+| `com` | string | ✓ | 串口名称，如 "COM3"、"ttyUSB0"、"USB Serial" |
 | `baud_rate` | integer | ✗ | 波特率（默认1000000，范围0~2000000） |
 
 ---
@@ -510,24 +510,44 @@
 | 参数 | 类型 | 必需 | 说明 |
 |------|------|------|------|
 | `port` | integer | ✓ | 串口工具实例端口号 |
-| `start_line` | integer | ✗ | 起始行号（1-based，模式1和2使用） |
+| `start_line` | integer | ✗ | 起始行号（1-based，模式1和2使用，模式3默认为-1） |
 | `end_line` | integer | ✗ | 结束行号（模式1使用，-1表示到末尾） |
 | `line_count` | integer | ✗ | 读取行数（模式2和3使用） |
 | `timeout_ms` | integer | ✗ | 等待超时毫秒（模式3使用，0表示不等待） |
 
-**说明**：返回格式可通过 `dlqq_uart_switch_text_hex` 切换为文本或HEX格式。
+**说明**：返回格式可通过 `dlqq_uart_switch_text_hex` 切换为文本或HEX格式。如需固定格式，请使用 `dlqq_uart_get_log_text` 或 `dlqq_uart_get_log_hex`。
 
 ---
 
-#### 35. `dlqq_uart_clear_text` - 清除串口数据
+#### 35. `dlqq_uart_get_log_text` - 获取串口日志数据（强制文本格式）
 
-清除串口数据缓冲区及所有统计数据。
+获取串口缓冲区中的日志数据（强制文本格式）。支持3种模式（同 `dlqq_uart_get_log`）。
+
+**参数**：同 `dlqq_uart_get_log`
+
+**说明**：无论当前显示格式设置如何，始终返回文本格式。
+
+---
+
+#### 36. `dlqq_uart_get_log_hex` - 获取串口日志数据（强制HEX格式）
+
+获取串口缓冲区中的日志数据（强制HEX格式）。支持3种模式（同 `dlqq_uart_get_log`）。
+
+**参数**：同 `dlqq_uart_get_log`
+
+**说明**：无论当前显示格式设置如何，始终返回HEX格式。
+
+---
+
+#### 37. `dlqq_uart_clear_text` - 清除串口数据
+
+清除串口数据缓冲区。
 
 **参数**：同 `dlqq_uart_get_com`
 
 ---
 
-#### 36. `dlqq_uart_get_line_count` - 获取缓冲区行数
+#### 38. `dlqq_uart_get_line_count` - 获取缓冲区行数
 
 获取当前串口数据缓冲区中的日志行数。
 
@@ -535,7 +555,7 @@
 
 ---
 
-#### 37. `dlqq_uart_set_text_size` - 设置缓冲区大小
+#### 39. `dlqq_uart_set_text_size` - 设置缓冲区大小
 
 设置串口数据缓冲区大小。
 
@@ -547,7 +567,7 @@
 
 ---
 
-#### 38. `dlqq_uart_switch_text_hex` - 切换显示格式
+#### 40. `dlqq_uart_switch_text_hex` - 切换显示格式
 
 切换日志显示格式（文本/HEX）。切换后，UI日志显示和 `dlqq_uart_get_log` 返回的数据格式都会相应改变。
 
@@ -574,7 +594,7 @@
 
 ---
 
-#### 39. `dlqq_exit_uart` - 退出串口工具
+#### 41. `dlqq_exit_uart` - 退出串口工具
 
 关闭串口工具窗口及进程，释放所有资源。
 
@@ -659,8 +679,8 @@ donglouqiaoque-ai-tools/
 │   │       └── McpServer.java      # MCP服务器核心
 │   └── utils/
 │       └── FileUtils.java          # 文件工具类
-├── release/V1.0.0/
-│   └── aitools-1.0.0.jar           # 可执行JAR
+├── debug/V255.0.0/
+│   └── donglouqiaoque_ai_tools.jar # 可执行JAR
 └── pom.xml                          # Maven配置
 ```
 

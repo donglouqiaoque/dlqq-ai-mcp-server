@@ -57,6 +57,9 @@ public class UartTools {
     // 显示格式控制（文本/HEX）
     private boolean displayAsHex = false;  // 日志显示格式：false=文本, true=HEX
 
+    // 发送格式控制（文本/HEX）
+    private boolean sendAsHex = false;  // 发送输入格式：false=文本, true=HEX
+
     // 线程池
     private final ExecutorService executor;
 
@@ -421,43 +424,12 @@ public class UartTools {
     }
 
     /**
-     * 5. 获取串口接收的文本数据 - 支持3种读取模式
-     *
-     * 模式1（直接范围读取）: port + start_line + end_line
-     *   直接读取指定行范围的数据
-     *
-     * 模式2（直接计数读取）: port + start_line + line_count
-     *   从start_line开始读取指定行数
-     *
-     * 模式3（等待读取）: port + timeout_ms + line_count
-     *   等待新数据到达，最多等待timeout_ms毫秒，读取至少line_count行
-     *
-     * @param port 服务器端口号（必需）
-     * @param start_line 起始行号（1-based，模式1和2使用）
-     * @param end_line 结束行号（模式1使用，-1表示到末尾）
-     * @param line_count 读取行数（模式2和3使用）
-     * @param timeout_ms 等待超时毫秒（模式3使用，0表示不等待）
-     * @return 文本数据
+     * 内部方法：获取串口日志的核心逻辑
      */
-    public static String getUartLog(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
-        String portError = checkPortParam(port);
-        if (portError != null) {
-            return portError;
-        }
-
-        if (!isInstanceRunning(port)) {
-            return "错误：端口 " + port + " 的串口工具实例未启动，请先使用 dlqq_run_uart 启动";
-        }
-
-        UartTools tools = getInstance(port);
-
-        // 检查串口是否已打开
-        if (!tools.isPortOpen || tools.currentPort == null) {
-            return "错误：串口未打开，请先使用 dlqq_uart_open_com 打开串口";
-        }
-
+    private static String getUartLogCore(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
         // 判断读取模式
         boolean isWaitMode = timeout_ms > 0;
+        UartTools tools = getInstance(port);
 
         if (isWaitMode) {
             // ========== 模式3：等待读取模式 ==========
@@ -500,7 +472,7 @@ public class UartTools {
 
                 StringBuilder sb = new StringBuilder();
                 for (int i = startFrom - 1; i < endAt; i++) {
-                    sb.append(tools.convertLineForDisplay(tools.dataBuffer.get(i)));
+                    sb.append(tools.dataBuffer.get(i));
                     if (i < endAt - 1) {
                         sb.append("\n");
                     }
@@ -542,7 +514,7 @@ public class UartTools {
 
                 StringBuilder sb = new StringBuilder();
                 for (int i = start - 1; i < end && i < totalLines; i++) {
-                    sb.append(tools.convertLineForDisplay(tools.dataBuffer.get(i)));
+                    sb.append(tools.dataBuffer.get(i));
                     if (i < end - 1) {
                         sb.append("\n");
                     }
@@ -551,6 +523,153 @@ public class UartTools {
                 return sb.toString();
             }
         }
+    }
+
+    /**
+     * 5. 获取串口接收的文本数据 - 支持3种读取模式
+     * 根据当前显示格式设置（displayAsHex）返回数据
+     *
+     * 模式1（直接范围读取）: port + start_line + end_line
+     *   直接读取指定行范围的数据
+     *
+     * 模式2（直接计数读取）: port + start_line + line_count
+     *   从start_line开始读取指定行数
+     *
+     * 模式3（等待读取）: port + timeout_ms + line_count
+     *   等待新数据到达，最多等待timeout_ms毫秒，读取至少line_count行
+     *
+     * @param port 服务器端口号（必需）
+     * @param start_line 起始行号（1-based，模式1和2使用）
+     * @param end_line 结束行号（模式1使用，-1表示到末尾）
+     * @param line_count 读取行数（模式2和3使用）
+     * @param timeout_ms 等待超时毫秒（模式3使用，0表示不等待）
+     * @return 文本数据（根据当前显示格式）
+     */
+    public static String getUartLog(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
+        String portError = checkPortParam(port);
+        if (portError != null) {
+            return portError;
+        }
+
+        if (!isInstanceRunning(port)) {
+            return "错误：端口 " + port + " 的串口工具实例未启动，请先使用 dlqq_run_uart 启动";
+        }
+
+        UartTools tools = getInstance(port);
+
+        // 检查串口是否已打开
+        if (!tools.isPortOpen || tools.currentPort == null) {
+            return "错误：串口未打开，请先使用 dlqq_uart_open_com 打开串口";
+        }
+
+        // 获取原始日志
+        String rawLog = getUartLogCore(port, start_line, end_line, line_count, timeout_ms);
+
+        // 如果是错误消息（包含"错误："或"等待超时"），直接返回
+        if (rawLog.startsWith("错误：") || rawLog.startsWith("等待超时")) {
+            return rawLog;
+        }
+
+        // 根据当前显示格式设置转换
+        if (rawLog.isEmpty()) {
+            return rawLog;
+        }
+
+        String[] lines = rawLog.split("\n");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            sb.append(tools.convertLineForDisplay(lines[i]));
+            if (i < lines.length - 1) {
+                sb.append("\n");
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * 5a. 获取串口接收的文本数据 - 强制以文本格式返回
+     * 支持3种读取模式（同getUartLog）
+     *
+     * @param port 服务器端口号（必需）
+     * @param start_line 起始行号（1-based）
+     * @param end_line 结束行号
+     * @param line_count 读取行数
+     * @param timeout_ms 等待超时毫秒
+     * @return 文本数据（强制文本格式）
+     */
+    public static String getUartLogText(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
+        String portError = checkPortParam(port);
+        if (portError != null) {
+            return portError;
+        }
+
+        if (!isInstanceRunning(port)) {
+            return "错误：端口 " + port + " 的串口工具实例未启动，请先使用 dlqq_run_uart 启动";
+        }
+
+        UartTools tools = getInstance(port);
+
+        // 检查串口是否已打开
+        if (!tools.isPortOpen || tools.currentPort == null) {
+            return "错误：串口未打开，请先使用 dlqq_uart_open_com 打开串口";
+        }
+
+        // 直接返回原始日志（文本格式）
+        return getUartLogCore(port, start_line, end_line, line_count, timeout_ms);
+    }
+
+    /**
+     * 5b. 获取串口接收的文本数据 - 强制以HEX格式返回
+     * 支持3种读取模式（同getUartLog）
+     *
+     * @param port 服务器端口号（必需）
+     * @param start_line 起始行号（1-based）
+     * @param end_line 结束行号
+     * @param line_count 读取行数
+     * @param timeout_ms 等待超时毫秒
+     * @return 文本数据（强制HEX格式）
+     */
+    public static String getUartLogHex(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
+        String portError = checkPortParam(port);
+        if (portError != null) {
+            return portError;
+        }
+
+        if (!isInstanceRunning(port)) {
+            return "错误：端口 " + port + " 的串口工具实例未启动，请先使用 dlqq_run_uart 启动";
+        }
+
+        UartTools tools = getInstance(port);
+
+        // 检查串口是否已打开
+        if (!tools.isPortOpen || tools.currentPort == null) {
+            return "错误：串口未打开，请先使用 dlqq_uart_open_com 打开串口";
+        }
+
+        // 获取原始日志
+        String rawLog = getUartLogCore(port, start_line, end_line, line_count, timeout_ms);
+
+        // 如果是错误消息，直接返回
+        if (rawLog.startsWith("错误：") || rawLog.startsWith("等待超时")) {
+            return rawLog;
+        }
+
+        // 强制转换为HEX格式
+        if (rawLog.isEmpty()) {
+            return rawLog;
+        }
+
+        String[] lines = rawLog.split("\n");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            sb.append(tools.convertLineToHex(lines[i]));
+            if (i < lines.length - 1) {
+                sb.append("\n");
+            }
+        }
+
+        return sb.toString();
     }
 
     /**
@@ -1073,6 +1192,21 @@ public class UartTools {
             return line;  // 文本模式直接返回
         }
         // HEX模式：提取RX/TX数据部分并转换为HEX
+        return convertDataPartToHex(line);
+    }
+
+    /**
+     * 将缓冲区行强制转换为HEX格式
+     */
+    private String convertLineToHex(String line) {
+        return convertDataPartToHex(line);
+    }
+
+    /**
+     * 将数据部分转换为HEX格式
+     * 处理 RX: / TX: / TX[HEX]: 后的数据
+     */
+    private String convertDataPartToHex(String line) {
         if (line.contains("RX: ")) {
             int idx = line.indexOf("RX: ");
             String prefix = line.substring(0, idx + 4);
@@ -1297,7 +1431,7 @@ public class UartTools {
         // 发送控制面板（底部）
         JPanel sendControlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
 
-        // 发送格式选择 - 控制是以文本方式发送，还是将文本作为HEX数据发送
+        // 发送格式选择 - 控制输入显示格式和发送方式
         sendControlPanel.add(new JLabel("发送格式:"));
         JRadioButton textSendRadio = new JRadioButton("文本", true);
         JRadioButton hexSendRadio = new JRadioButton("HEX");
@@ -1306,6 +1440,61 @@ public class UartTools {
         sendFormatGroup.add(hexSendRadio);
         sendControlPanel.add(textSendRadio);
         sendControlPanel.add(hexSendRadio);
+
+        // 添加分隔
+        sendControlPanel.add(Box.createHorizontalStrut(10));
+
+        // 添加HEX转换提示标签
+        JLabel sendFormatTipLabel = new JLabel("(输入自动按空格分隔)");
+        sendFormatTipLabel.setFont(new Font("Consolas", Font.PLAIN, 10));
+        sendFormatTipLabel.setForeground(Color.GRAY);
+        sendFormatTipLabel.setVisible(false);  // 默认隐藏，HEX模式时显示
+        sendControlPanel.add(sendFormatTipLabel);
+
+        // 发送格式切换事件 - 文本模式
+        textSendRadio.addActionListener(e -> {
+            if (sendAsHex) {
+                // 从HEX切换回文本模式，将HEX内容转换为文本
+                String hexText = sendInputArea.getText().trim();
+                if (!hexText.isEmpty()) {
+                    try {
+                        // 移除所有空格，解析HEX字符串
+                        String cleanHex = hexText.replaceAll("\\s", "");
+                        if (cleanHex.length() % 2 == 0 && cleanHex.matches("[0-9A-Fa-f]+")) {
+                            StringBuilder textResult = new StringBuilder();
+                            for (int i = 0; i < cleanHex.length(); i += 2) {
+                                int byteValue = Integer.parseInt(cleanHex.substring(i, i + 2), 16);
+                                textResult.append((char) byteValue);
+                            }
+                            sendInputArea.setText(textResult.toString());
+                        }
+                    } catch (Exception ex) {
+                        // 转换失败，保留原内容
+                    }
+                }
+                sendAsHex = false;
+                sendFormatTipLabel.setVisible(false);
+            }
+        });
+
+        // 发送格式切换事件 - HEX模式
+        hexSendRadio.addActionListener(e -> {
+            if (!sendAsHex) {
+                // 从文本切换到HEX模式，将文本内容转换为HEX显示
+                String text = sendInputArea.getText();
+                if (!text.isEmpty()) {
+                    byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+                    StringBuilder hexResult = new StringBuilder();
+                    for (int i = 0; i < bytes.length; i++) {
+                        if (i > 0) hexResult.append(" ");
+                        hexResult.append(String.format("%02X", bytes[i] & 0xFF));
+                    }
+                    sendInputArea.setText(hexResult.toString());
+                }
+                sendAsHex = true;
+                sendFormatTipLabel.setVisible(true);
+            }
+        });
 
         // 发送按钮 - 根据单选框选择决定发送方式
         JButton sendButton = new JButton("发送");

@@ -58,11 +58,11 @@ if not exist "%BUILD_DIR%" (
 )
 
 echo [INFO] Copy JAR to output dir...
-copy /Y "target\%JAR_NAME%" "%BUILD_DIR%\%JAR_NAME%"
+copy /Y "target\%JAR_NAME%" "%BUILD_DIR%\donglouqiaoque_ai_tools.jar"
 
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Copy failed!
     exit /b 1
 )
 
-echo [INFO] %BUILD_TYPE% success: %BUILD_DIR%\%JAR_NAME%
+echo [INFO] %BUILD_TYPE% success: %BUILD_DIR%\donglouqiaoque_ai_tools.jar
