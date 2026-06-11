@@ -10,11 +10,12 @@
 - **搜索工具** - 在目录下搜索文件或文件夹，支持部分匹配和正则
 - **对话框交互** - 文本输入、确认、文件选择等GUI对话框
 - **串口通信** - CH340等USB转串口设备的图形化通信工具
+- **BLE蓝牙** - 蓝牙低功耗设备的扫描、连接、数据读写工具
 - **MCP服务器** - 完整支持MCP协议，可作为AI工具服务器使用
 
 ## 工具列表
 
-本MCP服务器提供40个核心工具：
+本MCP服务器提供57个核心工具：
 
 ### 文件操作工具 (1-12)
 
@@ -66,7 +67,7 @@
 | `dlqq_dialog_check` | 确认对话框，用户选择是/否（独立窗口） |
 | `dlqq_dialog_file_path` | 文件选择对话框（独立窗口） |
 
-### 串口工具 (26-40)
+### 串口工具 (26-41)
 
 | 工具名称 | 描述 |
 |---------|------|
@@ -86,6 +87,29 @@
 | `dlqq_uart_set_text_size` | 设置串口数据缓冲区大小 |
 | `dlqq_uart_switch_text_hex` | 切换日志显示格式（文本/HEX） |
 | `dlqq_exit_uart` | 退出串口工具（关闭窗口及进程） |
+
+### BLE蓝牙工具 (42-57)
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_run_ble` | 启动BLE蓝牙工具（打开图形界面） |
+| `dlqq_ble_scan` | 扫描BLE设备 |
+| `dlqq_ble_get_devices` | 获取扫描到的设备列表 |
+| `dlqq_ble_connect` | 连接BLE设备 |
+| `dlqq_ble_disconnect` | 断开BLE设备连接 |
+| `dlqq_ble_discover` | 发现BLE服务和特征 |
+| `dlqq_ble_read` | 读取BLE特征值 |
+| `dlqq_ble_write_text` | 写入BLE特征值（文本） |
+| `dlqq_ble_write_hex` | 写入BLE特征值（HEX） |
+| `dlqq_ble_subscribe` | 订阅/取消订阅BLE通知 |
+| `dlqq_ble_get_log` | 获取BLE日志数据（支持文本/HEX格式） |
+| `dlqq_ble_get_log_text` | 获取BLE日志数据（强制文本格式） |
+| `dlqq_ble_get_log_hex` | 获取BLE日志数据（强制HEX格式） |
+| `dlqq_ble_clear` | 清除BLE数据缓冲区 |
+| `dlqq_ble_get_line_count` | 获取当前缓冲区行数 |
+| `dlqq_ble_set_buffer_size` | 设置BLE数据缓冲区大小 |
+| `dlqq_ble_switch_text_hex` | 切换日志显示格式（文本/HEX） |
+| `dlqq_exit_ble` | 退出BLE工具（关闭窗口及进程） |
 
 ## 快速开始
 
@@ -907,6 +931,284 @@ mvn clean package
 }
 ```
 
+### 42. dlqq_run_ble
+
+启动BLE蓝牙工具，打开图形界面。
+
+**参数**：
+- `port` (integer, 必需): 服务器端口号（1~65535，用于AI后续连接）
+
+**示例**：
+```json
+{
+  "port": 8090
+}
+```
+
+**说明**：启动后窗口保持运行，AI返回对话后用户可与UI交互。后续使用 `dlqq_ble_scan` 等工具时需要指定相同的端口号。
+
+### 43. dlqq_ble_scan
+
+扫描周围的BLE蓝牙设备。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+- `timeout_ms` (integer, 可选): 扫描超时时间（毫秒，默认10000）
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "timeout_ms": 10000
+}
+```
+
+**说明**：扫描完成后使用 `dlqq_ble_get_devices` 查看结果。
+
+### 44. dlqq_ble_get_devices
+
+获取扫描到的BLE设备列表。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+
+**示例**：
+```json
+{
+  "port": 8090
+}
+```
+
+### 45. dlqq_ble_connect
+
+连接指定的BLE设备。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+- `device_address` (string, 必需): BLE设备地址（如 AA:BB:CC:DD:EE:01）
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "device_address": "AA:BB:CC:DD:EE:01"
+}
+```
+
+### 46. dlqq_ble_disconnect
+
+断开当前连接的BLE设备。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+
+**示例**：
+```json
+{
+  "port": 8090
+}
+```
+
+### 47. dlqq_ble_discover
+
+发现已连接BLE设备的服务和特征。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+
+**示例**：
+```json
+{
+  "port": 8090
+}
+```
+
+**说明**：必须先连接设备。返回服务和特征列表，包含UUID和属性信息。
+
+### 48. dlqq_ble_read
+
+读取BLE设备的特征值。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+- `service_uuid` (string, 必需): 服务UUID
+- `char_uuid` (string, 必需): 特征UUID
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "service_uuid": "0000180f-0000-1000-8000-00805f9b34fb",
+  "char_uuid": "00002a19-0000-1000-8000-00805f9b34fb"
+}
+```
+
+### 49. dlqq_ble_write_text
+
+向BLE设备写入文本数据。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+- `service_uuid` (string, 必需): 服务UUID
+- `char_uuid` (string, 必需): 特征UUID
+- `text` (string, 必需): 要写入的文本内容
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "service_uuid": "0000fff0-0000-1000-8000-00805f9b34fb",
+  "char_uuid": "0000fff2-0000-1000-8000-00805f9b34fb",
+  "text": "Hello BLE"
+}
+```
+
+### 50. dlqq_ble_write_hex
+
+向BLE设备写入16进制数据。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+- `service_uuid` (string, 必需): 服务UUID
+- `char_uuid` (string, 必需): 特征UUID
+- `hex_array` (array, 必需): 16进制字符串数组，如 `["FF", "01", "02"]`
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "service_uuid": "0000fff0-0000-1000-8000-00805f9b34fb",
+  "char_uuid": "0000fff2-0000-1000-8000-00805f9b34fb",
+  "hex_array": ["FF", "01", "02", "03"]
+}
+```
+
+### 51. dlqq_ble_subscribe
+
+订阅或取消订阅BLE设备的特征通知。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+- `service_uuid` (string, 必需): 服务UUID
+- `char_uuid` (string, 必需): 特征UUID
+- `enable` (boolean, 可选): 是否启用通知（默认true）
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "service_uuid": "0000180f-0000-1000-8000-00805f9b34fb",
+  "char_uuid": "00002a19-0000-1000-8000-00805f9b34fb",
+  "enable": true
+}
+```
+
+### 52. dlqq_ble_get_log
+
+获取BLE缓冲区日志数据，支持3种读取模式。返回格式取决于当前显示格式设置（文本/HEX）。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+- `start_line` (integer, 可选): 起始行（1-based）
+- `end_line` (integer, 可选): 结束行
+- `line_count` (integer, 可选): 读取行数
+- `timeout_ms` (integer, 可选): 等待超时毫秒（默认0）
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "start_line": 1,
+  "line_count": 100
+}
+```
+
+### 53. dlqq_ble_get_log_text
+
+获取BLE日志数据（强制文本格式）。支持3种模式（同 dlqq_ble_get_log）。
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "start_line": 1,
+  "line_count": 100
+}
+```
+
+### 54. dlqq_ble_get_log_hex
+
+获取BLE日志数据（强制HEX格式）。支持3种模式（同 dlqq_ble_get_log）。
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "start_line": 1,
+  "line_count": 100
+}
+```
+
+### 55. dlqq_ble_clear
+
+清除BLE数据缓冲区。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+
+**示例**：
+```json
+{
+  "port": 8090
+}
+```
+
+### 56. dlqq_ble_set_buffer_size
+
+设置BLE数据缓冲区大小。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+- `size_bytes` (integer, 必需): 缓冲区大小（字节）
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "size_bytes": 10485760
+}
+```
+
+### 57. dlqq_ble_switch_text_hex
+
+切换BLE日志显示格式（文本/HEX）。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+- `format` (string, 必需): 显示格式，`text` 或 `hex`
+
+**示例**：
+```json
+{
+  "port": 8090,
+  "format": "hex"
+}
+```
+
+### 58. dlqq_exit_ble
+
+完全退出BLE工具，关闭窗口及进程，释放所有资源。
+
+**参数**：
+- `port` (integer, 必需): BLE工具的端口号
+
+**示例**：
+```json
+{
+  "port": 8090
+}
+```
+
 ## 使用示例
 
 在支持MCP的AI客户端中，可以直接请求AI使用这些工具：
@@ -956,6 +1258,22 @@ mvn clean package
 - "关闭串口"
 - "退出串口工具"
 
+### BLE蓝牙操作示例
+
+- "启动BLE工具，端口8090"
+- "扫描BLE设备"
+- "获取扫描到的设备列表"
+- "连接设备 AA:BB:CC:DD:EE:01"
+- "发现BLE服务和特征"
+- "读取电池服务特征值"
+- "写入文本 'Hello BLE' 到特征"
+- "写入HEX数据 ['FF', '01', '02'] 到特征"
+- "订阅通知"
+- "获取BLE日志"
+- "切换日志显示格式为HEX"
+- "断开BLE连接"
+- "退出BLE工具"
+
 ## 技术栈
 
 - Java 17+
@@ -963,6 +1281,7 @@ mvn clean package
 - Maven构建工具
 - 依赖：
   - jSerialComm（UART串口通信）
+  - tinyb（BLE蓝牙通信）
 
 ## 项目结构
 
@@ -979,7 +1298,8 @@ src/main/java/com/donglouqiaoque/aitools/
 │   │   ├── AITools.java           # 工具注册
 │   │   ├── FileTools.java         # 文件操作工具
 │   │   ├── DialogTools.java       # GUI对话框工具
-│   │   └── UartTools.java         # 串口工具
+│   │   ├── UartTools.java         # 串口工具
+│   │   └── BleTools.java          # BLE蓝牙工具
 │   └── transport/
 │       ├── McpTransport.java      # 传输层接口
 │       └── StdioTransport.java    # stdio传输实现

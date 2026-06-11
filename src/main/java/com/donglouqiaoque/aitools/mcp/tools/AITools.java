@@ -68,6 +68,36 @@ public class AITools {
         registerUartSetTextSizeTool(server);      // dlqq_uart_set_text_size
         registerUartSwitchTextHexTool(server);    // dlqq_uart_switch_text_hex
         registerExitUartTool(server);             // dlqq_exit_uart
+
+        // ========== BLE库管理工具 (30-33) ==========
+        registerBleLibHasTool(server);          // dlqq_ble_lib_has
+        registerBleLibInstallTool(server);      // dlqq_ble_lib_install
+        registerBleLibUpdateTool(server);       // dlqq_ble_lib_update
+        registerBleReleaseScriptTool(server);   // dlqq_ble_release_script
+
+        // ========== BLE蓝牙工具 (34-45) ==========
+        registerRunBleTool(server);               // dlqq_run_ble
+        registerBleScanTool(server);              // dlqq_ble_scan
+        registerBleGetDevicesTool(server);        // dlqq_ble_get_devices
+        registerBleConnectTool(server);           // dlqq_ble_connect
+        registerBleDisconnectTool(server);        // dlqq_ble_disconnect
+        registerBleDiscoverTool(server);          // dlqq_ble_discover
+        registerBleReadTool(server);              // dlqq_ble_read
+        registerBleWriteTextTool(server);         // dlqq_ble_write_text
+        registerBleWriteHexTool(server);          // dlqq_ble_write_hex
+        registerBleSubscribeTool(server);         // dlqq_ble_subscribe
+        registerBleGetLogTool(server);            // dlqq_ble_get_log
+        registerBleGetLogTextTool(server);        // dlqq_ble_get_log_text
+        registerBleGetLogHexTool(server);         // dlqq_ble_get_log_hex
+        registerBleClearTool(server);             // dlqq_ble_clear
+        registerBleGetLineCountTool(server);      // dlqq_ble_get_line_count
+        registerBleSetBufferSizeTool(server);     // dlqq_ble_set_buffer_size
+        registerBleSwitchTextHexTool(server);     // dlqq_ble_switch_text_hex
+        registerExitBleTool(server);              // dlqq_exit_ble
+        
+        // ========== 系统信息工具 ==========
+        registerGetMcpVersionTool(server);          // dlqq_get_mcp_version
+        registerOpenBluetoothTool(server);          // dlqq_open_bluetooth
     }
 
     // ==================== 文件操作工具 ====================
@@ -2091,5 +2121,1113 @@ public class AITools {
             return (String) value;
         }
         return value.toString();
+    }
+
+    // ==================== BLE库管理工具 ====================
+
+    /**
+     * 30. dlqq_ble_lib_has - 检查Python BLE库状态
+     */
+    private void registerBleLibHasTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_ble_lib_has",
+            "检查Python BLE库（bleak）是否已安装，返回Python版本和各库的安装状态及版本信息。如果库未安装，需要先使用 dlqq_ble_lib_install 安装。",
+            inputSchema,
+            arguments -> {
+                String result = BleTools.bleLibHas();
+                return textResult(result);
+            });
+    }
+
+    /**
+     * 31. dlqq_ble_lib_install - 安装Python BLE库
+     */
+    private void registerBleLibInstallTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_ble_lib_install",
+            "自动安装Python BLE依赖库（bleak）。需要先确保Python 3.8+已安装且python命令可用。安装完成后可以使用 dlqq_ble_lib_has 检查安装结果。",
+            inputSchema,
+            arguments -> {
+                String result = BleTools.bleLibInstall();
+                return textResult(result);
+            });
+    }
+
+    /**
+     * 32. dlqq_ble_lib_update - 检查并更新Python BLE库
+     */
+    private void registerBleLibUpdateTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_ble_lib_update",
+            "检查Python BLE库是否有新版本可用，如果有更新会弹出对话框让用户选择是否立即更新。如果用户选择更新，会自动执行更新操作。",
+            inputSchema,
+            arguments -> {
+                String result = BleTools.bleLibUpdate();
+                return textResult(result);
+            });
+    }
+
+    /**
+     * 33. dlqq_ble_release_script - 释放Python脚本到项目目录
+     */
+    private void registerBleReleaseScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_ble_release_script",
+            "释放BLE Python脚本到项目目录下的.dlqq/python文件夹中。首次使用BLE工具前建议先执行此操作，以便查看和管理Python脚本。",
+            inputSchema,
+            arguments -> {
+                String result = BleTools.bleReleaseScript();
+                return textResult(result);
+            });
+    }
+
+    // ==================== BLE蓝牙工具 ====================
+
+    /**
+     * 34. dlqq_run_ble - 启动BLE工具
+     */
+    private void registerRunBleTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "Java服务器端口号（用于AI后续连接）");
+        properties.put("port", portProp);
+
+        Map<String, Object> pythonPortProp = new HashMap<>();
+        pythonPortProp.put("type", "integer");
+        pythonPortProp.put("description", "Python服务端口号（可选，默认为Java端口+10000）");
+        properties.put("python_port", pythonPortProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_run_ble",
+            "打开BLE蓝牙工具，需要指定Java端口号，用于后续通讯，ip地址为localhost即可，打开后窗口保持运行，AI退出返回对话，继续与用户交互。可选指定Python服务端口号，默认为Java端口+10000。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                Integer pythonPort = parseInteger(arguments.get("python_port"), null);
+
+                if (port == null) {
+                    return errorResult("端口号必须指定");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.runBle(port, pythonPort);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("启动BLE工具失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 34. dlqq_ble_scan - 扫描BLE设备
+     */
+    private void registerBleScanTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号（dlqq_run_ble 指定的端口号）");
+        properties.put("port", portProp);
+
+        Map<String, Object> timeoutProp = new HashMap<>();
+        timeoutProp.put("type", "integer");
+        timeoutProp.put("description", "扫描超时时间（毫秒，默认10000）");
+        properties.put("timeout_ms", timeoutProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_ble_scan",
+            "扫描周围的BLE蓝牙设备。扫描完成后使用 dlqq_ble_get_devices 查看结果。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 10000);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.scanBleDevices(port, timeoutMs);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("扫描BLE设备失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 35. dlqq_ble_get_devices - 获取扫描到的设备列表
+     */
+    private void registerBleGetDevicesTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号（dlqq_run_ble 指定的端口号）");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_ble_get_devices",
+            "获取扫描到的BLE设备列表。必须先执行 dlqq_ble_scan 扫描设备。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.getBleDevices(port);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("获取设备列表失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 36. dlqq_ble_connect - 连接BLE设备
+     */
+    private void registerBleConnectTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> addressProp = new HashMap<>();
+        addressProp.put("type", "string");
+        addressProp.put("description", "BLE设备地址（如 AA:BB:CC:DD:EE:01）");
+        properties.put("device_address", addressProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "device_address"));
+
+        server.addTool("dlqq_ble_connect",
+            "连接指定的BLE设备。设备地址可从 dlqq_ble_get_devices 获取。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                String deviceAddress = (String) arguments.get("device_address");
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (deviceAddress == null || deviceAddress.trim().isEmpty()) {
+                    return errorResult("设备地址不能为空");
+                }
+
+                try {
+                    String result = BleTools.connectBleDevice(port, deviceAddress);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("连接BLE设备失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 37. dlqq_ble_disconnect - 断开BLE设备连接
+     */
+    private void registerBleDisconnectTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_ble_disconnect",
+            "断开当前连接的BLE设备。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.disconnectBleDevice(port);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("断开BLE设备失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 38. dlqq_ble_discover - 发现BLE服务和特征
+     */
+    private void registerBleDiscoverTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_ble_discover",
+            "发现已连接BLE设备的服务和特征。必须先连接设备。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.discoverBleServices(port);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("发现服务失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 39. dlqq_ble_read - 读取BLE特征值
+     */
+    private void registerBleReadTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> serviceProp = new HashMap<>();
+        serviceProp.put("type", "string");
+        serviceProp.put("description", "服务UUID（如 0000180f-0000-1000-8000-00805f9b34fb）");
+        properties.put("service_uuid", serviceProp);
+
+        Map<String, Object> charProp = new HashMap<>();
+        charProp.put("type", "string");
+        charProp.put("description", "特征UUID（如 00002a19-0000-1000-8000-00805f9b34fb）");
+        properties.put("char_uuid", charProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "service_uuid", "char_uuid"));
+
+        server.addTool("dlqq_ble_read",
+            "读取BLE设备的特征值。必须先连接设备并发现服务。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                String serviceUuid = (String) arguments.get("service_uuid");
+                String charUuid = (String) arguments.get("char_uuid");
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (serviceUuid == null || serviceUuid.trim().isEmpty()) {
+                    return errorResult("服务UUID不能为空");
+                }
+                if (charUuid == null || charUuid.trim().isEmpty()) {
+                    return errorResult("特征UUID不能为空");
+                }
+
+                try {
+                    String result = BleTools.readBleCharacteristic(port, serviceUuid, charUuid);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("读取特征失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 40. dlqq_ble_write_text - 写入BLE特征值（文本）
+     */
+    private void registerBleWriteTextTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> serviceProp = new HashMap<>();
+        serviceProp.put("type", "string");
+        serviceProp.put("description", "服务UUID");
+        properties.put("service_uuid", serviceProp);
+
+        Map<String, Object> charProp = new HashMap<>();
+        charProp.put("type", "string");
+        charProp.put("description", "特征UUID");
+        properties.put("char_uuid", charProp);
+
+        Map<String, Object> textProp = new HashMap<>();
+        textProp.put("type", "string");
+        textProp.put("description", "要写入的文本内容");
+        properties.put("text", textProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "service_uuid", "char_uuid", "text"));
+
+        server.addTool("dlqq_ble_write_text",
+            "向BLE设备写入文本数据。必须先连接设备。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                String serviceUuid = (String) arguments.get("service_uuid");
+                String charUuid = (String) arguments.get("char_uuid");
+                String text = (String) arguments.get("text");
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (serviceUuid == null || serviceUuid.trim().isEmpty()) {
+                    return errorResult("服务UUID不能为空");
+                }
+                if (charUuid == null || charUuid.trim().isEmpty()) {
+                    return errorResult("特征UUID不能为空");
+                }
+                if (text == null || text.isEmpty()) {
+                    return errorResult("写入内容不能为空");
+                }
+
+                try {
+                    String result = BleTools.writeBleCharacteristicText(port, serviceUuid, charUuid, text);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("写入特征失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 41. dlqq_ble_write_hex - 写入BLE特征值（HEX）
+     */
+    private void registerBleWriteHexTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> serviceProp = new HashMap<>();
+        serviceProp.put("type", "string");
+        serviceProp.put("description", "服务UUID");
+        properties.put("service_uuid", serviceProp);
+
+        Map<String, Object> charProp = new HashMap<>();
+        charProp.put("type", "string");
+        charProp.put("description", "特征UUID");
+        properties.put("char_uuid", charProp);
+
+        Map<String, Object> hexArrayProp = new HashMap<>();
+        hexArrayProp.put("type", "array");
+        hexArrayProp.put("description", "16进制字符串数组（如 [\"FF\", \"01\", \"02\"]）");
+        properties.put("hex_array", hexArrayProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "service_uuid", "char_uuid", "hex_array"));
+
+        server.addTool("dlqq_ble_write_hex",
+            "向BLE设备写入16进制数据。每个字符串应为偶数长度的16进制字符。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                String serviceUuid = (String) arguments.get("service_uuid");
+                String charUuid = (String) arguments.get("char_uuid");
+                Object hexArrayRaw = arguments.get("hex_array");
+
+                // 处理hex_array可能是List或String的情况
+                List<String> hexArray;
+                if (hexArrayRaw instanceof List) {
+                    @SuppressWarnings("unchecked")
+                    List<String> temp = (List<String>) hexArrayRaw;
+                    hexArray = temp;
+                } else if (hexArrayRaw instanceof String) {
+                    // 尝试解析JSON字符串
+                    String hexStr = (String) hexArrayRaw;
+                    try {
+                        hexStr = hexStr.trim();
+                        if (hexStr.startsWith("[")) {
+                            com.google.gson.JsonArray jsonArray = com.google.gson.JsonParser.parseString(hexStr).getAsJsonArray();
+                            hexArray = new ArrayList<>();
+                            for (com.google.gson.JsonElement elem : jsonArray) {
+                                hexArray.add(elem.getAsString());
+                            }
+                        } else {
+                            // 单个hex字符串，按空格或逗号分割
+                            hexArray = Arrays.asList(hexStr.split("[\\s,]+"));
+                        }
+                    } catch (Exception e) {
+                        return errorResult("HEX数据格式错误，期望JSON数组或空格分隔的hex字符串: " + e.getMessage());
+                    }
+                } else {
+                    return errorResult("HEX数据必须是字符串数组（如 [\"20\", \"A2\", \"00\", \"C2\"]）");
+                }
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (serviceUuid == null || serviceUuid.trim().isEmpty()) {
+                    return errorResult("服务UUID不能为空");
+                }
+                if (charUuid == null || charUuid.trim().isEmpty()) {
+                    return errorResult("特征UUID不能为空");
+                }
+                if (hexArray == null || hexArray.isEmpty()) {
+                    return errorResult("HEX数据不能为空");
+                }
+
+                try {
+                    String result = BleTools.writeBleCharacteristicHex(port, serviceUuid, charUuid, hexArray);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("写入HEX数据失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 42. dlqq_ble_subscribe - 订阅BLE通知
+     */
+    private void registerBleSubscribeTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> serviceProp = new HashMap<>();
+        serviceProp.put("type", "string");
+        serviceProp.put("description", "服务UUID");
+        properties.put("service_uuid", serviceProp);
+
+        Map<String, Object> charProp = new HashMap<>();
+        charProp.put("type", "string");
+        charProp.put("description", "特征UUID");
+        properties.put("char_uuid", charProp);
+
+        Map<String, Object> enableProp = new HashMap<>();
+        enableProp.put("type", "boolean");
+        enableProp.put("description", "是否启用通知（true启用，false取消）");
+        properties.put("enable", enableProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "service_uuid", "char_uuid", "enable"));
+
+        server.addTool("dlqq_ble_subscribe",
+            "订阅或取消订阅BLE设备的特征通知。设备发送通知时将自动记录到日志。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                String serviceUuid = (String) arguments.get("service_uuid");
+                String charUuid = (String) arguments.get("char_uuid");
+                Boolean enable = (Boolean) arguments.getOrDefault("enable", true);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (serviceUuid == null || serviceUuid.trim().isEmpty()) {
+                    return errorResult("服务UUID不能为空");
+                }
+                if (charUuid == null || charUuid.trim().isEmpty()) {
+                    return errorResult("特征UUID不能为空");
+                }
+
+                try {
+                    String result = BleTools.subscribeBleNotifications(port, serviceUuid, charUuid, enable);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("订阅通知失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 43. dlqq_ble_get_log - 获取BLE日志数据
+     */
+    private void registerBleGetLogTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "integer");
+        startLineProp.put("description", "起始行（1-based）");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> endLineProp = new HashMap<>();
+        endLineProp.put("type", "integer");
+        endLineProp.put("description", "结束行（1-based）");
+        properties.put("end_line", endLineProp);
+
+        Map<String, Object> lineCountProp = new HashMap<>();
+        lineCountProp.put("type", "integer");
+        lineCountProp.put("description", "读取行数");
+        properties.put("line_count", lineCountProp);
+
+        Map<String, Object> timeoutProp = new HashMap<>();
+        timeoutProp.put("type", "integer");
+        timeoutProp.put("description", "超时时间（毫秒，默认0表示不等待）");
+        properties.put("timeout_ms", timeoutProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_ble_get_log",
+            "获取BLE工具缓冲区日志数据。支持3种模式：\n" +
+            "模式1: 指定start_line和end_line，直接读取已有数据\n" +
+            "模式2: 指定start_line和line_count，直接读取已有数据\n" +
+            "模式3: 指定timeout_ms和line_count，等待读取新数据\n" +
+            "返回格式根据 dlqq_ble_switch_text_hex 设置（文本/HEX）",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                Integer startLine = parseInteger(arguments.get("start_line"), null);
+                Integer endLine = parseInteger(arguments.get("end_line"), null);
+                Integer lineCount = parseInteger(arguments.get("line_count"), null);
+                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.getBleLog(port, startLine, endLine, lineCount, timeoutMs);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("获取日志失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 43a. dlqq_ble_get_log_text - 获取BLE日志（强制文本格式）
+     */
+    private void registerBleGetLogTextTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "integer");
+        startLineProp.put("description", "起始行（1-based）");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> endLineProp = new HashMap<>();
+        endLineProp.put("type", "integer");
+        endLineProp.put("description", "结束行（1-based）");
+        properties.put("end_line", endLineProp);
+
+        Map<String, Object> lineCountProp = new HashMap<>();
+        lineCountProp.put("type", "integer");
+        lineCountProp.put("description", "读取行数");
+        properties.put("line_count", lineCountProp);
+
+        Map<String, Object> timeoutProp = new HashMap<>();
+        timeoutProp.put("type", "integer");
+        timeoutProp.put("description", "超时时间（毫秒，默认0表示不等待）");
+        properties.put("timeout_ms", timeoutProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_ble_get_log_text",
+            "获取BLE缓冲区日志数据（强制文本格式）。支持3种读取模式，同dlqq_ble_get_log。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                Integer startLine = parseInteger(arguments.get("start_line"), null);
+                Integer endLine = parseInteger(arguments.get("end_line"), null);
+                Integer lineCount = parseInteger(arguments.get("line_count"), null);
+                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.getBleLogText(port, startLine, endLine, lineCount, timeoutMs);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("获取日志失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 43b. dlqq_ble_get_log_hex - 获取BLE日志（强制HEX格式）
+     */
+    private void registerBleGetLogHexTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "integer");
+        startLineProp.put("description", "起始行（1-based）");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> endLineProp = new HashMap<>();
+        endLineProp.put("type", "integer");
+        endLineProp.put("description", "结束行（1-based）");
+        properties.put("end_line", endLineProp);
+
+        Map<String, Object> lineCountProp = new HashMap<>();
+        lineCountProp.put("type", "integer");
+        lineCountProp.put("description", "读取行数");
+        properties.put("line_count", lineCountProp);
+
+        Map<String, Object> timeoutProp = new HashMap<>();
+        timeoutProp.put("type", "integer");
+        timeoutProp.put("description", "超时时间（毫秒，默认0表示不等待）");
+        properties.put("timeout_ms", timeoutProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_ble_get_log_hex",
+            "获取BLE缓冲区日志数据（强制HEX格式）。支持3种读取模式，同dlqq_ble_get_log。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                Integer startLine = parseInteger(arguments.get("start_line"), null);
+                Integer endLine = parseInteger(arguments.get("end_line"), null);
+                Integer lineCount = parseInteger(arguments.get("line_count"), null);
+                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.getBleLogHex(port, startLine, endLine, lineCount, timeoutMs);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("获取日志失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 44. dlqq_ble_clear - 清除BLE日志
+     */
+    private void registerBleClearTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_ble_clear",
+            "清除BLE工具接收的数据缓冲区。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.clearBleLog(port);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("清除日志失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 44a. dlqq_ble_get_line_count - 获取BLE缓冲区行数
+     */
+    private void registerBleGetLineCountTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_ble_get_line_count",
+            "获取BLE工具缓冲区当前的日志行数。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.getLineCount(port);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("获取行数失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 45. dlqq_ble_set_buffer_size - 设置BLE缓冲区大小
+     */
+    private void registerBleSetBufferSizeTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> sizeProp = new HashMap<>();
+        sizeProp.put("type", "integer");
+        sizeProp.put("description", "缓冲区大小（字节），默认5MB（5242880字节）");
+        properties.put("size_bytes", sizeProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "size_bytes"));
+
+        server.addTool("dlqq_ble_set_buffer_size",
+            "设置BLE工具的数据缓冲区大小，单位字节。大小无限制，默认5MB。超出缓冲区，最早的数据会被丢弃。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                Integer sizeBytes = parseInteger(arguments.get("size_bytes"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (sizeBytes == null) {
+                    return errorResult("缓冲区大小必须指定");
+                }
+                if (sizeBytes <= 0) {
+                    return errorResult("缓冲区大小必须大于0");
+                }
+
+                try {
+                    String result = BleTools.setBleBufferSize(port, sizeBytes);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("设置缓冲区大小失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 46. dlqq_ble_switch_text_hex - 切换BLE日志显示格式
+     */
+    private void registerBleSwitchTextHexTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> formatProp = new HashMap<>();
+        formatProp.put("type", "string");
+        formatProp.put("description", "显示格式：'text' 表示文本，'hex' 表示HEX");
+        properties.put("format", formatProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "format"));
+
+        server.addTool("dlqq_ble_switch_text_hex",
+            "切换BLE日志的显示格式。切换后，UI日志显示和 dlqq_ble_get_log 返回的数据格式都会相应改变。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+                String format = parseString(arguments.get("format"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (format == null || format.trim().isEmpty()) {
+                    return errorResult("必须指定显示格式（format），'text' 或 'hex'");
+                }
+
+                try {
+                    String result = BleTools.switchDisplayFormat(port, format);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("切换显示格式失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 47. dlqq_exit_ble - 退出BLE工具
+     */
+    private void registerExitBleTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "integer");
+        portProp.put("description", "BLE工具的端口号（dlqq_run_ble 指定的端口号）");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_exit_ble",
+            "关闭指定端口号的BLE工具窗口及其进程，释放所有资源。调用后该端口的BLE工具将完全停止运行。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    String result = BleTools.exitBle(port);
+                    return textResult(result);
+                } catch (Exception e) {
+                    return errorResult("关闭BLE工具失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    // ==================== 系统信息工具 ====================
+
+    /**
+     * dlqq_get_mcp_version - 获取MCP服务器版本和构建信息
+     */
+    private void registerGetMcpVersionTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_get_mcp_version",
+            "获取MCP服务器的版本信息、JAR文件修改时间和构建信息，用于确认代码是否已更新",
+            inputSchema,
+            arguments -> {
+                String result = InfoTools.getMcpVersion();
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * 48. dlqq_open_bluetooth - 开启电脑蓝牙
+     */
+    private void registerOpenBluetoothTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_open_bluetooth",
+            "开启Windows电脑的蓝牙适配器（需要管理员权限）",
+            inputSchema,
+            arguments -> {
+                StringBuilder result = new StringBuilder();
+                result.append("=== 蓝牙开启诊断 ===\n\n");
+
+                try {
+                    // 方法1: 检查蓝牙设备状态
+                    result.append("[1/4] 检查蓝牙设备状态...\n");
+                    ProcessBuilder checkPb = new ProcessBuilder(
+                        "powershell.exe",
+                        "-Command",
+                        "Get-PnpDevice -Class Bluetooth | Select-Object Name, Status, InstanceId | Format-Table -AutoSize"
+                    );
+                    checkPb.redirectErrorStream(true);
+                    Process checkProcess = checkPb.start();
+
+                    StringBuilder checkOutput = new StringBuilder();
+                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(checkProcess.getInputStream(), "UTF-8"))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            checkOutput.append(line).append("\n");
+                        }
+                    }
+                    checkProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+                    result.append(checkOutput.toString()).append("\n");
+
+                    // 方法2: 尝试启用被禁用的蓝牙设备
+                    result.append("[2/4] 尝试启用蓝牙设备...\n");
+                    ProcessBuilder pb = new ProcessBuilder(
+                        "powershell.exe",
+                        "-Command",
+                        "Get-PnpDevice -Class Bluetooth | Where-Object {$_.Status -eq 'Disabled'} | Enable-PnpDevice -Confirm:$false 2>&1; " +
+                        "if ($?) { Write-Host '蓝牙设备已启用' } else { Write-Host '没有禁用的蓝牙设备或需要管理员权限' }"
+                    );
+                    pb.redirectErrorStream(true);
+                    Process process = pb.start();
+
+                    StringBuilder output = new StringBuilder();
+                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(process.getInputStream(), "UTF-8"))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            output.append(line).append("\n");
+                        }
+                    }
+                    int exitCode = process.waitFor();
+                    result.append("退出码: ").append(exitCode).append("\n");
+                    result.append("输出: ").append(output.toString()).append("\n");
+
+                    // 方法3: 启动蓝牙服务
+                    result.append("[3/4] 启动蓝牙服务...\n");
+                    ProcessBuilder pb2 = new ProcessBuilder(
+                        "powershell.exe",
+                        "-Command",
+                        "$service = Get-Service -Name bthserv; " +
+                        "if ($service.Status -ne 'Running') { Start-Service -Name bthserv; Write-Host '蓝牙服务已启动' } " +
+                        "else { Write-Host '蓝牙服务已在运行' }"
+                    );
+                    pb2.redirectErrorStream(true);
+                    Process process2 = pb2.start();
+
+                    StringBuilder output2 = new StringBuilder();
+                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(process2.getInputStream(), "UTF-8"))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            output2.append(line).append("\n");
+                        }
+                    }
+                    process2.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+                    result.append("输出: ").append(output2.toString()).append("\n");
+
+                    // 方法4: 尝试使用devcon或设备管理器
+                    result.append("[4/4] 尝试替代方法...\n");
+                    ProcessBuilder pb3 = new ProcessBuilder(
+                        "powershell.exe",
+                        "-Command",
+                        "# 尝试设置蓝牙设备电源\n" +
+                        "$adapter = Get-NetAdapter | Where-Object {$_.InterfaceDescription -like '*Bluetooth*'}\n" +
+                        "if ($adapter) {\n" +
+                        "    Write-Host \"找到蓝牙适配器: $($adapter.Name)\"\n" +
+                        "    if ($adapter.Status -eq 'Disabled') {\n" +
+                        "        Enable-NetAdapter -Name $adapter.Name\n" +
+                        "        Write-Host '蓝牙适配器已启用'\n" +
+                        "    } else {\n" +
+                        "        Write-Host \"蓝牙适配器状态: $($adapter.Status)\"\n" +
+                        "    }\n" +
+                        "} else {\n" +
+                        "    Write-Host '未找到蓝牙网络适配器'\n" +
+                        "}"
+                    );
+                    pb3.redirectErrorStream(true);
+                    Process process3 = pb3.start();
+
+                    StringBuilder output3 = new StringBuilder();
+                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(process3.getInputStream(), "UTF-8"))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            output3.append(line).append("\n");
+                        }
+                    }
+                    process3.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+                    result.append("输出: ").append(output3.toString()).append("\n");
+
+                    result.append("\n=== 诊断完成 ===\n");
+                    result.append("如果蓝牙仍未开启，请尝试以下手动操作:\n");
+                    result.append("1. 点击任务栏右下角的通知图标 → 展开快速设置 → 点击蓝牙图标开启\n");
+                    result.append("2. 或按 Win+I → 蓝牙和设备 → 开启蓝牙开关\n");
+                    result.append("3. 部分电脑需要按 Fn+功能键 开启蓝牙硬件开关\n");
+
+                    return textResult(result.toString());
+                } catch (Exception e) {
+                    result.append("\n错误: ").append(e.getMessage()).append("\n");
+                    result.append(e.toString()).append("\n");
+                    return textResult(result.toString());
+                }
+            }
+        );
     }
 }
