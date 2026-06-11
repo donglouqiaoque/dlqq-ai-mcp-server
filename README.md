@@ -111,6 +111,26 @@
 | `dlqq_ble_switch_text_hex` | 切换日志显示格式（文本/HEX） |
 | `dlqq_exit_ble` | 退出BLE工具（关闭窗口及进程） |
 
+## 参数类型说明
+
+**所有整数参数（integer）都同时支持 integer 和 string 两种格式**，例如：
+
+```json
+// 端口号 - 两种格式都可以
+{ "port": 8001 }        // integer 格式
+{ "port": "8001" }      // string 格式
+
+// 行号 - 两种格式都可以
+{ "start_line": 1 }     // integer 格式
+{ "start_line": "1" }   // string 格式
+
+// 缓冲区大小 - 两种格式都可以
+{ "size_bytes": 5242880 }      // integer 格式
+{ "size_bytes": "5242880" }    // string 格式
+```
+
+这样设计是为了兼容不同 AI 模型的参数传递习惯，无论 AI 传递整数还是字符串都能正常工作。
+
 ## 快速开始
 
 ### 1. 编译项目
@@ -636,7 +656,7 @@ mvn clean package
 启动CH340串口工具，打开图形界面。
 
 **参数**：
-- `port` (integer, 必需): 服务器端口号（1~65535，用于AI后续连接）
+- `port` (string, 必需): 服务器端口号（1~65535，例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -652,7 +672,7 @@ mvn clean package
 获取系统中所有可用的串口通道列表。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -668,7 +688,7 @@ mvn clean package
 刷新可用串口列表。获取系统中当前可用的所有串口设备。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -682,7 +702,7 @@ mvn clean package
 打开指定串口通道，开始捕获数据。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 - `com` (string, 必需): 串口名称（如 COM3、ttyUSB0、USB Serial等）
 - `baud_rate` (integer, 可选): 波特率（默认1000000，范围0~2000000）
 
@@ -700,7 +720,7 @@ mvn clean package
 关闭当前打开的串口通道。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -714,7 +734,7 @@ mvn clean package
 重新打开串口，用于更改波特率。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 - `com` (string, 可选): 串口名称（不指定则使用当前串口）
 - `baud_rate` (integer, 可选): 新的波特率（默认1000000）
 
@@ -731,7 +751,7 @@ mvn clean package
 发送文本数据到串口。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 - `text` (string, 必需): 要发送的文本内容
 
 **示例**：
@@ -747,7 +767,7 @@ mvn clean package
 发送16进制数据到串口。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 - `hex_array` (array, 必需): 16进制字符串数组，如 `["FF", "01", "02"]`
 
 **示例**：
@@ -763,7 +783,7 @@ mvn clean package
 获取串口缓冲区日志数据，支持3种读取模式。返回格式取决于当前显示格式设置（文本/HEX）。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 - `start_line` (integer, 可选): 起始行（1-based，模式1/2使用，模式3默认为-1表示从最后一行读取新数据）
 - `end_line` (integer, 可选): 结束行（模式1使用）
 - `line_count` (integer, 可选): 读取行数（模式2和3使用）
@@ -805,7 +825,7 @@ mvn clean package
 获取串口缓冲区日志数据（强制文本格式）。支持3种模式（同 dlqq_uart_get_log）。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 - `start_line` (integer, 可选): 起始行（1-based）
 - `end_line` (integer, 可选): 结束行
 - `line_count` (integer, 可选): 读取行数
@@ -827,7 +847,7 @@ mvn clean package
 获取串口缓冲区日志数据（强制HEX格式）。支持3种模式（同 dlqq_uart_get_log）。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 - `start_line` (integer, 可选): 起始行（1-based）
 - `end_line` (integer, 可选): 结束行
 - `line_count` (integer, 可选): 读取行数
@@ -849,7 +869,7 @@ mvn clean package
 清除串口数据缓冲区。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -863,7 +883,7 @@ mvn clean package
 获取当前缓冲区行数。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -879,7 +899,7 @@ mvn clean package
 设置串口数据缓冲区大小。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 - `size_bytes` (integer, 必需): 缓冲区大小（字节）
 
 **示例**：
@@ -897,7 +917,7 @@ mvn clean package
 切换日志显示格式（文本/HEX）。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 - `format` (string, 必需): 显示格式，`text` 表示文本，`hex` 表示HEX
 
 **示例**：
@@ -922,7 +942,7 @@ mvn clean package
 完全退出串口工具，关闭窗口及进程，释放所有资源。
 
 **参数**：
-- `port` (integer, 必需): 串口工具的端口号
+- `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -936,7 +956,7 @@ mvn clean package
 启动BLE蓝牙工具，打开图形界面。
 
 **参数**：
-- `port` (integer, 必需): 服务器端口号（1~65535，用于AI后续连接）
+- `port` (string, 必需): 服务器端口号（1~65535，例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -952,7 +972,7 @@ mvn clean package
 扫描周围的BLE蓝牙设备。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 - `timeout_ms` (integer, 可选): 扫描超时时间（毫秒，默认10000）
 
 **示例**：
@@ -970,7 +990,7 @@ mvn clean package
 获取扫描到的BLE设备列表。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -984,7 +1004,7 @@ mvn clean package
 连接指定的BLE设备。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 - `device_address` (string, 必需): BLE设备地址（如 AA:BB:CC:DD:EE:01）
 
 **示例**：
@@ -1000,7 +1020,7 @@ mvn clean package
 断开当前连接的BLE设备。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -1014,7 +1034,7 @@ mvn clean package
 发现已连接BLE设备的服务和特征。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -1030,7 +1050,7 @@ mvn clean package
 读取BLE设备的特征值。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 - `service_uuid` (string, 必需): 服务UUID
 - `char_uuid` (string, 必需): 特征UUID
 
@@ -1048,7 +1068,7 @@ mvn clean package
 向BLE设备写入文本数据。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 - `service_uuid` (string, 必需): 服务UUID
 - `char_uuid` (string, 必需): 特征UUID
 - `text` (string, 必需): 要写入的文本内容
@@ -1068,7 +1088,7 @@ mvn clean package
 向BLE设备写入16进制数据。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 - `service_uuid` (string, 必需): 服务UUID
 - `char_uuid` (string, 必需): 特征UUID
 - `hex_array` (array, 必需): 16进制字符串数组，如 `["FF", "01", "02"]`
@@ -1088,7 +1108,7 @@ mvn clean package
 订阅或取消订阅BLE设备的特征通知。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 - `service_uuid` (string, 必需): 服务UUID
 - `char_uuid` (string, 必需): 特征UUID
 - `enable` (boolean, 可选): 是否启用通知（默认true）
@@ -1108,7 +1128,7 @@ mvn clean package
 获取BLE缓冲区日志数据，支持3种读取模式。返回格式取决于当前显示格式设置（文本/HEX）。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 - `start_line` (integer, 可选): 起始行（1-based）
 - `end_line` (integer, 可选): 结束行
 - `line_count` (integer, 可选): 读取行数
@@ -1154,7 +1174,7 @@ mvn clean package
 清除BLE数据缓冲区。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json
@@ -1168,7 +1188,7 @@ mvn clean package
 设置BLE数据缓冲区大小。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 - `size_bytes` (integer, 必需): 缓冲区大小（字节）
 
 **示例**：
@@ -1184,7 +1204,7 @@ mvn clean package
 切换BLE日志显示格式（文本/HEX）。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 - `format` (string, 必需): 显示格式，`text` 或 `hex`
 
 **示例**：
@@ -1200,7 +1220,7 @@ mvn clean package
 完全退出BLE工具，关闭窗口及进程，释放所有资源。
 
 **参数**：
-- `port` (integer, 必需): BLE工具的端口号
+- `port` (string, 必需): BLE工具的端口号（例如："8001"、"8002"等）
 
 **示例**：
 ```json

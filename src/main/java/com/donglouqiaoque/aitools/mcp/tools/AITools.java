@@ -114,17 +114,17 @@ public class AITools {
         properties.put("file_path", pathProp);
 
         Map<String, Object> startProp = new HashMap<>();
-        startProp.put("type", "integer");
+        startProp.put("type", Arrays.asList("integer", "string"));
         startProp.put("description", "起始行数（1-based，默认为1）");
         properties.put("start_line", startProp);
 
         Map<String, Object> endProp = new HashMap<>();
-        endProp.put("type", "integer");
+        endProp.put("type", Arrays.asList("integer", "string"));
         endProp.put("description", "结束行数（1-based，包含，-1表示到文件末尾）");
         properties.put("end_line", endProp);
 
         Map<String, Object> linesProp = new HashMap<>();
-        linesProp.put("type", "integer");
+        linesProp.put("type", Arrays.asList("integer", "string"));
         linesProp.put("description", "读取行数（与end_line互斥，end_line优先）");
         properties.put("read_lines", linesProp);
 
@@ -309,12 +309,12 @@ public class AITools {
         properties.put("file_path", pathProp);
 
         Map<String, Object> startProp = new HashMap<>();
-        startProp.put("type", "integer");
+        startProp.put("type", Arrays.asList("integer", "string"));
         startProp.put("description", "起始行数（1-based，包含）");
         properties.put("start_line", startProp);
 
         Map<String, Object> endProp = new HashMap<>();
-        endProp.put("type", "integer");
+        endProp.put("type", Arrays.asList("integer", "string"));
         endProp.put("description", "结束行数（1-based，包含）");
         properties.put("end_line", endProp);
 
@@ -367,12 +367,12 @@ public class AITools {
         properties.put("file_path", pathProp);
 
         Map<String, Object> startProp = new HashMap<>();
-        startProp.put("type", "integer");
+        startProp.put("type", Arrays.asList("integer", "string"));
         startProp.put("description", "起始行数（1-based，包含）");
         properties.put("start_line", startProp);
 
         Map<String, Object> endProp = new HashMap<>();
-        endProp.put("type", "integer");
+        endProp.put("type", Arrays.asList("integer", "string"));
         endProp.put("description", "结束行数（1-based，包含）");
         properties.put("end_line", endProp);
 
@@ -434,7 +434,7 @@ public class AITools {
         properties.put("file_path", pathProp);
 
         Map<String, Object> lineProp = new HashMap<>();
-        lineProp.put("type", "integer");
+        lineProp.put("type", Arrays.asList("integer", "string"));
         lineProp.put("description", "插入位置（1-based，插入到该行之前）");
         properties.put("line", lineProp);
 
@@ -960,17 +960,17 @@ public class AITools {
         properties.put("file_path", pathProp);
 
         Map<String, Object> startProp = new HashMap<>();
-        startProp.put("type", "integer");
+        startProp.put("type", Arrays.asList("integer", "string"));
         startProp.put("description", "起始字节（0-based，默认为0）");
         properties.put("start_byte", startProp);
 
         Map<String, Object> endProp = new HashMap<>();
-        endProp.put("type", "integer");
+        endProp.put("type", Arrays.asList("integer", "string"));
         endProp.put("description", "结束字节（0-based，包含，-1表示到文件末尾）");
         properties.put("end_byte", endProp);
 
         Map<String, Object> bytesProp = new HashMap<>();
-        bytesProp.put("type", "integer");
+        bytesProp.put("type", Arrays.asList("integer", "string"));
         bytesProp.put("description", "读取字节数（与end_byte互斥，end_byte优先）");
         properties.put("read_bytes", bytesProp);
 
@@ -1308,8 +1308,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "服务器端口号（用于AI后续连接）");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "服务器端口号（用于AI后续连接，例如：8001、8002等）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -1344,7 +1344,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -1380,7 +1380,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -1416,7 +1416,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -1426,7 +1426,7 @@ public class AITools {
         properties.put("com", comProp);
 
         Map<String, Object> baudRateProp = new HashMap<>();
-        baudRateProp.put("type", "integer");
+        baudRateProp.put("type", Arrays.asList("integer", "string"));
         baudRateProp.put("description", "波特率（0~2000000，默认1000000）");
         properties.put("baud_rate", baudRateProp);
 
@@ -1470,7 +1470,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -1480,7 +1480,7 @@ public class AITools {
         properties.put("com", comProp);
 
         Map<String, Object> baudRateProp = new HashMap<>();
-        baudRateProp.put("type", "integer");
+        baudRateProp.put("type", Arrays.asList("integer", "string"));
         baudRateProp.put("description", "波特率（0~2000000，默认1000000）");
         properties.put("baud_rate", baudRateProp);
 
@@ -1524,7 +1524,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -1560,7 +1560,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -1605,7 +1605,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -1657,27 +1657,27 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
         Map<String, Object> startLineProp = new HashMap<>();
-        startLineProp.put("type", "integer");
+        startLineProp.put("type", Arrays.asList("integer", "string"));
         startLineProp.put("description", "起始行（1-based，模式1/2必需，模式3默认为-1表示从最后一行开始读取新数据）");
         properties.put("start_line", startLineProp);
 
         Map<String, Object> endLineProp = new HashMap<>();
-        endLineProp.put("type", "integer");
+        endLineProp.put("type", Arrays.asList("integer", "string"));
         endLineProp.put("description", "结束行（1-based，模式1使用）");
         properties.put("end_line", endLineProp);
 
         Map<String, Object> lineCountProp = new HashMap<>();
-        lineCountProp.put("type", "integer");
+        lineCountProp.put("type", Arrays.asList("integer", "string"));
         lineCountProp.put("description", "读取行数（模式2和模式3使用，模式3必需）");
         properties.put("line_count", lineCountProp);
 
         Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", "integer");
+        timeoutProp.put("type", Arrays.asList("integer", "string"));
         timeoutProp.put("description", "超时时间（毫秒，模式3使用，默认0表示不等待）");
         properties.put("timeout_ms", timeoutProp);
 
@@ -1723,27 +1723,27 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
         Map<String, Object> startLineProp = new HashMap<>();
-        startLineProp.put("type", "integer");
+        startLineProp.put("type", Arrays.asList("integer", "string"));
         startLineProp.put("description", "起始行（1-based，模式1/2必需，模式3默认为-1表示从最后一行开始读取新数据）");
         properties.put("start_line", startLineProp);
 
         Map<String, Object> endLineProp = new HashMap<>();
-        endLineProp.put("type", "integer");
+        endLineProp.put("type", Arrays.asList("integer", "string"));
         endLineProp.put("description", "结束行（1-based，模式1使用）");
         properties.put("end_line", endLineProp);
 
         Map<String, Object> lineCountProp = new HashMap<>();
-        lineCountProp.put("type", "integer");
+        lineCountProp.put("type", Arrays.asList("integer", "string"));
         lineCountProp.put("description", "读取行数（模式2和模式3使用，模式3必需）");
         properties.put("line_count", lineCountProp);
 
         Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", "integer");
+        timeoutProp.put("type", Arrays.asList("integer", "string"));
         timeoutProp.put("description", "超时时间（毫秒，模式3使用，默认0表示不等待）");
         properties.put("timeout_ms", timeoutProp);
 
@@ -1788,27 +1788,27 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
         Map<String, Object> startLineProp = new HashMap<>();
-        startLineProp.put("type", "integer");
+        startLineProp.put("type", Arrays.asList("integer", "string"));
         startLineProp.put("description", "起始行（1-based，模式1/2必需，模式3默认为-1表示从最后一行开始读取新数据）");
         properties.put("start_line", startLineProp);
 
         Map<String, Object> endLineProp = new HashMap<>();
-        endLineProp.put("type", "integer");
+        endLineProp.put("type", Arrays.asList("integer", "string"));
         endLineProp.put("description", "结束行（1-based，模式1使用）");
         properties.put("end_line", endLineProp);
 
         Map<String, Object> lineCountProp = new HashMap<>();
-        lineCountProp.put("type", "integer");
+        lineCountProp.put("type", Arrays.asList("integer", "string"));
         lineCountProp.put("description", "读取行数（模式2和模式3使用，模式3必需）");
         properties.put("line_count", lineCountProp);
 
         Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", "integer");
+        timeoutProp.put("type", Arrays.asList("integer", "string"));
         timeoutProp.put("description", "超时时间（毫秒，模式3使用，默认0表示不等待）");
         properties.put("timeout_ms", timeoutProp);
 
@@ -1852,7 +1852,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -1888,7 +1888,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -1924,12 +1924,12 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
         Map<String, Object> sizeProp = new HashMap<>();
-        sizeProp.put("type", "integer");
+        sizeProp.put("type", Arrays.asList("integer", "string"));
         sizeProp.put("description", "缓冲区大小（字节），默认5MB（5242880字节）");
         properties.put("size_bytes", sizeProp);
 
@@ -1972,7 +1972,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -2017,7 +2017,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "串口工具的端口号（dlqq_run_uart 指定的端口号）");
         properties.put("port", portProp);
 
@@ -2073,7 +2073,7 @@ public class AITools {
     }
 
     /**
-     * 解析整数参数（兼容 Long 和 Integer）
+     * 解析整数参数（兼容 Long、Integer 和 String）
      */
     private Integer parseInteger(Object value, Integer defaultValue) {
         if (value == null) {
@@ -2088,11 +2088,19 @@ public class AITools {
         if (value instanceof Number) {
             return ((Number) value).intValue();
         }
+        if (value instanceof String) {
+            try {
+                String str = ((String) value).trim();
+                return Integer.parseInt(str);
+            } catch (NumberFormatException e) {
+                return defaultValue;
+            }
+        }
         return defaultValue;
     }
 
     /**
-     * 解析长整数参数（兼容 Long 和 Integer）
+     * 解析长整数参数（兼容 Long、Integer 和 String）
      */
     private Long parseLong(Object value, Long defaultValue) {
         if (value == null) {
@@ -2106,6 +2114,14 @@ public class AITools {
         }
         if (value instanceof Number) {
             return ((Number) value).longValue();
+        }
+        if (value instanceof String) {
+            try {
+                String str = ((String) value).trim();
+                return Long.parseLong(str);
+            } catch (NumberFormatException e) {
+                return defaultValue;
+            }
         }
         return defaultValue;
     }
@@ -2198,12 +2214,12 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "Java服务器端口号（用于AI后续连接）");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "Java服务器端口号（用于AI后续连接，例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> pythonPortProp = new HashMap<>();
-        pythonPortProp.put("type", "integer");
+        pythonPortProp.put("type", Arrays.asList("integer", "string"));
         pythonPortProp.put("description", "Python服务端口号（可选，默认为Java端口+10000）");
         properties.put("python_port", pythonPortProp);
 
@@ -2240,12 +2256,12 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "BLE工具的端口号（dlqq_run_ble 指定的端口号）");
         properties.put("port", portProp);
 
         Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", "integer");
+        timeoutProp.put("type", Arrays.asList("integer", "string"));
         timeoutProp.put("description", "扫描超时时间（毫秒，默认10000）");
         properties.put("timeout_ms", timeoutProp);
 
@@ -2282,7 +2298,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "BLE工具的端口号（dlqq_run_ble 指定的端口号）");
         properties.put("port", portProp);
 
@@ -2318,8 +2334,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> addressProp = new HashMap<>();
@@ -2363,8 +2379,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -2399,8 +2415,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -2435,8 +2451,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> serviceProp = new HashMap<>();
@@ -2489,8 +2505,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> serviceProp = new HashMap<>();
@@ -2552,8 +2568,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> serviceProp = new HashMap<>();
@@ -2643,8 +2659,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> serviceProp = new HashMap<>();
@@ -2703,27 +2719,27 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> startLineProp = new HashMap<>();
-        startLineProp.put("type", "integer");
+        startLineProp.put("type", Arrays.asList("integer", "string"));
         startLineProp.put("description", "起始行（1-based）");
         properties.put("start_line", startLineProp);
 
         Map<String, Object> endLineProp = new HashMap<>();
-        endLineProp.put("type", "integer");
+        endLineProp.put("type", Arrays.asList("integer", "string"));
         endLineProp.put("description", "结束行（1-based）");
         properties.put("end_line", endLineProp);
 
         Map<String, Object> lineCountProp = new HashMap<>();
-        lineCountProp.put("type", "integer");
+        lineCountProp.put("type", Arrays.asList("integer", "string"));
         lineCountProp.put("description", "读取行数");
         properties.put("line_count", lineCountProp);
 
         Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", "integer");
+        timeoutProp.put("type", Arrays.asList("integer", "string"));
         timeoutProp.put("description", "超时时间（毫秒，默认0表示不等待）");
         properties.put("timeout_ms", timeoutProp);
 
@@ -2767,27 +2783,27 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> startLineProp = new HashMap<>();
-        startLineProp.put("type", "integer");
+        startLineProp.put("type", Arrays.asList("integer", "string"));
         startLineProp.put("description", "起始行（1-based）");
         properties.put("start_line", startLineProp);
 
         Map<String, Object> endLineProp = new HashMap<>();
-        endLineProp.put("type", "integer");
+        endLineProp.put("type", Arrays.asList("integer", "string"));
         endLineProp.put("description", "结束行（1-based）");
         properties.put("end_line", endLineProp);
 
         Map<String, Object> lineCountProp = new HashMap<>();
-        lineCountProp.put("type", "integer");
+        lineCountProp.put("type", Arrays.asList("integer", "string"));
         lineCountProp.put("description", "读取行数");
         properties.put("line_count", lineCountProp);
 
         Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", "integer");
+        timeoutProp.put("type", Arrays.asList("integer", "string"));
         timeoutProp.put("description", "超时时间（毫秒，默认0表示不等待）");
         properties.put("timeout_ms", timeoutProp);
 
@@ -2827,27 +2843,27 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> startLineProp = new HashMap<>();
-        startLineProp.put("type", "integer");
+        startLineProp.put("type", Arrays.asList("integer", "string"));
         startLineProp.put("description", "起始行（1-based）");
         properties.put("start_line", startLineProp);
 
         Map<String, Object> endLineProp = new HashMap<>();
-        endLineProp.put("type", "integer");
+        endLineProp.put("type", Arrays.asList("integer", "string"));
         endLineProp.put("description", "结束行（1-based）");
         properties.put("end_line", endLineProp);
 
         Map<String, Object> lineCountProp = new HashMap<>();
-        lineCountProp.put("type", "integer");
+        lineCountProp.put("type", Arrays.asList("integer", "string"));
         lineCountProp.put("description", "读取行数");
         properties.put("line_count", lineCountProp);
 
         Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", "integer");
+        timeoutProp.put("type", Arrays.asList("integer", "string"));
         timeoutProp.put("description", "超时时间（毫秒，默认0表示不等待）");
         properties.put("timeout_ms", timeoutProp);
 
@@ -2887,8 +2903,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -2923,8 +2939,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -2959,12 +2975,12 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> sizeProp = new HashMap<>();
-        sizeProp.put("type", "integer");
+        sizeProp.put("type", Arrays.asList("integer", "string"));
         sizeProp.put("description", "缓冲区大小（字节），默认5MB（5242880字节）");
         properties.put("size_bytes", sizeProp);
 
@@ -3007,8 +3023,8 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
-        portProp.put("description", "BLE工具的端口号");
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
         properties.put("port", portProp);
 
         Map<String, Object> formatProp = new HashMap<>();
@@ -3052,7 +3068,7 @@ public class AITools {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> portProp = new HashMap<>();
-        portProp.put("type", "integer");
+        portProp.put("type", Arrays.asList("integer", "string"));
         portProp.put("description", "BLE工具的端口号（dlqq_run_ble 指定的端口号）");
         properties.put("port", portProp);
 
