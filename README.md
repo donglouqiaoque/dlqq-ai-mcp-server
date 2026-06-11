@@ -822,21 +822,41 @@ mvn clean package
 
 ### 35. dlqq_uart_get_log_text
 
-获取串口缓冲区日志数据（强制文本格式）。支持3种模式（同 dlqq_uart_get_log）。
+获取串口缓冲区日志数据（强制文本格式）。支持3种读取模式。
 
 **参数**：
 - `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
-- `start_line` (integer, 可选): 起始行（1-based）
-- `end_line` (integer, 可选): 结束行
-- `line_count` (integer, 可选): 读取行数
-- `timeout_ms` (integer, 可选): 等待超时毫秒（默认0）
+- `start_line` (integer, 可选): 起始行（1-based，模式1/2使用，模式3默认为-1表示从最后一行读取新数据）
+- `end_line` (integer, 可选): 结束行（模式1使用）
+- `line_count` (integer, 可选): 读取行数（模式2和3使用）
+- `timeout_ms` (integer, 可选): 等待超时毫秒（模式3使用，默认0表示不等待）
+
+**模式说明**：
+- 模式1（直接范围）：`start_line` + `end_line`
+- 模式2（直接计数）：`start_line` + `line_count`
+- 模式3（等待读取）：`timeout_ms` + `line_count`（`start_line`默认为-1表示从最后一行开始读取新数据）
 
 **示例**：
 ```json
+// 模式1：读取第1到第10行
 {
   "port": 8080,
   "start_line": 1,
-  "line_count": 100
+  "end_line": 10
+}
+
+// 模式2：从第5行开始读取20行
+{
+  "port": 8080,
+  "start_line": 5,
+  "line_count": 20
+}
+
+// 模式3：等待最多5000毫秒，读取至少10行新数据
+{
+  "port": 8080,
+  "timeout_ms": 5000,
+  "line_count": 10
 }
 ```
 
@@ -844,21 +864,41 @@ mvn clean package
 
 ### 36. dlqq_uart_get_log_hex
 
-获取串口缓冲区日志数据（强制HEX格式）。支持3种模式（同 dlqq_uart_get_log）。
+获取串口缓冲区日志数据（强制HEX格式）。支持3种读取模式。
 
 **参数**：
 - `port` (string, 必需): 串口工具的端口号（例如："8001"、"8002"等）
-- `start_line` (integer, 可选): 起始行（1-based）
-- `end_line` (integer, 可选): 结束行
-- `line_count` (integer, 可选): 读取行数
-- `timeout_ms` (integer, 可选): 等待超时毫秒（默认0）
+- `start_line` (integer, 可选): 起始行（1-based，模式1/2使用，模式3默认为-1表示从最后一行读取新数据）
+- `end_line` (integer, 可选): 结束行（模式1使用）
+- `line_count` (integer, 可选): 读取行数（模式2和3使用）
+- `timeout_ms` (integer, 可选): 等待超时毫秒（模式3使用，默认0表示不等待）
+
+**模式说明**：
+- 模式1（直接范围）：`start_line` + `end_line`
+- 模式2（直接计数）：`start_line` + `line_count`
+- 模式3（等待读取）：`timeout_ms` + `line_count`（`start_line`默认为-1表示从最后一行开始读取新数据）
 
 **示例**：
 ```json
+// 模式1：读取第1到第10行
 {
   "port": 8080,
   "start_line": 1,
-  "line_count": 100
+  "end_line": 10
+}
+
+// 模式2：从第5行开始读取20行
+{
+  "port": 8080,
+  "start_line": 5,
+  "line_count": 20
+}
+
+// 模式3：等待最多5000毫秒，读取至少10行新数据
+{
+  "port": 8080,
+  "timeout_ms": 5000,
+  "line_count": 10
 }
 ```
 

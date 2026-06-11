@@ -332,6 +332,20 @@ public class McpServer {
         }
 
         CallToolResult call(Map<String, Object> arguments) {
+            // 校验参数：检测未知参数
+            if (inputSchema != null && inputSchema.getProperties() != null) {
+                java.util.Set<String> validParams = inputSchema.getProperties().keySet();
+                for (String key : arguments.keySet()) {
+                    if (!validParams.contains(key)) {
+                        CallToolResult result = new CallToolResult();
+                        result.setError(true);
+                        java.util.List<ToolContent> content = new java.util.ArrayList<>();
+                        content.add(ToolContent.error("未知参数: " + key + "，有效参数为: " + String.join(", ", validParams)));
+                        result.setContent(content);
+                        return result;
+                    }
+                }
+            }
             return handler.apply(arguments);
         }
     }
