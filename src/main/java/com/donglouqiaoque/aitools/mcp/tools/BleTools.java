@@ -1427,6 +1427,11 @@ public class BleTools {
     }
 
     private String getLogCore(Integer startLine, Integer endLine, Integer lineCount, int timeoutMs) {
+        // 限制最大超时时间为30秒，防止卡住
+        if (timeoutMs > 30000) {
+            timeoutMs = 30000;
+        }
+
         boolean isWaitMode = timeoutMs > 0;
 
         if (isWaitMode) {

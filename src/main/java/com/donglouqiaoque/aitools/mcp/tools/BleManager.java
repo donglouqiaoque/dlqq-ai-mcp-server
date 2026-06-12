@@ -470,10 +470,15 @@ public class BleManager {
             return null;
         }
 
-        try (Socket socket = new Socket("127.0.0.1", servicePort);
-             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-             BufferedReader in = new BufferedReader(
-                     new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
+        try (Socket socket = new Socket()) {
+            // 设置连接超时和读取超时（10秒）
+            var socketAddress = new java.net.InetSocketAddress("127.0.0.1", servicePort);
+            socket.connect(socketAddress, 10000);  // 10秒连接超时
+            socket.setSoTimeout(30000);  // 30秒读取超时（BLE操作可能需要较长时间）
+            
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
 
             Map<String, Object> command = new HashMap<>();
             command.put("type", type);
@@ -494,6 +499,8 @@ public class BleManager {
                 }
             }
 
+        } catch (java.net.SocketTimeoutException e) {
+            System.err.println(getInstanceId() + " 发送命令超时 [" + type + "]: " + e.getMessage());
         } catch (Exception e) {
             System.err.println(getInstanceId() + " 发送命令失败 [" + type + "]: " + e.getMessage());
         }

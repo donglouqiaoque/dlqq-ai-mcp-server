@@ -292,7 +292,20 @@ public class UartTools {
             1000, 1000
         );
 
-        if (!serialPort.openPort()) {
+        // 使用超时保护打开串口
+        final SerialPort portToOpen = serialPort;
+        Future<Boolean> openFuture = tools.executor.submit(() -> portToOpen.openPort());
+        boolean opened;
+        try {
+            opened = openFuture.get(5, TimeUnit.SECONDS); // 5秒超时
+        } catch (TimeoutException e) {
+            openFuture.cancel(true);
+            return "打开串口 " + com + " 超时（5秒），请检查串口设备是否正常";
+        } catch (Exception e) {
+            return "打开串口 " + com + " 失败: " + e.getMessage();
+        }
+
+        if (!opened) {
             return "无法打开串口 " + com + "，可能已被占用";
         }
 
@@ -427,6 +440,11 @@ public class UartTools {
      * 内部方法：获取串口日志的核心逻辑
      */
     private static String getUartLogCore(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
+        // 限制最大超时时间为30秒，防止卡住
+        if (timeout_ms > 30000) {
+            timeout_ms = 30000;
+        }
+        
         // 判断读取模式
         boolean isWaitMode = timeout_ms > 0;
         UartTools tools = getInstance(port);
@@ -771,7 +789,16 @@ public class UartTools {
         try {
             // 将文本转换为字节发送
             byte[] data = text.getBytes(StandardCharsets.UTF_8);
-            int bytesWritten = tools.currentPort.writeBytes(data, data.length);
+            
+            // 使用超时保护发送数据
+            Future<Integer> writeFuture = tools.executor.submit(() -> tools.currentPort.writeBytes(data, data.length));
+            int bytesWritten;
+            try {
+                bytesWritten = writeFuture.get(3, TimeUnit.SECONDS); // 3秒超时
+            } catch (TimeoutException e) {
+                writeFuture.cancel(true);
+                return "发送超时（3秒），串口设备可能无响应";
+            }
 
             if (bytesWritten < 0) {
                 return "发送失败";
@@ -850,7 +877,15 @@ public class UartTools {
                 return "错误：没有有效的16进制数据";
             }
 
-            int bytesWritten = tools.currentPort.writeBytes(data, data.length);
+            // 使用超时保护发送数据
+            Future<Integer> writeFuture = tools.executor.submit(() -> tools.currentPort.writeBytes(data, data.length));
+            int bytesWritten;
+            try {
+                bytesWritten = writeFuture.get(3, TimeUnit.SECONDS); // 3秒超时
+            } catch (TimeoutException e) {
+                writeFuture.cancel(true);
+                return "发送超时（3秒），串口设备可能无响应";
+            }
 
             if (bytesWritten < 0) {
                 return "发送失败";

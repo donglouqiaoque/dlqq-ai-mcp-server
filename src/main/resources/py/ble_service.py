@@ -310,8 +310,12 @@ class BleBridgeService:
             return True
 
         try:
-            self.run_async(write())
+            # 添加10秒超时
+            import asyncio
+            self.run_async(asyncio.wait_for(write(), timeout=10.0))
             return {"success": True}
+        except asyncio.TimeoutError:
+            return {"success": False, "error": "Write operation timed out (10s)"}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
