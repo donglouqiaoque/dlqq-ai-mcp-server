@@ -539,8 +539,57 @@ public class StdioTransport implements McpTransport {
             Object value = parseJsonValue(content, i);
             result.put(key, value);
 
-            // 跳过已解析的部分
-            // 这里简化处理，跳到下一个逗号或结束
+            // 跳过已解析的部分（正确追踪括号深度）
+            int depth = 0;
+            boolean inStr = false;
+            while (i < content.length()) {
+                char c = content.charAt(i);
+                if (c == '"' && (i == 0 || content.charAt(i - 1) != '\\')) {
+                    inStr = !inStr;
+                } else if (!inStr) {
+                    if (c == '{' || c == '[') depth++;
+                    else if (c == '}' || c == ']') depth--;
+                    else if (c == ',' && depth == 0) {
+                        i++;  // 跳过逗号
+                        break;
+                    }
+                }
+                i++;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 解析JSON数组
+     */
+    @SuppressWarnings("unchecked")
+    private List<Object> parseJsonArray(String json) {
+        List<Object> result = new java.util.ArrayList<>();
+
+        if (!json.startsWith("[") || !json.endsWith("]")) {
+            return result;
+        }
+
+        String content = json.substring(1, json.length() - 1).trim();
+        if (content.isEmpty()) {
+            return result;
+        }
+
+        int i = 0;
+        while (i < content.length()) {
+            // 跳过空白
+            while (i < content.length() && Character.isWhitespace(content.charAt(i))) {
+                i++;
+            }
+            if (i >= content.length()) break;
+
+            // 解析值
+            Object value = parseJsonValue(content, i);
+            result.add(value);
+
+            // 跳过已解析的部分，跳到下一个逗号或结束
             while (i < content.length() && content.charAt(i) != ',') {
                 i++;
             }
@@ -581,7 +630,7 @@ public class StdioTransport implements McpTransport {
             }
             return parseJsonObject(json.substring(start, end));
         } else if (firstChar == '[') {
-            // 数组 - 简化处理
+            // 数组 - 解析为List
             int bracketCount = 1;
             int end = start + 1;
             while (end < json.length() && bracketCount > 0) {
@@ -589,7 +638,7 @@ public class StdioTransport implements McpTransport {
                 else if (json.charAt(end) == ']') bracketCount--;
                 end++;
             }
-            return json.substring(start, end);
+            return parseJsonArray(json.substring(start, end));
         } else if (json.startsWith("null", start)) {
             return null;
         } else if (json.startsWith("true", start)) {

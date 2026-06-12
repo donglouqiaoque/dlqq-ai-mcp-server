@@ -29,6 +29,10 @@ class BleBridgeService:
         self.is_scanning: bool = False
         # 通知推送配置: {char_uuid: {"java_port": int, "service_uuid": str}}
         self.notification_configs: Dict[str, Dict] = {}
+        # 心跳检测配置
+        self.last_heartbeat_time: float = 0  # 最后收到命令的时间
+        self.heartbeat_timeout: float = 30.0  # 心跳超时时间（秒）
+        self.heartbeat_check_thread: Optional[threading.Thread] = None
 
     def start(self):
         """启动服务"""
@@ -38,7 +42,16 @@ class BleBridgeService:
         self.server_socket.listen(1)
         self.running = True
 
+        # 初始化心跳时间
+        import time
+        self.last_heartbeat_time = time.time()
+        
+        # 启动心跳检测线程
+        self.heartbeat_check_thread = threading.Thread(target=self._heartbeat_check, daemon=True)
+        self.heartbeat_check_thread.start()
+
         print(f"[BLE Bridge] 服务启动，监听端口: {self.port}", flush=True)
+        print(f"[BLE Bridge] 心跳超时: {self.heartbeat_timeout}秒", flush=True)
 
         while self.running:
             try:
@@ -47,6 +60,26 @@ class BleBridgeService:
                 self.handle_client(conn)
             except Exception as e:
                 print(f"[BLE Bridge] 接受连接失败: {e}", flush=True)
+
+    def _heartbeat_check(self):
+        """心跳检测线程 - 定期检查是否超时"""
+        import time
+        print("[BLE Bridge] 心跳检测线程启动", flush=True)
+        
+        while self.running:
+            time.sleep(5)  # 每5秒检查一次
+            
+            elapsed = time.time() - self.last_heartbeat_time
+            if elapsed > self.heartbeat_timeout:
+                print(f"[BLE Bridge] 心跳超时！最后心跳: {elapsed:.1f}秒前，超时阈值: {self.heartbeat_timeout}秒", flush=True)
+                print("[BLE Bridge] Java连接已断开，自动退出...", flush=True)
+                self.stop()
+                break
+    
+    def update_heartbeat(self):
+        """更新心跳时间戳"""
+        import time
+        self.last_heartbeat_time = time.time()
 
     def handle_client(self, conn: socket.socket):
         """处理客户端连接"""
@@ -69,6 +102,8 @@ class BleBridgeService:
                 # 解析JSON命令
                 try:
                     command = json.loads(data)
+                    # 更新心跳时间戳
+                    self.update_heartbeat()
                     result = self.execute_command(command)
                 except json.JSONDecodeError as e:
                     result = {"success": False, "error": f"Invalid JSON: {str(e)}"}
@@ -90,6 +125,8 @@ class BleBridgeService:
         finally:
             conn.close()
             print("[BLE Bridge] 客户端断开", flush=True)
+            # 客户端断开后，更新心跳时间让检测线程知道连接已断开
+            # 检测线程会在超时后自动停止服务
 
     def execute_command(self, command: Dict[str, Any]) -> Dict[str, Any]:
         """执行命令"""
@@ -132,11 +169,14 @@ class BleBridgeService:
             devices = []
             discovered = await BleakScanner.discover(timeout=timeout)
             for device in discovered:
+                # 过滤掉Unknown Name设备，只显示有名称的设备
+                if device.name is None or device.name == "Unknown" or device.name.strip() == "":
+                    continue
                 # bleak 0.20+ 版本中 BLEDevice 的 rssi 可能为 None
                 rssi = getattr(device, 'rssi', None) or -100
                 devices.append({
                     "address": device.address,
-                    "name": device.name or "Unknown",
+                    "name": device.name,
                     "rssi": rssi,
                 })
             return devices

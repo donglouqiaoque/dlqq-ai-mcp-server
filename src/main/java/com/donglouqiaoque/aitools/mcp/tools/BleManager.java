@@ -61,6 +61,11 @@ public class BleManager {
     // Python命令缓存
     private String pythonCommand = null;
 
+    // 心跳检测
+    private Thread heartbeatThread;
+    private volatile boolean heartbeatRunning = false;
+    private static final int HEARTBEAT_INTERVAL_MS = 10000;  // 心跳间隔10秒
+
     /**
      * 创建BLE管理器实例
      * @param port Python服务端口号（与MCP工具实例端口一致）
@@ -68,6 +73,9 @@ public class BleManager {
     public BleManager(int port) {
         this.servicePort = port;
         this.notificationPort = port + 1000;  // 通知端口 = 服务端口 + 1000
+        
+        // 注册Shutdown Hook，确保Java进程退出时销毁Python进程
+        registerShutdownHook();
     }
 
     /**
@@ -75,6 +83,66 @@ public class BleManager {
      */
     private String getInstanceId() {
         return "[BleManager-" + servicePort + "]";
+    }
+
+    // ==================== Shutdown Hook ====================
+
+    // 静态变量，用于跟踪所有BleManager实例
+    private static final List<BleManager> instances = new CopyOnWriteArrayList<>();
+
+    /**
+     * 注册Shutdown Hook，确保Java进程退出时销毁所有Python进程
+     */
+    private void registerShutdownHook() {
+        // 添加当前实例到全局列表
+        instances.add(this);
+        
+        // 只注册一次Shutdown Hook
+        if (!shutdownHookRegistered) {
+            synchronized (BleManager.class) {
+                if (!shutdownHookRegistered) {
+                    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                        System.err.println("[BleManager] Java进程退出，开始清理所有Python进程...");
+                        for (BleManager manager : instances) {
+                            try {
+                                manager.cleanupPythonProcess();
+                            } catch (Exception e) {
+                                System.err.println(manager.getInstanceId() + " 清理Python进程失败: " + e.getMessage());
+                            }
+                        }
+                        System.err.println("[BleManager] 所有Python进程清理完成");
+                    }, "BLE-Python-Cleanup"));
+                    shutdownHookRegistered = true;
+                }
+            }
+        }
+    }
+
+    private static volatile boolean shutdownHookRegistered = false;
+
+    /**
+     * 清理Python进程（供Shutdown Hook调用）
+     */
+    private void cleanupPythonProcess() {
+        if (pythonProcess != null && pythonProcess.isAlive()) {
+            System.err.println(getInstanceId() + " 正在销毁Python进程 (PID: " + pythonProcess.pid() + ")...");
+            pythonProcess.destroy();
+            try {
+                // 等待进程结束，最多等待3秒
+                if (!pythonProcess.waitFor(3, TimeUnit.SECONDS)) {
+                    System.err.println(getInstanceId() + " Python进程未正常退出，强制终止...");
+                    pythonProcess.destroyForcibly();
+                    pythonProcess.waitFor(2, TimeUnit.SECONDS);
+                }
+            } catch (InterruptedException e) {
+                System.err.println(getInstanceId() + " 等待Python进程退出被中断: " + e.getMessage());
+                pythonProcess.destroyForcibly();
+                Thread.currentThread().interrupt();
+            }
+            pythonProcess = null;
+            pythonServiceStarted = false;
+            System.err.println(getInstanceId() + " Python进程已销毁");
+        }
     }
 
     // ==================== Python环境检测与管理 ====================
@@ -327,9 +395,12 @@ public class BleManager {
             if (response != null && response.has("success") && response.get("success").getAsBoolean()) {
                 // 启动通知接收服务器
                 startNotificationServer();
+                // 启动心跳线程
+                startHeartbeat();
                 // 使用stderr输出日志，避免污染MCP通信
                 System.err.println(getInstanceId() + " Python BLE服务启动成功，端口: " + servicePort);
                 System.err.println(getInstanceId() + " 通知接收服务器启动，端口: " + notificationPort);
+                System.err.println(getInstanceId() + " 心跳检测已启动，间隔: " + HEARTBEAT_INTERVAL_MS + "ms");
                 isInitialized = true;
                 return true;
             } else {
@@ -545,12 +616,62 @@ public class BleManager {
      */
     public void stopService() {
         stopNotificationServer();
-        if (pythonProcess != null) {
-            pythonProcess.destroy();
-            pythonProcess = null;
-        }
+        stopHeartbeat();
+        cleanupPythonProcess();
+        // 从全局实例列表中移除
+        instances.remove(this);
         pythonServiceStarted = false;
         isInitialized = false;
+    }
+
+    // ==================== 心跳检测 ====================
+
+    /**
+     * 启动心跳线程，定期向Python发送ping命令
+     */
+    private void startHeartbeat() {
+        heartbeatRunning = true;
+        heartbeatThread = new Thread(() -> {
+            System.err.println(getInstanceId() + " 心跳线程启动");
+            while (heartbeatRunning && pythonServiceStarted) {
+                try {
+                    Thread.sleep(HEARTBEAT_INTERVAL_MS);
+                    if (heartbeatRunning && pythonServiceStarted) {
+                        JsonObject response = sendCommand("ping", null);
+                        if (response == null || !response.has("success") || !response.get("success").getAsBoolean()) {
+                            System.err.println(getInstanceId() + " 心跳检测失败，Python服务可能已停止");
+                            // Python服务不可用，清理资源
+                            stopService();
+                            break;
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    System.err.println(getInstanceId() + " 心跳发送异常: " + e.getMessage());
+                }
+            }
+            System.err.println(getInstanceId() + " 心跳线程退出");
+        }, "BLE-Heartbeat-" + servicePort);
+        heartbeatThread.setDaemon(true);
+        heartbeatThread.start();
+    }
+
+    /**
+     * 停止心跳线程
+     */
+    private void stopHeartbeat() {
+        heartbeatRunning = false;
+        if (heartbeatThread != null) {
+            heartbeatThread.interrupt();
+            try {
+                heartbeatThread.join(3000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            heartbeatThread = null;
+        }
     }
 
     // ==================== BLE操作 ====================
@@ -579,52 +700,49 @@ public class BleManager {
         isScanning = true;
         discoveredDevices.clear();
 
-        scanThread = new Thread(() -> {
-            try {
-                Map<String, Object> params = new HashMap<>();
-                params.put("timeout", timeoutMs / 1000.0);
+        try {
+            Map<String, Object> params = new HashMap<>();
+            params.put("timeout", timeoutMs / 1000.0);
 
-                JsonObject response = sendCommand("scan", params);
+            JsonObject response = sendCommand("scan", params);
 
-                if (response != null && response.has("success") && response.get("success").getAsBoolean()) {
-                    JsonArray devices = response.getAsJsonArray("devices");
-                    if (devices != null) {
-                        for (JsonElement deviceElem : devices) {
-                            JsonObject deviceObj = deviceElem.getAsJsonObject();
-                            String address = deviceObj.get("address").getAsString();
-                            String name = deviceObj.get("name").getAsString();
-                            int rssi = deviceObj.get("rssi").getAsInt();
+            if (response != null && response.has("success") && response.get("success").getAsBoolean()) {
+                JsonArray devices = response.getAsJsonArray("devices");
+                if (devices != null) {
+                    for (JsonElement deviceElem : devices) {
+                        JsonObject deviceObj = deviceElem.getAsJsonObject();
+                        String address = deviceObj.get("address").getAsString();
+                        String name = deviceObj.get("name").getAsString();
+                        int rssi = deviceObj.get("rssi").getAsInt();
 
-                            BleDevice device = new BleDevice(address, name, rssi);
-                            discoveredDevices.put(address, device);
+                        BleDevice device = new BleDevice(address, name, rssi);
+                        discoveredDevices.put(address, device);
 
-                            if (scanCallback != null) {
-                                scanCallback.onDeviceFound(device);
-                            }
+                        if (scanCallback != null) {
+                            scanCallback.onDeviceFound(device);
                         }
                     }
-
-                    if (scanCallback != null) {
-                        scanCallback.onScanComplete();
-                    }
-                } else {
-                    String error = response != null && response.has("error")
-                            ? response.get("error").getAsString()
-                            : "Unknown error";
-                    if (scanCallback != null) {
-                        scanCallback.onScanFailed(error);
-                    }
                 }
-            } catch (Exception e) {
+
                 if (scanCallback != null) {
-                    scanCallback.onScanFailed(e.getMessage());
+                    scanCallback.onScanComplete();
                 }
-            } finally {
-                isScanning = false;
+            } else {
+                String error = response != null && response.has("error")
+                        ? response.get("error").getAsString()
+                        : "Unknown error";
+                if (scanCallback != null) {
+                    scanCallback.onScanFailed(error);
+                }
             }
-        });
+        } catch (Exception e) {
+            if (scanCallback != null) {
+                scanCallback.onScanFailed(e.getMessage());
+            }
+        } finally {
+            isScanning = false;
+        }
 
-        scanThread.start();
         return true;
     }
 

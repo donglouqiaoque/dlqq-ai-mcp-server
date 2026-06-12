@@ -510,7 +510,7 @@ public class BleTools {
 
         // 清空之前的扫描结果
         tools.scannedDevices.clear();
-        
+
         // 清空GUI设备列表
         if (tools.deviceListModel != null) {
             SwingUtilities.invokeLater(() -> tools.deviceListModel.clear());
@@ -520,71 +520,64 @@ public class BleTools {
         tools.isScanning = true;
         tools.addToBuffer("SYS", "开始扫描BLE设备，超时: " + timeoutMs + "ms");
 
-        // 启动真实BLE扫描
-        tools.executor.submit(() -> {
-            try {
-                // 使用Windows BLE管理器进行真实扫描
-                tools.bleManager.startScan(new BleManager.ScanCallback() {
-                    @Override
-                    public void onDeviceFound(BleManager.BleDevice device) {
-                        tools.scannedDevices.put(device.getAddress(), device.getName());
-                        String deviceInfo = device.getName() + " [" + device.getAddress() + "] " + device.getRssi() + " dBm";
-                        tools.addToBuffer("SYS", "发现设备: " + deviceInfo);
-                        
-                        // 更新GUI设备列表
-                        if (tools.deviceListModel != null) {
-                            SwingUtilities.invokeLater(() -> {
-                                // 检查是否已存在
-                                boolean exists = false;
-                                for (int i = 0; i < tools.deviceListModel.size(); i++) {
-                                    if (tools.deviceListModel.get(i).contains(device.getAddress())) {
-                                        exists = true;
-                                        break;
-                                    }
-                                }
-                                if (!exists) {
-                                    tools.deviceListModel.addElement(deviceInfo);
-                                }
-                            });
-                        }
-                    }
+        // 同步执行BLE扫描，阻塞等待扫描完成
+        try {
+            // 使用Windows BLE管理器进行真实扫描（startScan现在是同步的，会阻塞直到扫描完成）
+            tools.bleManager.startScan(new BleManager.ScanCallback() {
+                @Override
+                public void onDeviceFound(BleManager.BleDevice device) {
+                    tools.scannedDevices.put(device.getAddress(), device.getName());
+                    String deviceInfo = device.getName() + " [" + device.getAddress() + "] " + device.getRssi() + " dBm";
+                    tools.addToBuffer("SYS", "发现设备: " + deviceInfo);
 
-                    @Override
-                    public void onScanComplete() {
-                        tools.isScanning = false;
-                        tools.addToBuffer("SYS", "扫描完成，共发现 " + tools.scannedDevices.size() + " 个设备");
-                        
-                        // 更新设备列表标题
-                        if (tools.deviceList != null && tools.guiWindow != null) {
-                            SwingUtilities.invokeLater(() -> {
-                                JPanel parent = (JPanel) tools.deviceList.getParent().getParent();
-                                if (parent.getBorder() instanceof TitledBorder) {
-                                    ((TitledBorder) parent.getBorder()).setTitle("扫描到的设备列表 (" + tools.scannedDevices.size() + ")");
-                                    parent.repaint();
+                    // 更新GUI设备列表
+                    if (tools.deviceListModel != null) {
+                        SwingUtilities.invokeLater(() -> {
+                            // 检查是否已存在
+                            boolean exists = false;
+                            for (int i = 0; i < tools.deviceListModel.size(); i++) {
+                                if (tools.deviceListModel.get(i).contains(device.getAddress())) {
+                                    exists = true;
+                                    break;
                                 }
-                            });
-                        }
+                            }
+                            if (!exists) {
+                                tools.deviceListModel.addElement(deviceInfo);
+                            }
+                        });
                     }
-
-                    @Override
-                    public void onScanFailed(String error) {
-                        tools.isScanning = false;
-                        tools.addToBuffer("SYS", "扫描失败: " + error);
-                    }
-                }, timeoutMs);
-                
-                // 等待扫描完成
-                while (tools.isScanning && tools.bleManager.isScanning()) {
-                    Thread.sleep(100);
                 }
-            } catch (Exception e) {
-                tools.addToBuffer("SYS", "扫描异常: " + e.getMessage());
-            } finally {
-                tools.isScanning = false;
-            }
-        });
 
-        return "已开始扫描BLE设备，扫描时间: " + timeoutMs + "ms，请使用 dlqq_ble_get_devices 查看结果";
+                @Override
+                public void onScanComplete() {
+                    tools.isScanning = false;
+                    tools.addToBuffer("SYS", "扫描完成，共发现 " + tools.scannedDevices.size() + " 个设备");
+
+                    // 更新设备列表标题
+                    if (tools.deviceList != null && tools.guiWindow != null) {
+                        SwingUtilities.invokeLater(() -> {
+                            JPanel parent = (JPanel) tools.deviceList.getParent().getParent();
+                            if (parent.getBorder() instanceof TitledBorder) {
+                                ((TitledBorder) parent.getBorder()).setTitle("扫描到的设备列表 (" + tools.scannedDevices.size() + ")");
+                                parent.repaint();
+                            }
+                        });
+                    }
+                }
+
+                @Override
+                public void onScanFailed(String error) {
+                    tools.isScanning = false;
+                    tools.addToBuffer("SYS", "扫描失败: " + error);
+                }
+            }, timeoutMs);
+        } catch (Exception e) {
+            tools.addToBuffer("SYS", "扫描异常: " + e.getMessage());
+            tools.isScanning = false;
+        }
+
+        // 返回扫描结果
+        return getBleDevices(port);
     }
 
     /**
