@@ -2,7 +2,10 @@ package com.donglouqiaoque.aitools.mcp.tools;
 
 import com.donglouqiaoque.aitools.utils.FileUtils;
 
-import java.io.IOException;
+import java.io.*;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -48,7 +51,8 @@ public class FileTools {
             }
         }
 
-        List<String> lines = Files.readAllLines(path, cs);
+        // 使用 FileChannel 以共享模式读取文件，避免多进程竞争
+        List<String> lines = readAllLinesWithSharedLock(path, cs);
         if (lines.isEmpty()) {
             return "";
         }
@@ -85,6 +89,46 @@ public class FileTools {
         }
 
         return result.toString();
+    }
+
+    /**
+     * 使用共享读锁读取文件所有行，避免多进程并发访问时的文件竞争
+     */
+    private static List<String> readAllLinesWithSharedLock(Path path, Charset charset) throws IOException {
+        List<String> lines = new ArrayList<>();
+
+        // 使用 FileChannel 以只读模式打开文件，允许其他进程同时读取
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ);
+             InputStream is = Channels.newInputStream(channel);
+             Reader reader = new InputStreamReader(is, charset);
+             BufferedReader br = new BufferedReader(reader)) {
+
+            // 在 Windows 上尝试获取共享锁（读锁），非阻塞
+            // 在 Linux/Mac 上，这个锁是建议性的
+            FileLock lock = null;
+            try {
+                lock = channel.tryLock(0, Long.MAX_VALUE, true); // true = 共享锁
+            } catch (Exception e) {
+                // 某些系统不支持共享锁，继续无锁读取
+            }
+
+            try {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    lines.add(line);
+                }
+            } finally {
+                if (lock != null) {
+                    try {
+                        lock.release();
+                    } catch (Exception e) {
+                        // 忽略释放锁的错误
+                    }
+                }
+            }
+        }
+
+        return lines;
     }
 
     /**

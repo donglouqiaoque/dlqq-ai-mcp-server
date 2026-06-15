@@ -1,20 +1,26 @@
 package com.donglouqiaoque.aitools.config;
 
 import java.io.*;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.Properties;
 
 /**
  * 配置管理器 - 管理AI工具的各类配置
+ * 支持多进程并发访问（使用文件锁）
  */
 public class ConfigManager {
 
     private static final String CONFIG_DIR = System.getProperty("user.home") + "/.aitools";
     private static final String CONFIG_FILE = CONFIG_DIR + "/config.properties";
+    private static final String LOCK_FILE = CONFIG_DIR + "/.config.lock";
     private static final String DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String DEFAULT_MODEL = "gpt-3.5-turbo";
+    private static final long LOCK_TIMEOUT_MS = 5000; // 5秒超时
 
     private final Properties properties;
     private static ConfigManager instance;
@@ -32,26 +38,72 @@ public class ConfigManager {
     }
 
     /**
-     * 加载配置文件
+     * 获取文件锁（带超时）
+     */
+    private FileLock acquireLock(FileChannel channel) throws IOException {
+        long startTime = System.currentTimeMillis();
+        FileLock lock = null;
+        while (lock == null) {
+            try {
+                lock = channel.tryLock();
+                if (lock != null) {
+                    return lock;
+                }
+            } catch (Exception e) {
+                // 锁被其他进程持有，继续等待
+            }
+            if (System.currentTimeMillis() - startTime > LOCK_TIMEOUT_MS) {
+                throw new IOException("获取配置文件锁超时");
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("获取锁被中断");
+            }
+        }
+        return lock;
+    }
+
+    /**
+     * 加载配置文件（带文件锁）
      */
     private void loadConfig() {
         Path configPath = Paths.get(CONFIG_FILE);
-        if (Files.exists(configPath)) {
-            try (InputStream is = new FileInputStream(CONFIG_FILE)) {
-                properties.load(is);
-            } catch (IOException e) {
-                System.err.println("加载配置文件失败: " + e.getMessage());
+        if (!Files.exists(configPath)) {
+            return;
+        }
+
+        // 使用锁文件防止并发读写
+        Path lockPath = Paths.get(LOCK_FILE);
+        try {
+            Files.createDirectories(Paths.get(CONFIG_DIR));
+            try (FileChannel lockChannel = FileChannel.open(lockPath,
+                    StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 FileLock lock = acquireLock(lockChannel)) {
+                // 重新读取（持有锁后）
+                if (Files.exists(configPath)) {
+                    try (InputStream is = new FileInputStream(CONFIG_FILE)) {
+                        properties.load(is);
+                    }
+                }
             }
+        } catch (IOException e) {
+            System.err.println("加载配置文件失败: " + e.getMessage());
         }
     }
 
     /**
-     * 保存配置到文件
+     * 保存配置到文件（带文件锁）
      */
     public void saveConfig() {
+        Path lockPath = Paths.get(LOCK_FILE);
         try {
             Files.createDirectories(Paths.get(CONFIG_DIR));
-            try (OutputStream os = new FileOutputStream(CONFIG_FILE)) {
+            try (FileChannel lockChannel = FileChannel.open(lockPath,
+                    StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 FileLock lock = acquireLock(lockChannel);
+                 OutputStream os = new FileOutputStream(CONFIG_FILE)) {
                 properties.store(os, "AI Tools Configuration");
             }
         } catch (IOException e) {

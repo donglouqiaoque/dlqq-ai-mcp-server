@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 set "SCRIPT_DIR=%~dp0"
@@ -8,7 +7,7 @@ cd /d "%PROJECT_DIR%"
 
 set "CONFIG_FILE=%SCRIPT_DIR%config.properties"
 
-REM 读取配置
+REM Read config
 for /f "tokens=1,2 delims==" %%a in ('type "%CONFIG_FILE%" ^| findstr "^release_version="') do set "RELEASE_VERSION=%%b"
 for /f "tokens=1,2 delims==" %%a in ('type "%CONFIG_FILE%" ^| findstr "^debug_version="') do set "DEBUG_VERSION=%%b"
 for /f "tokens=1,2 delims==" %%a in ('type "%CONFIG_FILE%" ^| findstr "^use_debug="') do set "USE_DEBUG=%%b"
@@ -35,42 +34,42 @@ echo [INFO] Version: %VERSION%
 echo [INFO] Output dir: %BUILD_DIR%
 echo.
 
-REM ========== Maven 构建 Java 项目 ==========
+REM ========== Maven Build Java Project ==========
 echo [INFO] ========================================
-echo [INFO] 编译 Java 项目...
+echo [INFO] Building Java project...
 echo [INFO] ========================================
 echo.
 
 call mvn clean package -DskipTests -Drevision=%VERSION%
 
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Maven 构建失败！
+    echo [ERROR] Maven build failed!
     exit /b 1
 )
 
-echo [INFO] Maven 构建成功！
+echo [INFO] Maven build success!
 echo.
 
-REM ========== 复制到输出目录 ==========
+REM ========== Copy to output directory ==========
 if not exist "%BUILD_DIR%" (
-    echo [INFO] 创建输出目录: %BUILD_DIR%
+    echo [INFO] Creating output dir: %BUILD_DIR%
     mkdir "%BUILD_DIR%"
 )
 
-REM 复制 JAR
-echo [INFO] 复制 JAR...
+REM Copy JAR
+echo [INFO] Copying JAR...
 copy /Y "target\%JAR_NAME%" "%BUILD_DIR%\donglouqiaoque_ai_tools.jar" >nul
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] JAR 复制失败！
+    echo [ERROR] JAR copy failed!
     exit /b 1
 )
 echo [INFO] JAR: %BUILD_DIR%\donglouqiaoque_ai_tools.jar
 
 echo.
 echo [INFO] ========================================
-echo [INFO] 构建完成！
+echo [INFO] Build completed!
 echo [INFO] ========================================
-echo [INFO] 输出目录: %BUILD_DIR%
+echo [INFO] Output dir: %BUILD_DIR%
 echo.
 
 endlocal

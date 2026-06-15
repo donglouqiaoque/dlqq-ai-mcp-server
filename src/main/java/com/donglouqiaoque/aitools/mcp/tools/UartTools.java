@@ -10,12 +10,15 @@ import java.awt.event.*;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.jar.*;
 
 /**
  * UART串口工具 - 支持CH340等USB转串口设备
@@ -439,14 +442,14 @@ public class UartTools {
     /**
      * 内部方法：获取串口日志的核心逻辑
      */
-    private static String getUartLogCore(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
+    private static String getUartLogCore(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_sec) {
         // 限制最大超时时间为30秒，防止卡住
-        if (timeout_ms > 30000) {
-            timeout_ms = 30000;
+        if (timeout_sec > 30) {
+            timeout_sec = 30;
         }
         
         // 判断读取模式
-        boolean isWaitMode = timeout_ms > 0;
+        boolean isWaitMode = timeout_sec > 0;
         UartTools tools = getInstance(port);
 
         if (isWaitMode) {
@@ -461,9 +464,9 @@ public class UartTools {
             int startFrom = (start_line != null && start_line > 0) ? start_line : initialLines + 1;
             int targetLines = (line_count != null && line_count > 0) ? line_count : 1;
 
-            // 等待新数据到达
+            // 等待新数据到达（秒转毫秒）
             long startTime = System.currentTimeMillis();
-            while (System.currentTimeMillis() - startTime < timeout_ms) {
+            while (System.currentTimeMillis() - startTime < timeout_sec * 1000) {
                 synchronized (tools.dataBuffer) {
                     if (tools.dataBuffer.size() >= startFrom + targetLines - 1) {
                         // 已有足够的新数据，跳出等待
@@ -553,17 +556,17 @@ public class UartTools {
      * 模式2（直接计数读取）: port + start_line + line_count
      *   从start_line开始读取指定行数
      *
-     * 模式3（等待读取）: port + timeout_ms + line_count
-     *   等待新数据到达，最多等待timeout_ms毫秒，读取至少line_count行
+     * 模式3（等待读取）: port + timeout_sec + line_count
+     *   等待新数据到达，最多等待timeout_sec秒，读取至少line_count行
      *
      * @param port 服务器端口号（必需）
      * @param start_line 起始行号（1-based，模式1和2使用）
      * @param end_line 结束行号（模式1使用，-1表示到末尾）
      * @param line_count 读取行数（模式2和3使用）
-     * @param timeout_ms 等待超时毫秒（模式3使用，0表示不等待）
+     * @param timeout_sec 等待超时秒数（模式3使用，0表示不等待）
      * @return 文本数据（根据当前显示格式）
      */
-    public static String getUartLog(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
+    public static String getUartLog(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_sec) {
         String portError = checkPortParam(port);
         if (portError != null) {
             return portError;
@@ -581,7 +584,7 @@ public class UartTools {
         }
 
         // 获取原始日志
-        String rawLog = getUartLogCore(port, start_line, end_line, line_count, timeout_ms);
+        String rawLog = getUartLogCore(port, start_line, end_line, line_count, timeout_sec);
 
         // 如果是错误消息（包含"错误："或"等待超时"），直接返回
         if (rawLog.startsWith("错误：") || rawLog.startsWith("等待超时")) {
@@ -613,10 +616,10 @@ public class UartTools {
      * @param start_line 起始行号（1-based）
      * @param end_line 结束行号
      * @param line_count 读取行数
-     * @param timeout_ms 等待超时毫秒
+     * @param timeout_sec 等待超时秒数
      * @return 文本数据（强制文本格式）
      */
-    public static String getUartLogText(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
+    public static String getUartLogText(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_sec) {
         String portError = checkPortParam(port);
         if (portError != null) {
             return portError;
@@ -634,7 +637,7 @@ public class UartTools {
         }
 
         // 直接返回原始日志（文本格式）
-        return getUartLogCore(port, start_line, end_line, line_count, timeout_ms);
+        return getUartLogCore(port, start_line, end_line, line_count, timeout_sec);
     }
 
     /**
@@ -645,10 +648,10 @@ public class UartTools {
      * @param start_line 起始行号（1-based）
      * @param end_line 结束行号
      * @param line_count 读取行数
-     * @param timeout_ms 等待超时毫秒
+     * @param timeout_sec 等待超时秒数
      * @return 文本数据（强制HEX格式）
      */
-    public static String getUartLogHex(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_ms) {
+    public static String getUartLogHex(Integer port, Integer start_line, Integer end_line, Integer line_count, int timeout_sec) {
         String portError = checkPortParam(port);
         if (portError != null) {
             return portError;
@@ -666,7 +669,7 @@ public class UartTools {
         }
 
         // 获取原始日志
-        String rawLog = getUartLogCore(port, start_line, end_line, line_count, timeout_ms);
+        String rawLog = getUartLogCore(port, start_line, end_line, line_count, timeout_sec);
 
         // 如果是错误消息，直接返回
         if (rawLog.startsWith("错误：") || rawLog.startsWith("等待超时")) {
@@ -1306,6 +1309,14 @@ public class UartTools {
         guiWindow.setSize(800, 600);
         guiWindow.setLocationRelativeTo(null);
 
+        // Set window icon
+        try {
+            java.net.URL iconUrl = getClass().getResource("/image/logo.ico");
+            if (iconUrl != null) {
+                guiWindow.setIconImage(new ImageIcon(iconUrl).getImage());
+            }
+        } catch (Exception ignored) {}
+
         JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -1586,6 +1597,56 @@ public class UartTools {
 
         mainPanel.add(bottomPanel, BorderLayout.SOUTH);
 
+        // 作者信息栏
+        JPanel authorPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 2));
+        authorPanel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
+        authorPanel.setBackground(new Color(240, 240, 240));
+
+        // 作者
+        JLabel authorLabel = new JLabel("作者：鸫楼桥鹊");
+        authorLabel.setFont(new Font("Microsoft YaHei", Font.PLAIN, 11));
+        authorLabel.setForeground(Color.DARK_GRAY);
+        authorPanel.add(authorLabel);
+
+        // 版本号（从config.properties读取）
+        String version = getAppVersion();
+        String versionText = "无法获取".equals(version) ? "无法获取" : "V" + version;
+        JLabel versionLabel = new JLabel("版本：" + versionText);
+        versionLabel.setFont(new Font("Consolas", Font.PLAIN, 11));
+        versionLabel.setForeground(Color.DARK_GRAY);
+        authorPanel.add(versionLabel);
+
+        // 联系作者（可点击链接）
+        JLabel linkLabel = new JLabel("<html><u>联系作者：www.donglouqiaoque.com</u></html>");
+        linkLabel.setFont(new Font("Microsoft YaHei", Font.PLAIN, 11));
+        linkLabel.setForeground(new Color(0, 102, 204));
+        linkLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        linkLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    if (Desktop.isDesktopSupported()) {
+                        Desktop.getDesktop().browse(new URI("http://www.donglouqiaoque.com"));
+                    }
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(guiWindow, "无法打开浏览器：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                linkLabel.setForeground(new Color(0, 51, 153));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                linkLabel.setForeground(new Color(0, 102, 204));
+            }
+        });
+        authorPanel.add(linkLabel);
+
+        mainPanel.add(authorPanel, BorderLayout.PAGE_END);
+
         guiWindow.add(mainPanel);
 
         // 关闭处理
@@ -1651,6 +1712,61 @@ public class UartTools {
                 }
             }
         }
+    }
+
+    /**
+     * 获取应用版本号和构建时间
+     * 格式：Vx.x.x（xxx.xx.xx xx.xx.xx）
+     */
+    private static String getAppVersion() {
+        try {
+            // 获取当前类的JAR文件路径
+            String classPath = UartTools.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+            // URL解码处理中文路径
+            classPath = java.net.URLDecoder.decode(classPath, "UTF-8");
+            File jarFile = new File(classPath);
+
+            if (jarFile.exists()) {
+                // 读取MANIFEST.MF
+                try (JarFile jar = new JarFile(jarFile)) {
+                    Manifest manifest = jar.getManifest();
+                    if (manifest != null) {
+                        Attributes mainAttrs = manifest.getMainAttributes();
+                        String version = mainAttrs.getValue("Implementation-Version");
+
+                        // 获取构建时间
+                        String buildTime = null;
+                        String buildTimeAttr = mainAttrs.getValue("Build-Time");
+                        if (buildTimeAttr != null) {
+                            try {
+                                // 将UTC时间转换为本地时间
+                                java.time.LocalDateTime utcTime = java.time.LocalDateTime.parse(buildTimeAttr,
+                                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                                java.time.ZonedDateTime utcZoned = utcTime.atZone(java.time.ZoneId.of("UTC"));
+                                java.time.ZonedDateTime localZoned = utcZoned.withZoneSameInstant(java.time.ZoneId.systemDefault());
+                                buildTime = localZoned.format(java.time.format.DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss"));
+                            } catch (Exception e) {
+                                // 如果解析失败，使用JAR文件修改时间
+                            }
+                        }
+
+                        // 如果没有从MANIFEST获取到构建时间，使用JAR文件修改时间
+                        if (buildTime == null) {
+                            long lastModified = jarFile.lastModified();
+                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy.MM.dd HH.mm.ss");
+                            buildTime = sdf.format(new Date(lastModified));
+                        }
+
+                        if (version != null) {
+                            return version + "（" + buildTime + "）";
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // 出错时返回无法获取
+        }
+        return "无法获取";
     }
 
     /**

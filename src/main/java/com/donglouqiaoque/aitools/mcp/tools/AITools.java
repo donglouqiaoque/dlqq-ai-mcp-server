@@ -1696,7 +1696,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -1706,7 +1706,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = UartTools.getUartLog(port, startLine, endLine, lineCount, timeoutMs);
+                    String result = UartTools.getUartLog(port, startLine, endLine, lineCount, timeoutSec);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取串口数据失败: " + e.getMessage());
@@ -1761,7 +1761,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -1771,7 +1771,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = UartTools.getUartLogText(port, startLine, endLine, lineCount, timeoutMs);
+                    String result = UartTools.getUartLogText(port, startLine, endLine, lineCount, timeoutSec);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取串口数据失败: " + e.getMessage());
@@ -1826,7 +1826,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -1836,7 +1836,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = UartTools.getUartLogHex(port, startLine, endLine, lineCount, timeoutMs);
+                    String result = UartTools.getUartLogHex(port, startLine, endLine, lineCount, timeoutSec);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取串口数据失败: " + e.getMessage());
@@ -2215,22 +2215,16 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "Java服务器端口号（用于AI后续连接，例如：8001、8002等）");
+        portProp.put("description", "Python服务端口号（例如：8765、8766等）");
         properties.put("port", portProp);
-
-        Map<String, Object> pythonPortProp = new HashMap<>();
-        pythonPortProp.put("type", Arrays.asList("integer", "string"));
-        pythonPortProp.put("description", "Python服务端口号（可选，默认为Java端口+10000）");
-        properties.put("python_port", pythonPortProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
         server.addTool("dlqq_run_ble",
-            "打开BLE蓝牙工具，需要指定Java端口号，用于后续通讯，ip地址为localhost即可，打开后窗口保持运行，AI退出返回对话，继续与用户交互。可选指定Python服务端口号，默认为Java端口+10000。",
+            "打开BLE蓝牙工具，指定Python服务端口号，启动后Python GUI窗口保持运行，AI可通过此端口与BLE工具通信。",
             inputSchema,
             arguments -> {
                 Integer port = parseInteger(arguments.get("port"), null);
-                Integer pythonPort = parseInteger(arguments.get("python_port"), null);
 
                 if (port == null) {
                     return errorResult("端口号必须指定");
@@ -2240,7 +2234,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = BleTools.runBle(port, pythonPort);
+                    String result = BleTools.runBle(port);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("启动BLE工具失败: " + e.getMessage());
@@ -2257,13 +2251,13 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（dlqq_run_ble 指定的端口号）");
+        portProp.put("description", "BLE工具的Python端口号（dlqq_run_ble 指定的端口号）");
         properties.put("port", portProp);
 
         Map<String, Object> timeoutProp = new HashMap<>();
         timeoutProp.put("type", Arrays.asList("integer", "string"));
-        timeoutProp.put("description", "扫描超时时间（毫秒，默认10000）");
-        properties.put("timeout_ms", timeoutProp);
+        timeoutProp.put("description", "扫描超时时间（秒，默认10秒）");
+        properties.put("timeout", timeoutProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
@@ -2272,7 +2266,7 @@ public class AITools {
             inputSchema,
             arguments -> {
                 Integer port = parseInteger(arguments.get("port"), null);
-                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 10000);
+                Integer timeoutSec = parseInteger(arguments.get("timeout"), 10);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -2282,7 +2276,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = BleTools.scanBleDevices(port, timeoutMs);
+                    String result = BleTools.scanBleDevices(port, timeoutSec);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("扫描BLE设备失败: " + e.getMessage());
@@ -2299,7 +2293,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（dlqq_run_ble 指定的端口号）");
+        portProp.put("description", "BLE工具的Python端口号（dlqq_run_ble 指定的端口号）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -2335,7 +2329,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         Map<String, Object> addressProp = new HashMap<>();
@@ -2380,7 +2374,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -2416,7 +2410,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -2452,7 +2446,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         Map<String, Object> serviceProp = new HashMap<>();
@@ -2506,7 +2500,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         Map<String, Object> serviceProp = new HashMap<>();
@@ -2569,7 +2563,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         Map<String, Object> serviceProp = new HashMap<>();
@@ -2660,7 +2654,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         Map<String, Object> serviceProp = new HashMap<>();
@@ -2720,7 +2714,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         Map<String, Object> startLineProp = new HashMap<>();
@@ -2740,8 +2734,8 @@ public class AITools {
 
         Map<String, Object> timeoutProp = new HashMap<>();
         timeoutProp.put("type", Arrays.asList("integer", "string"));
-        timeoutProp.put("description", "超时时间（毫秒，默认0表示不等待）");
-        properties.put("timeout_ms", timeoutProp);
+        timeoutProp.put("description", "超时时间（秒，默认0表示不等待）");
+        properties.put("timeout", timeoutProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
@@ -2749,7 +2743,7 @@ public class AITools {
             "获取BLE工具缓冲区日志数据。支持3种模式：\n" +
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
-            "模式3: 指定timeout_ms和line_count，等待读取新数据\n" +
+            "模式3: 指定timeout和line_count，等待读取新数据\n" +
             "返回格式根据 dlqq_ble_switch_text_hex 设置（文本/HEX）",
             inputSchema,
             arguments -> {
@@ -2757,7 +2751,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -2767,7 +2761,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = BleTools.getBleLog(port, startLine, endLine, lineCount, timeoutMs);
+                    String result = BleTools.getBleLog(port, startLine, endLine, lineCount, timeoutSec);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取日志失败: " + e.getMessage());
@@ -2784,7 +2778,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         Map<String, Object> startLineProp = new HashMap<>();
@@ -2804,8 +2798,8 @@ public class AITools {
 
         Map<String, Object> timeoutProp = new HashMap<>();
         timeoutProp.put("type", Arrays.asList("integer", "string"));
-        timeoutProp.put("description", "超时时间（毫秒，默认0表示不等待）");
-        properties.put("timeout_ms", timeoutProp);
+        timeoutProp.put("description", "超时时间（秒，默认0表示不等待）");
+        properties.put("timeout", timeoutProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
@@ -2817,7 +2811,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -2827,7 +2821,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = BleTools.getBleLogText(port, startLine, endLine, lineCount, timeoutMs);
+                    String result = BleTools.getBleLogText(port, startLine, endLine, lineCount, timeoutSec);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取日志失败: " + e.getMessage());
@@ -2844,7 +2838,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         Map<String, Object> startLineProp = new HashMap<>();
@@ -2864,8 +2858,8 @@ public class AITools {
 
         Map<String, Object> timeoutProp = new HashMap<>();
         timeoutProp.put("type", Arrays.asList("integer", "string"));
-        timeoutProp.put("description", "超时时间（毫秒，默认0表示不等待）");
-        properties.put("timeout_ms", timeoutProp);
+        timeoutProp.put("description", "超时时间（秒，默认0表示不等待）");
+        properties.put("timeout", timeoutProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
@@ -2877,7 +2871,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutMs = parseInteger(arguments.get("timeout_ms"), 0);
+                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -2887,7 +2881,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = BleTools.getBleLogHex(port, startLine, endLine, lineCount, timeoutMs);
+                    String result = BleTools.getBleLogHex(port, startLine, endLine, lineCount, timeoutSec);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取日志失败: " + e.getMessage());
@@ -2904,7 +2898,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -2940,7 +2934,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -2976,7 +2970,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         Map<String, Object> sizeProp = new HashMap<>();
@@ -3024,7 +3018,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（例如：8001、8002等）");
+        portProp.put("description", "BLE工具的Python端口号（例如：8765、8766等）");
         properties.put("port", portProp);
 
         Map<String, Object> formatProp = new HashMap<>();
@@ -3069,7 +3063,7 @@ public class AITools {
 
         Map<String, Object> portProp = new HashMap<>();
         portProp.put("type", Arrays.asList("integer", "string"));
-        portProp.put("description", "BLE工具的端口号（dlqq_run_ble 指定的端口号）");
+        portProp.put("description", "BLE工具的Python端口号（dlqq_run_ble 指定的端口号）");
         properties.put("port", portProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
