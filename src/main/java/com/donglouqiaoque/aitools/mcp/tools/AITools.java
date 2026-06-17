@@ -30,15 +30,17 @@ public class AITools {
         registerMoveFileTool(server);             // dlqq_move_file
         registerRenameFileTool(server);           // dlqq_rename_file
 
-        // ========== 目录操作工具 (12-17) ==========
+        // ========== 目录操作工具 (12-19) ==========
         registerCreateDirTool(server);            // dlqq_mdir
         registerCreateDirsTool(server);           // dlqq_mdirs
         registerDeleteDirTool(server);            // dlqq_delete_dir
         registerCopyDirTool(server);              // dlqq_copy_dir
         registerMoveDirTool(server);              // dlqq_move_dir
         registerRenameDirTool(server);              // dlqq_rename_dir
+        registerListDirTreeTool(server);            // dlqq_list_dir_tree
+        registerListDirFilesTool(server);         // dlqq_list_dir_files
 
-        // ========== 二进制文件操作工具 (18-19) ==========
+        // ========== 二进制文件操作工具 (20-21) ==========
         registerReadBinFileTool(server);          // dlqq_read_bin_file
         registerWriteBinFileTool(server);         // dlqq_write_bin_file
 
@@ -941,6 +943,100 @@ public class AITools {
                     return textResult("文件夹重命名成功");
                 } catch (IOException e) {
                     return errorResult("重命名失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 17. dlqq_list_dir_tree - 列出目录树（递归）
+     */
+    private void registerListDirTreeTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "要列出的目录路径");
+        properties.put("dir_path", pathProp);
+
+        Map<String, Object> depthProp = new HashMap<>();
+        depthProp.put("type", Arrays.asList("integer", "string"));
+        depthProp.put("description", "最大递归深度（-1表示无限制，默认为-1）");
+        properties.put("max_depth", depthProp);
+
+        Map<String, Object> entriesProp = new HashMap<>();
+        entriesProp.put("type", Arrays.asList("integer", "string"));
+        entriesProp.put("description", "最大返回条目数（-1表示无限制，默认为-1）");
+        properties.put("max_entries", entriesProp);
+
+        Map<String, Object> hiddenProp = new HashMap<>();
+        hiddenProp.put("type", "string");
+        hiddenProp.put("description", "是否显示隐藏文件/目录（'true'或'false'，默认为'false'）");
+        hiddenProp.put("enum", Arrays.asList("true", "false"));
+        properties.put("show_hidden", hiddenProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("dir_path"));
+
+        server.addTool("dlqq_list_dir_tree",
+            "列出指定文件夹的完整目录结构，递归显示所有子目录和文件。支持指定递归深度和最大条目数限制。",
+            inputSchema,
+            arguments -> {
+                String dirPath = (String) arguments.get("dir_path");
+                Integer maxDepth = parseInteger(arguments.get("max_depth"), -1);
+                Integer maxEntries = parseInteger(arguments.get("max_entries"), -1);
+                String showHiddenStr = (String) arguments.getOrDefault("show_hidden", "false");
+                boolean showHidden = Boolean.parseBoolean(showHiddenStr);
+
+                if (dirPath == null || dirPath.trim().isEmpty()) {
+                    return errorResult("目录路径不能为空");
+                }
+
+                try {
+                    String result = FileTools.listDirectoryTree(dirPath, maxDepth, maxEntries, showHidden);
+                    return textResult(result);
+                } catch (IOException e) {
+                    return errorResult("列出目录失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 18. dlqq_list_dir_files - 列出单层目录内容
+     */
+    private void registerListDirFilesTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "要列出的目录路径");
+        properties.put("dir_path", pathProp);
+
+        Map<String, Object> hiddenProp = new HashMap<>();
+        hiddenProp.put("type", "string");
+        hiddenProp.put("description", "是否显示隐藏文件/目录（'true'或'false'，默认为'false'）");
+        hiddenProp.put("enum", Arrays.asList("true", "false"));
+        properties.put("show_hidden", hiddenProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("dir_path"));
+
+        server.addTool("dlqq_list_dir_files",
+            "列出指定文件夹下的文件和文件夹，只列出一层，不递归进入子目录。",
+            inputSchema,
+            arguments -> {
+                String dirPath = (String) arguments.get("dir_path");
+                String showHiddenStr = (String) arguments.getOrDefault("show_hidden", "false");
+                boolean showHidden = Boolean.parseBoolean(showHiddenStr);
+
+                if (dirPath == null || dirPath.trim().isEmpty()) {
+                    return errorResult("目录路径不能为空");
+                }
+
+                try {
+                    String result = FileTools.listDirectoryFiles(dirPath, showHidden);
+                    return textResult(result);
+                } catch (IOException e) {
+                    return errorResult("列出目录失败: " + e.getMessage());
                 }
             }
         );

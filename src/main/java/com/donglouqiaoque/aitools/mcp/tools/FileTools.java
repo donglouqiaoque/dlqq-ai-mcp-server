@@ -1065,4 +1065,203 @@ public class FileTools {
 
         return results;
     }
+
+    // ==================== 目录列表工具 ====================
+
+    /**
+     * 列出目录树（递归列出所有内容）
+     *
+     * @param dirPath      目录路径
+     * @param maxDepth     最大递归深度（-1表示无限制）
+     * @param maxEntries   最大返回条目数（-1表示无限制）
+     * @param showHidden   是否显示隐藏文件/目录
+     * @return 格式化的目录树字符串
+     * @throws IOException 操作异常
+     */
+    public static String listDirectoryTree(String dirPath, int maxDepth, int maxEntries, boolean showHidden) throws IOException {
+        dirPath = FileUtils.normalizePath(dirPath);
+        Path path = Paths.get(dirPath);
+        if (!Files.exists(path)) {
+            throw new IOException("目录不存在: " + dirPath);
+        }
+        if (!Files.isDirectory(path)) {
+            throw new IOException("路径不是目录: " + dirPath);
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append("目录结构: ").append(dirPath).append("\n");
+        result.append("=" .repeat(Math.min(60, dirPath.length() + 10))).append("\n\n");
+
+        int[] stats = new int[3]; // [files, dirs, total]
+        listDirectoryTreeRecursive(path, "", 0, maxDepth, maxEntries, showHidden, result, stats);
+
+        result.append("\n");
+        result.append("-".repeat(40)).append("\n");
+        result.append("统计: ").append(stats[1]).append(" 个目录, ").append(stats[0]).append(" 个文件");
+        if (maxEntries > 0 && stats[2] >= maxEntries) {
+            result.append(" (已限制，最多显示 ").append(maxEntries).append(" 个条目)");
+        }
+        result.append("\n");
+
+        return result.toString();
+    }
+
+    private static boolean listDirectoryTreeRecursive(Path path, String prefix, int depth, int maxDepth,
+                                                      int maxEntries, boolean showHidden, StringBuilder result, int[] stats) {
+        // 检查深度限制
+        if (maxDepth >= 0 && depth > maxDepth) {
+            return true;
+        }
+
+        // 检查条目限制
+        if (maxEntries > 0 && stats[2] >= maxEntries) {
+            return false;
+        }
+
+        try (java.util.stream.Stream<Path> stream = Files.list(path)) {
+            List<Path> entries = stream
+                .filter(p -> showHidden || !isHidden(p))
+                .sorted((a, b) -> {
+                    boolean aIsDir = Files.isDirectory(a);
+                    boolean bIsDir = Files.isDirectory(b);
+                    if (aIsDir != bIsDir) {
+                        return aIsDir ? -1 : 1; // 目录在前
+                    }
+                    return a.getFileName().toString().compareToIgnoreCase(b.getFileName().toString());
+                })
+                .toList();
+
+            for (int i = 0; i < entries.size(); i++) {
+                Path entry = entries.get(i);
+                boolean isLast = (i == entries.size() - 1);
+
+                // 检查条目限制
+                if (maxEntries > 0 && stats[2] >= maxEntries) {
+                    return false;
+                }
+
+                String entryPrefix = prefix + (isLast ? "└── " : "├── ");
+                String name = entry.getFileName().toString();
+
+                if (Files.isDirectory(entry)) {
+                    result.append(entryPrefix).append("[").append(name).append("]/\n");
+                    stats[1]++;
+                    stats[2]++;
+
+                    // 递归处理子目录
+                    String childPrefix = prefix + (isLast ? "    " : "│   ");
+                    boolean continued = listDirectoryTreeRecursive(entry, childPrefix, depth + 1, maxDepth,
+                                                                     maxEntries, showHidden, result, stats);
+                    if (!continued) {
+                        return false;
+                    }
+                } else {
+                    String sizeStr = formatFileSize(Files.size(entry));
+                    result.append(entryPrefix).append(name);
+                    if (sizeStr != null) {
+                        result.append(" (").append(sizeStr).append(")");
+                    }
+                    result.append("\n");
+                    stats[0]++;
+                    stats[2]++;
+                }
+            }
+        } catch (IOException e) {
+            result.append(prefix).append("[读取失败: ").append(e.getMessage()).append("]\n");
+        }
+
+        return true;
+    }
+
+    /**
+     * 列出单层目录内容
+     *
+     * @param dirPath    目录路径
+     * @param showHidden 是否显示隐藏文件/目录
+     * @return 格式化的目录内容字符串
+     * @throws IOException 操作异常
+     */
+    public static String listDirectoryFiles(String dirPath, boolean showHidden) throws IOException {
+        dirPath = FileUtils.normalizePath(dirPath);
+        Path path = Paths.get(dirPath);
+        if (!Files.exists(path)) {
+            throw new IOException("目录不存在: " + dirPath);
+        }
+        if (!Files.isDirectory(path)) {
+            throw new IOException("路径不是目录: " + dirPath);
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append("目录: ").append(dirPath).append("\n");
+        result.append("=".repeat(Math.min(60, dirPath.length() + 8))).append("\n\n");
+
+        try (java.util.stream.Stream<Path> stream = Files.list(path)) {
+            List<Path> entries = stream
+                .filter(p -> showHidden || !isHidden(p))
+                .sorted((a, b) -> {
+                    boolean aIsDir = Files.isDirectory(a);
+                    boolean bIsDir = Files.isDirectory(b);
+                    if (aIsDir != bIsDir) {
+                        return aIsDir ? -1 : 1; // 目录在前
+                    }
+                    return a.getFileName().toString().compareToIgnoreCase(b.getFileName().toString());
+                })
+                .toList();
+
+            if (entries.isEmpty()) {
+                result.append("(空目录)\n");
+            } else {
+                int fileCount = 0;
+                int dirCount = 0;
+
+                for (Path entry : entries) {
+                    String name = entry.getFileName().toString();
+                    if (Files.isDirectory(entry)) {
+                        result.append("[DIR]  ").append(name).append("/\n");
+                        dirCount++;
+                    } else {
+                        String sizeStr = formatFileSize(Files.size(entry));
+                        result.append("[FILE] ").append(name);
+                        if (sizeStr != null) {
+                            result.append(" (").append(sizeStr).append(")");
+                        }
+                        result.append("\n");
+                        fileCount++;
+                    }
+                }
+
+                result.append("\n");
+                result.append("-".repeat(40)).append("\n");
+                result.append("总计: ").append(dirCount).append(" 个目录, ").append(fileCount).append(" 个文件\n");
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * 检查文件/目录是否为隐藏文件
+     */
+    private static boolean isHidden(Path path) {
+        try {
+            return Files.isHidden(path);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
+     * 格式化文件大小
+     */
+    private static String formatFileSize(long size) {
+        if (size < 1024) {
+            return size + " B";
+        } else if (size < 1024 * 1024) {
+            return String.format("%.1f KB", size / 1024.0);
+        } else if (size < 1024 * 1024 * 1024) {
+            return String.format("%.1f MB", size / (1024.0 * 1024));
+        } else {
+            return String.format("%.1f GB", size / (1024.0 * 1024 * 1024));
+        }
+    }
 }
