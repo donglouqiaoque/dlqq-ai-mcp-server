@@ -416,8 +416,14 @@ public class FileTools {
         }
 
         // 验证行号
+        if (endLine < 0) {
+            endLine = lines.size();
+        }
         if (startLine < 1) {
             startLine = 1;
+        }
+        if (endLine < 1) {
+            endLine = 1;
         }
         if (endLine > lines.size()) {
             endLine = lines.size();
@@ -482,8 +488,14 @@ public class FileTools {
         }
 
         // 验证行号
+        if (endLine < 0) {
+            endLine = lines.size();
+        }
         if (startLine < 1) {
             startLine = 1;
+        }
+        if (endLine < 1) {
+            endLine = 1;
         }
         if (endLine > lines.size()) {
             endLine = lines.size();

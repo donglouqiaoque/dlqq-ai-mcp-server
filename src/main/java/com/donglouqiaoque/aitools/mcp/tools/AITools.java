@@ -315,7 +315,7 @@ public class AITools {
 
         Map<String, Object> endProp = new HashMap<>();
         endProp.put("type", Arrays.asList("integer", "string"));
-        endProp.put("description", "结束行数（1-based，包含）");
+        endProp.put("description", "结束行数（1-based，包含，-1表示到文件末尾）");
         properties.put("end_line", endProp);
 
         Map<String, Object> charsetProp = new HashMap<>();
@@ -326,7 +326,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "start_line", "end_line"));
 
         server.addTool("dlqq_remove_lines_in_file",
-            "删除文件中指定行范围的内容（包含起始行和结束行）。支持指定字符集编码（默认UTF-8）。",
+            "删除文件中指定行范围的内容（包含起始行和结束行）。支持指定字符集编码（默认UTF-8）。注意：end_line为-1表示到文件末尾，行号超出范围会自动修正。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
@@ -373,7 +373,7 @@ public class AITools {
 
         Map<String, Object> endProp = new HashMap<>();
         endProp.put("type", Arrays.asList("integer", "string"));
-        endProp.put("description", "结束行数（1-based，包含）");
+        endProp.put("description", "结束行数（1-based，包含，-1表示到文件末尾）");
         properties.put("end_line", endProp);
 
         Map<String, Object> contentProp = new HashMap<>();
@@ -389,7 +389,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "start_line", "end_line", "content"));
 
         server.addTool("dlqq_replace_lines_in_file",
-            "将文件中指定行范围的内容替换为新内容（包含起始行和结束行）。支持多行替换。支持指定字符集编码（默认UTF-8）。",
+            "将文件中指定行范围的内容替换为新内容（包含起始行和结束行）。支持多行替换。支持指定字符集编码（默认UTF-8）。注意：end_line为-1表示到文件末尾，行号超出范围会自动修正。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
