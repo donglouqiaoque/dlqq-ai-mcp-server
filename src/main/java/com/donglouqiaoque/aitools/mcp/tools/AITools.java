@@ -2074,6 +2074,7 @@ public class AITools {
 
     /**
      * 解析整数参数（兼容 Long、Integer 和 String）
+     * 当传入非空值但无法解析时抛出IllegalArgumentException，确保AI传错参数时报错而不是使用默认值
      */
     private Integer parseInteger(Object value, Integer defaultValue) {
         if (value == null) {
@@ -2089,18 +2090,22 @@ public class AITools {
             return ((Number) value).intValue();
         }
         if (value instanceof String) {
-            try {
-                String str = ((String) value).trim();
-                return Integer.parseInt(str);
-            } catch (NumberFormatException e) {
+            String str = ((String) value).trim();
+            if (str.isEmpty()) {
                 return defaultValue;
             }
+            try {
+                return Integer.parseInt(str);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("参数格式错误：'" + str + "' 不是有效的整数");
+            }
         }
-        return defaultValue;
+        throw new IllegalArgumentException("参数类型错误：期望整数类型，但得到 " + value.getClass().getSimpleName());
     }
 
     /**
      * 解析长整数参数（兼容 Long、Integer 和 String）
+     * 当传入非空值但无法解析时抛出IllegalArgumentException，确保AI传错参数时报错而不是使用默认值
      */
     private Long parseLong(Object value, Long defaultValue) {
         if (value == null) {
@@ -2116,14 +2121,17 @@ public class AITools {
             return ((Number) value).longValue();
         }
         if (value instanceof String) {
-            try {
-                String str = ((String) value).trim();
-                return Long.parseLong(str);
-            } catch (NumberFormatException e) {
+            String str = ((String) value).trim();
+            if (str.isEmpty()) {
                 return defaultValue;
             }
+            try {
+                return Long.parseLong(str);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("参数格式错误：'" + str + "' 不是有效的整数");
+            }
         }
-        return defaultValue;
+        throw new IllegalArgumentException("参数类型错误：期望整数类型，但得到 " + value.getClass().getSimpleName());
     }
 
     /**

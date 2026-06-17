@@ -1143,7 +1143,9 @@ public class UartTools {
         synchronized (dataBuffer) {
             lineCounter++;
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss.SSS"));
-            String formattedData = String.format("[%05d] [%s] RX: %s", lineCounter, timestamp, data);
+            // 去掉数据末尾的换行符，防止每条日志变成两行，但保留中间换行
+            String trimmedData = data.replaceAll("[\\r\\n]+$", "");
+            String formattedData = String.format("[%05d] [%s] RX: %s", lineCounter, timestamp, trimmedData);
             dataBuffer.add(formattedData);
             int dataSize = data.getBytes(StandardCharsets.UTF_8).length;
             currentBufferSize += formattedData.getBytes(StandardCharsets.UTF_8).length;
@@ -1168,7 +1170,9 @@ public class UartTools {
             lineCounter++;
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss.SSS"));
             String direction = isHex ? "TX[HEX]" : "TX";
-            String formattedData = String.format("[%05d] [%s] %s: %s", lineCounter, timestamp, direction, data);
+            // 去掉数据末尾的换行符，防止每条日志变成两行，但保留中间换行
+            String trimmedData = data.replaceAll("[\\r\\n]+$", "");
+            String formattedData = String.format("[%05d] [%s] %s: %s", lineCounter, timestamp, direction, trimmedData);
             dataBuffer.add(formattedData);
             int dataSize = data.getBytes(StandardCharsets.UTF_8).length;
             currentBufferSize += formattedData.getBytes(StandardCharsets.UTF_8).length;

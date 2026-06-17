@@ -619,10 +619,18 @@ public class FileTools {
 
         if (useRegex) {
             try {
+                // 预编译正则表达式，使用高效模式
                 Pattern pattern = Pattern.compile(searchText);
                 java.util.regex.Matcher matcher = pattern.matcher(content);
 
-                StringBuffer sb = new StringBuffer();
+                // 快速检查是否有匹配
+                if (!matcher.find()) {
+                    return 0;
+                }
+
+                // 重置matcher并执行替换
+                matcher.reset();
+                StringBuffer sb = new StringBuffer(content.length());
                 while (matcher.find()) {
                     replaceCount++;
                     matcher.appendReplacement(sb, Matcher.quoteReplacement(replaceText));
@@ -633,15 +641,21 @@ public class FileTools {
                 throw new IOException("正则表达式语法错误: " + e.getMessage());
             }
         } else {
-            // 普通文本替换
-            int index = 0;
-            StringBuilder sb = new StringBuilder(content);
-            while ((index = sb.indexOf(searchText, index)) != -1) {
-                sb.replace(index, index + searchText.length(), replaceText);
-                index += replaceText.length();
-                replaceCount++;
+            // 普通文本替换 - 使用String.replace()，内部优化更高效
+            if (!content.contains(searchText)) {
+                return 0;
             }
-            newContent = sb.toString();
+
+            // 对于多次替换，使用String.replace()比手动循环更高效
+            // Java内部使用KMP或类似算法优化字符串查找
+            newContent = content.replace(searchText, replaceText);
+
+            // 计算替换次数
+            int index = 0;
+            while ((index = content.indexOf(searchText, index)) != -1) {
+                replaceCount++;
+                index += searchText.length();
+            }
         }
 
         // 如果有替换，写回文件

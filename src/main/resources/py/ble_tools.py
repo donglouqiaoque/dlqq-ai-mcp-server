@@ -59,6 +59,9 @@ class BleGuiTool:
         # 通知回调注册表（保持对回调函数的强引用）
         self._notification_callbacks: Dict[str, Any] = {}
 
+        # 断开连接回调
+        self._disconnect_callback_registered = False
+
     def _get_ble_version(self) -> str:
         """获取BLE库版本号"""
         try:
@@ -138,13 +141,9 @@ class BleGuiTool:
         self.connect_status_label = tk.Label(control_frame, text="● 未连接", fg="gray", font=('Arial', 10, 'bold'))
         self.connect_status_label.pack(side=tk.LEFT, padx=(20, 5))
 
-        # 连接/断开按钮
-        self.connect_button = ttk.Button(control_frame, text="连接", command=self.gui_connect, width=8)
+        # 连接/断开按钮（动态切换）
+        self.connect_button = ttk.Button(control_frame, text="连接", command=self.gui_toggle_connection, width=8)
         self.connect_button.pack(side=tk.LEFT, padx=5)
-
-        # 断开按钮（初始禁用）
-        self.disconnect_button = ttk.Button(control_frame, text="断开", command=self.gui_disconnect, width=8, state="disabled")
-        self.disconnect_button.pack(side=tk.LEFT, padx=5)
 
         # 服务端口显示
         ttk.Label(control_frame, text=f"端口:{self.service_port}", foreground="gray").pack(side=tk.RIGHT)
@@ -280,18 +279,23 @@ class BleGuiTool:
             def _update():
                 if connected:
                     self.connect_status_label.config(text="● 已连接", fg="green")
-                    self.connect_button.config(state="disabled")
-                    self.disconnect_button.config(state="normal")
+                    self.connect_button.config(text="断开", command=self.gui_disconnect)
                     self.scan_button.config(state="disabled")
                     short_addr = device_address.split(':')[-2:] if device_address else ["?", "?"]
                     self.status_label.config(text=f"已连接: {':'.join(short_addr)}")
                 else:
                     self.connect_status_label.config(text="● 未连接", fg="gray")
-                    self.connect_button.config(state="normal")
-                    self.disconnect_button.config(state="disabled")
+                    self.connect_button.config(text="连接", command=self.gui_connect)
                     self.scan_button.config(state="normal")
                     self.status_label.config(text="就绪")
             self.root.after(0, _update)
+
+    def gui_toggle_connection(self):
+        """GUI连接/断开切换按钮"""
+        if self.client and self.client.is_connected:
+            self.gui_disconnect()
+        else:
+            self.gui_connect()
 
     def gui_connect(self):
         """GUI连接按钮"""
@@ -313,10 +317,18 @@ class BleGuiTool:
     def _do_connect(self, address: str):
         """执行连接"""
         try:
+            # 如果之前有连接，先彻底清理
+            if self.client is not None:
+                self._cleanup_client()
+
             self.update_status("正在连接...")
             self.log(f"正在连接 {address}...", "CONN")
 
+            # 创建client并注册断开回调
             self.client = BleakClient(address)
+            self.client.set_disconnected_callback(self._on_disconnect)
+            self._disconnect_callback_registered = True
+
             connected = asyncio.run(self.client.connect())
 
             if connected:
@@ -327,10 +339,47 @@ class BleGuiTool:
                 self._start_background_loop()
             else:
                 self.log("连接失败", "ERROR")
+                self._cleanup_client()
                 self.update_connection_status(False)
         except Exception as e:
             self.log(f"连接失败: {e}", "ERROR")
+            self._cleanup_client()
             self.update_connection_status(False)
+
+    def _on_disconnect(self, client: BleakClient):
+        """设备断开连接回调（被单片机端断开时调用）"""
+        self.log(f"设备已断开连接: {client.address}", "CONN")
+        # 清理资源
+        self._cleanup_client()
+        # 更新UI状态
+        self.update_connection_status(False)
+
+    def _cleanup_client(self):
+        """彻底清理client资源"""
+        try:
+            # 停止后台事件循环
+            self._stop_background_loop()
+
+            # 清空通知回调注册表
+            self._notification_callbacks.clear()
+
+            # 断开并清理client
+            if self.client is not None:
+                try:
+                    if self.client.is_connected:
+                        asyncio.run(self.client.disconnect())
+                except Exception:
+                    pass
+                self.client = None
+
+            self.connected_device = None
+            self._disconnect_callback_registered = False
+            self.log("资源已清理", "SYS")
+        except Exception as e:
+            self.log(f"清理资源时出错: {e}", "ERROR")
+            # 确保client被重置，即使出错
+            self.client = None
+            self.connected_device = None
 
     def _start_background_loop(self):
         """启动后台事件循环，用于接收通知"""
@@ -386,12 +435,8 @@ class BleGuiTool:
     def _do_disconnect(self):
         """执行断开"""
         try:
-            # 先停止后台事件循环
-            self._stop_background_loop()
-            if self.client and self.client.is_connected:
-                asyncio.run(self.client.disconnect())
-            self.client = None
-            self.connected_device = None
+            self.log("正在断开连接...", "CONN")
+            self._cleanup_client()
             self.log("已断开连接", "CONN")
             self.update_connection_status(False)
         except Exception as e:
@@ -589,7 +634,7 @@ class BleGuiTool:
         return {"success": True, "devices": devices}
 
     def handle_connect(self, command: Dict[str, Any]) -> Dict[str, Any]:
-        """连接设备"""
+        """连接设备（AI命令）"""
         address = command.get("address")
         if not address:
             return {"success": False, "error": "Address required"}
@@ -599,8 +644,15 @@ class BleGuiTool:
 
         def do_connect():
             try:
+                # 如果之前有连接，先彻底清理
+                if self.client is not None:
+                    self._cleanup_client()
+
                 self.log(f"正在连接 {address}...", "CONN")
                 self.client = BleakClient(address)
+                self.client.set_disconnected_callback(self._on_disconnect)
+                self._disconnect_callback_registered = True
+
                 connected = asyncio.run(self.client.connect())
 
                 if connected:
@@ -611,26 +663,31 @@ class BleGuiTool:
                     self._start_background_loop()
                 else:
                     self.log("连接失败", "ERROR")
+                    self._cleanup_client()
                     self.update_connection_status(False)
             except Exception as e:
                 self.log(f"连接异常: {e}", "ERROR")
+                self._cleanup_client()
+                self.update_connection_status(False)
 
         threading.Thread(target=do_connect, daemon=True).start()
         return {"success": True, "message": "Connecting..."}
 
     def handle_disconnect(self, command: Dict[str, Any]) -> Dict[str, Any]:
-        """断开连接"""
+        """断开连接（AI命令）"""
         if not self.client or not self.client.is_connected:
+            # 即使没有连接也清理一下残留状态
+            self._cleanup_client()
+            self.update_connection_status(False)
             return {"success": True, "message": "Not connected"}
 
         try:
-            asyncio.run(self.client.disconnect())
-            self.client = None
-            self.connected_device = None
+            self._cleanup_client()
             self.log("已断开连接", "CONN")
             self.update_connection_status(False)
             return {"success": True}
         except Exception as e:
+            self._cleanup_client()
             self.update_connection_status(False)
             return {"success": False, "error": str(e)}
 
