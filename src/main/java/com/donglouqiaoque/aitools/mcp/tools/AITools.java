@@ -1746,7 +1746,7 @@ public class AITools {
      * 支持3种模式：
      * 模式1: start_line + end_line - 直接读取已有数据
      * 模式2: start_line + line_count - 直接读取已有数据
-     * 模式3: start_line + timeout_ms + line_count - 等待模式读取新数据
+     * 模式3: start_line + wait_time + line_count - 等待模式读取新数据
      * 如需固定格式，请使用 dlqq_uart_get_log_text（强制文本）或 dlqq_uart_get_log_hex（强制HEX）
      */
     private void registerUartGetLogTool(McpServer server) {
@@ -1772,10 +1772,10 @@ public class AITools {
         lineCountProp.put("description", "读取行数（模式2和模式3使用，模式3必需）");
         properties.put("line_count", lineCountProp);
 
-        Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", Arrays.asList("integer", "string"));
-        timeoutProp.put("description", "超时时间（毫秒，模式3使用，默认0表示不等待）");
-        properties.put("timeout_ms", timeoutProp);
+        Map<String, Object> waitTimeProp = new HashMap<>();
+        waitTimeProp.put("type", Arrays.asList("integer", "string"));
+        waitTimeProp.put("description", "等待时间（毫秒，模式3使用，默认0表示不等待）");
+        properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
@@ -1783,7 +1783,7 @@ public class AITools {
             "获取串口缓冲区日志数据。支持3种模式：\n" +
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
-            "模式3: 指定timeout_ms和line_count（start_line默认为-1），等待读取新数据\n" +
+            "模式3: 指定wait_time和line_count（start_line默认为-1），等待读取新数据\n" +
             "返回格式根据 dlqq_uart_switch_text_hex 设置（文本/HEX），保证与UI显示一致\n" +
             "如需固定格式，请使用 dlqq_uart_get_log_text（强制文本）或 dlqq_uart_get_log_hex（强制HEX）",
             inputSchema,
@@ -1792,7 +1792,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
+                Integer waitTimeMs = parseInteger(arguments.get("wait_time"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -1802,7 +1802,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = UartTools.getUartLog(port, startLine, endLine, lineCount, timeoutSec);
+                    String result = UartTools.getUartLog(port, startLine, endLine, lineCount, waitTimeMs);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取串口数据失败: " + e.getMessage());
@@ -1838,10 +1838,10 @@ public class AITools {
         lineCountProp.put("description", "读取行数（模式2和模式3使用，模式3必需）");
         properties.put("line_count", lineCountProp);
 
-        Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", Arrays.asList("integer", "string"));
-        timeoutProp.put("description", "超时时间（毫秒，模式3使用，默认0表示不等待）");
-        properties.put("timeout_ms", timeoutProp);
+        Map<String, Object> waitTimeProp = new HashMap<>();
+        waitTimeProp.put("type", Arrays.asList("integer", "string"));
+        waitTimeProp.put("description", "等待时间（毫秒，模式3使用，默认0表示不等待）");
+        properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
@@ -1849,7 +1849,7 @@ public class AITools {
             "获取串口缓冲区日志数据（强制文本格式）。支持3种模式：\n" +
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
-            "模式3: 指定timeout_ms和line_count（start_line默认为-1），等待读取新数据\n" +
+            "模式3: 指定wait_time和line_count（start_line默认为-1），等待读取新数据\n" +
             "无论当前显示格式设置如何，始终返回文本格式",
             inputSchema,
             arguments -> {
@@ -1857,7 +1857,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
+                Integer waitTimeMs = parseInteger(arguments.get("wait_time"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -1867,7 +1867,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = UartTools.getUartLogText(port, startLine, endLine, lineCount, timeoutSec);
+                    String result = UartTools.getUartLogText(port, startLine, endLine, lineCount, waitTimeMs);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取串口数据失败: " + e.getMessage());
@@ -1903,10 +1903,10 @@ public class AITools {
         lineCountProp.put("description", "读取行数（模式2和模式3使用，模式3必需）");
         properties.put("line_count", lineCountProp);
 
-        Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", Arrays.asList("integer", "string"));
-        timeoutProp.put("description", "超时时间（毫秒，模式3使用，默认0表示不等待）");
-        properties.put("timeout_ms", timeoutProp);
+        Map<String, Object> waitTimeProp = new HashMap<>();
+        waitTimeProp.put("type", Arrays.asList("integer", "string"));
+        waitTimeProp.put("description", "等待时间（毫秒，模式3使用，默认0表示不等待）");
+        properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
@@ -1914,7 +1914,7 @@ public class AITools {
             "获取串口缓冲区日志数据（强制HEX格式）。支持3种模式：\n" +
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
-            "模式3: 指定timeout_ms和line_count（start_line默认为-1），等待读取新数据\n" +
+            "模式3: 指定wait_time和line_count（start_line默认为-1），等待读取新数据\n" +
             "无论当前显示格式设置如何，始终返回HEX格式",
             inputSchema,
             arguments -> {
@@ -1922,7 +1922,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
+                Integer waitTimeMs = parseInteger(arguments.get("wait_time"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -1932,7 +1932,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = UartTools.getUartLogHex(port, startLine, endLine, lineCount, timeoutSec);
+                    String result = UartTools.getUartLogHex(port, startLine, endLine, lineCount, waitTimeMs);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取串口数据失败: " + e.getMessage());
@@ -2836,10 +2836,10 @@ public class AITools {
         lineCountProp.put("description", "读取行数");
         properties.put("line_count", lineCountProp);
 
-        Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", Arrays.asList("integer", "string"));
-        timeoutProp.put("description", "超时时间（秒，默认0表示不等待）");
-        properties.put("timeout", timeoutProp);
+        Map<String, Object> waitTimeProp = new HashMap<>();
+        waitTimeProp.put("type", Arrays.asList("integer", "string"));
+        waitTimeProp.put("description", "等待时间（秒，默认0表示不等待）");
+        properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
@@ -2847,7 +2847,7 @@ public class AITools {
             "获取BLE工具缓冲区日志数据。支持3种模式：\n" +
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
-            "模式3: 指定timeout和line_count，等待读取新数据\n" +
+            "模式3: 指定wait_time和line_count，等待读取新数据\n" +
             "返回格式根据 dlqq_ble_switch_text_hex 设置（文本/HEX）",
             inputSchema,
             arguments -> {
@@ -2855,7 +2855,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
+                Integer waitTimeSec = parseInteger(arguments.get("wait_time"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -2865,7 +2865,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = BleTools.getBleLog(port, startLine, endLine, lineCount, timeoutSec);
+                    String result = BleTools.getBleLog(port, startLine, endLine, lineCount, waitTimeSec);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取日志失败: " + e.getMessage());
@@ -2900,10 +2900,10 @@ public class AITools {
         lineCountProp.put("description", "读取行数");
         properties.put("line_count", lineCountProp);
 
-        Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", Arrays.asList("integer", "string"));
-        timeoutProp.put("description", "超时时间（秒，默认0表示不等待）");
-        properties.put("timeout", timeoutProp);
+        Map<String, Object> waitTimeProp = new HashMap<>();
+        waitTimeProp.put("type", Arrays.asList("integer", "string"));
+        waitTimeProp.put("description", "等待时间（秒，默认0表示不等待）");
+        properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
@@ -2915,7 +2915,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
+                Integer waitTimeSec = parseInteger(arguments.get("wait_time"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -2925,7 +2925,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = BleTools.getBleLogText(port, startLine, endLine, lineCount, timeoutSec);
+                    String result = BleTools.getBleLogText(port, startLine, endLine, lineCount, waitTimeSec);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取日志失败: " + e.getMessage());
@@ -2960,10 +2960,10 @@ public class AITools {
         lineCountProp.put("description", "读取行数");
         properties.put("line_count", lineCountProp);
 
-        Map<String, Object> timeoutProp = new HashMap<>();
-        timeoutProp.put("type", Arrays.asList("integer", "string"));
-        timeoutProp.put("description", "超时时间（秒，默认0表示不等待）");
-        properties.put("timeout", timeoutProp);
+        Map<String, Object> waitTimeProp = new HashMap<>();
+        waitTimeProp.put("type", Arrays.asList("integer", "string"));
+        waitTimeProp.put("description", "等待时间（秒，默认0表示不等待）");
+        properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
@@ -2975,7 +2975,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer timeoutSec = parseInteger(arguments.get("timeout"), 0);
+                Integer waitTimeSec = parseInteger(arguments.get("wait_time"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -2985,7 +2985,7 @@ public class AITools {
                 }
 
                 try {
-                    String result = BleTools.getBleLogHex(port, startLine, endLine, lineCount, timeoutSec);
+                    String result = BleTools.getBleLogHex(port, startLine, endLine, lineCount, waitTimeSec);
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("获取日志失败: " + e.getMessage());
