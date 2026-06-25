@@ -100,6 +100,10 @@ public class AITools {
         // ========== 系统信息工具 ==========
         registerGetMcpVersionTool(server);          // dlqq_get_mcp_version
         registerCheckBluetoothTool(server);          // dlqq_check_bluetooth_open
+
+        // ========== 数据管理工具 ==========
+        registerClearDataTool(server);              // dlqq_clear_data
+        registerClearCacheTool(server);           // dlqq_clear_cache
     }
 
     // ==================== 文件操作工具 ====================
@@ -3238,7 +3242,7 @@ public class AITools {
             "获取MCP服务器的版本信息、JAR文件修改时间和构建信息，用于确认代码是否已更新",
             inputSchema,
             arguments -> {
-                String result = InfoTools.getMcpVersion();
+                String result = McpTools.getMcpVersion();
                 return textResult(result);
             }
         );
@@ -3344,6 +3348,42 @@ public class AITools {
                     result.append(e.toString()).append("\n");
                     return textResult(result.toString());
                 }
+            }
+        );
+    }
+
+    // ==================== 数据管理工具 ====================
+
+    /**
+     * dlqq_clear_data - 清除.dlqq数据目录
+     */
+    private void registerClearDataTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_clear_data",
+            "清除.dlqq数据目录，删除整个.dlqq目录及其所有内容（包括日志、Python脚本等）。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.clearDlqqData();
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_clear_cache - 清除缓存日志文件
+     */
+    private void registerClearCacheTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_clear_cache",
+            "清除.dlqq/log目录下的日志缓存文件，保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.clearCache();
+                return textResult(result);
             }
         );
     }
