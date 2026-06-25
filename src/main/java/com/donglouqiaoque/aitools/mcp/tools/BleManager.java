@@ -443,6 +443,24 @@ public class BleManager {
                 Files.createDirectories(pythonDir);
             }
 
+            // 创建 .dlqq/.gitignore 文件，忽略该目录下的所有内容
+            Path dlqqDir = workDir.resolve(".dlqq");
+            Path gitignorePath = dlqqDir.resolve(".gitignore");
+            if (!Files.exists(gitignorePath)) {
+                Files.write(gitignorePath, "*\n".getBytes(StandardCharsets.UTF_8));
+            }
+
+            // 尝试将 .dlqq 目录设置为隐藏（Windows），失败则忽略
+            try {
+                java.nio.file.attribute.DosFileAttributeView dosView = Files.getFileAttributeView(
+                        dlqqDir, java.nio.file.attribute.DosFileAttributeView.class);
+                if (dosView != null) {
+                    dosView.setHidden(true);
+                }
+            } catch (Exception ignored) {
+                // 设置隐藏失败，忽略
+            }
+
             try (InputStream is = getClass().getResourceAsStream(SCRIPT_RESOURCE_PATH)) {
                 if (is == null) {
                     System.err.println(getInstanceId() + " 找不到资源: " + SCRIPT_RESOURCE_PATH);

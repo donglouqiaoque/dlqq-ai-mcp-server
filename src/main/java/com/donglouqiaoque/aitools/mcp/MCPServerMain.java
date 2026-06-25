@@ -36,6 +36,26 @@ public class MCPServerMain {
                 stderrDir.mkdirs();
             }
 
+            // 创建 .dlqq/.gitignore 文件，忽略该目录下的所有内容
+            java.io.File gitignoreFile = new java.io.File(logDir.getParentFile(), ".gitignore");
+            if (!gitignoreFile.exists()) {
+                try (java.io.FileWriter writer = new java.io.FileWriter(gitignoreFile)) {
+                    writer.write("*\n");
+                }
+            }
+
+            // 尝试将 .dlqq 目录设置为隐藏（Windows），失败则忽略
+            try {
+                java.nio.file.Path dlqqPath = logDir.getParentFile().toPath();
+                java.nio.file.attribute.DosFileAttributeView dosView = java.nio.file.Files.getFileAttributeView(
+                        dlqqPath, java.nio.file.attribute.DosFileAttributeView.class);
+                if (dosView != null) {
+                    dosView.setHidden(true);
+                }
+            } catch (Exception ignored) {
+                // 设置隐藏失败，忽略
+            }
+
             // 设置 SimpleLogger 的日志文件路径（带日期）
             String loggerFilePath = "./.dlqq/log/logger/" + dateStr + ".log";
             System.setProperty("org.slf4j.simpleLogger.logFile", loggerFilePath);

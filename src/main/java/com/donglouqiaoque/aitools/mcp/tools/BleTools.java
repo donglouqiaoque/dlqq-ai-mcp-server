@@ -287,6 +287,26 @@ public class BleTools {
                 dir.mkdirs();
             }
 
+            // 创建 .dlqq/.gitignore 文件，忽略该目录下的所有内容
+            File dlqqDir = new File(projectDir + File.separator + ".dlqq");
+            File gitignoreFile = new File(dlqqDir, ".gitignore");
+            if (!gitignoreFile.exists()) {
+                try (FileWriter writer = new FileWriter(gitignoreFile)) {
+                    writer.write("*\n");
+                }
+            }
+
+            // 尝试将 .dlqq 目录设置为隐藏（Windows），失败则忽略
+            try {
+                java.nio.file.attribute.DosFileAttributeView dosView = java.nio.file.Files.getFileAttributeView(
+                        dlqqDir.toPath(), java.nio.file.attribute.DosFileAttributeView.class);
+                if (dosView != null) {
+                    dosView.setHidden(true);
+                }
+            } catch (Exception ignored) {
+                // 设置隐藏失败，忽略
+            }
+
             // 从资源释放ble_tools.py（每次启动都强制覆盖，确保使用最新版本）
             String scriptPath = pythonDir + File.separator + "ble_tools.py";
             File scriptFile = new File(scriptPath);
