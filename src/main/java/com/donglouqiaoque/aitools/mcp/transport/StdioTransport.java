@@ -57,12 +57,18 @@ public class StdioTransport implements McpTransport {
     @Override
     public void start() throws IOException {
         running.set(true);
+        logger.info("[StdioTransport] 传输层启动中...");
+        logger.info("[StdioTransport] System.in available: {}", System.in.available());
+        logger.info("[StdioTransport] 编码设置: file.encoding={}, sun.stdout.encoding={}",
+                System.getProperty("file.encoding"), System.getProperty("sun.stdout.encoding"));
 
         // 启动读取线程
         executor.submit(this::readLoop);
+        logger.info("[StdioTransport] 读取线程已启动");
 
         // 启动处理线程
         executor.submit(this::processLoop);
+        logger.info("[StdioTransport] 处理线程已启动");
     }
     
     /**
@@ -92,23 +98,48 @@ public class StdioTransport implements McpTransport {
      * 修复：增加重试机制，防止因临时EOF或IOException导致server断开
      */
     private void readLoop() {
+        logger.info("[StdioTransport.readLoop] ========== 读取循环启动 ==========");
         int errorCount = 0;
         final int MAX_ERROR_COUNT = 5;  // 最大连续错误次数
-        
+        int messageCount = 0;
+        long lastStatusLog = System.currentTimeMillis();
+        int bytesReadTotal = 0;
+
         while (running.get()) {
             try {
+                // 每30秒输出一次状态
+                if (System.currentTimeMillis() - lastStatusLog > 30000) {
+                    logger.info("[StdioTransport.readLoop] 状态 - 已读取消息: {}, 总字节: {}, 可用输入: {}, running: {}",
+                            messageCount, bytesReadTotal, inputStream.available(), running.get());
+                    lastStatusLog = System.currentTimeMillis();
+                }
+
                 String message = readMessage();
                 if (message != null) {
-                    messageQueue.offer(message);
+                    boolean offered = messageQueue.offer(message);
                     errorCount = 0;  // 重置错误计数
+                    messageCount++;
+                    bytesReadTotal += message.getBytes(StandardCharsets.UTF_8).length;
+
+                    if (offered) {
+                        logger.info("[StdioTransport.readLoop] 消息已加入队列，当前队列大小: {}, 累计消息: {}",
+                                messageQueue.size(), messageCount);
+                    } else {
+                        logger.error("[StdioTransport.readLoop] 消息加入队列失败！队列可能已满");
+                    }
+
+                    if (messageCount % 10 == 0) {
+                        logger.info("[StdioTransport.readLoop] 已处理 {} 条消息，总接收字节: {}", messageCount, bytesReadTotal);
+                    }
                 } else {
                     // EOF 或读取失败 - 可能是父进程暂时断开
                     errorCount++;
+                    logger.warn("[StdioTransport.readLoop] 读取到null (EOF?)，错误计数 {}/{}，可用输入: {}",
+                            errorCount, MAX_ERROR_COUNT, inputStream.available());
                     if (errorCount >= MAX_ERROR_COUNT) {
-                        debug("readLoop: 连续 " + MAX_ERROR_COUNT + " 次读取失败，退出循环");
+                        logger.error("[StdioTransport.readLoop] 连续 {} 次读取失败，退出循环", MAX_ERROR_COUNT);
                         break;
                     }
-                    debug("readLoop: 读取到null (EOF?)，重试第 " + errorCount + "/" + MAX_ERROR_COUNT + " 次");
                     try {
                         Thread.sleep(100);  // 短暂等待后重试
                     } catch (InterruptedException ie) {
@@ -118,11 +149,11 @@ public class StdioTransport implements McpTransport {
                 }
             } catch (IOException e) {
                 if (running.get()) {
-                    logger.error("Error reading from stdin: {}", e.getMessage(), e);
+                    logger.error("[StdioTransport.readLoop] 读取stdin时出错: {}", e.getMessage(), e);
                 }
                 errorCount++;
                 if (errorCount >= MAX_ERROR_COUNT) {
-                    debug("readLoop: 连续 " + MAX_ERROR_COUNT + " 次IO错误，退出循环");
+                    logger.error("[StdioTransport.readLoop] 连续 {} 次IO错误，退出循环", MAX_ERROR_COUNT);
                     break;
                 }
                 try {
@@ -133,7 +164,7 @@ public class StdioTransport implements McpTransport {
                 }
             }
         }
-        debug("readLoop: 读取循环已退出");
+        logger.info("[StdioTransport.readLoop] ========== 读取循环已退出，共处理 {} 条消息，总字节 {} ==========", messageCount, bytesReadTotal);
     }
 
     /**
@@ -253,44 +284,82 @@ public class StdioTransport implements McpTransport {
      * 处理循环
      */
     private void processLoop() {
+        logger.info("[StdioTransport.processLoop] 处理循环启动");
+        int processedCount = 0;
+        int emptyPollCount = 0;
+        long lastStatusLog = System.currentTimeMillis();
+
         while (running.get()) {
             try {
                 String message = messageQueue.poll(100, TimeUnit.MILLISECONDS);
                 if (message != null) {
+                    emptyPollCount = 0; // 重置空轮询计数
+                    logger.info("[StdioTransport.processLoop] 从队列取出消息，队列剩余: {}, 已处理: {}",
+                            messageQueue.size(), processedCount + 1);
                     processMessage(message);
+                    processedCount++;
+                } else {
+                    emptyPollCount++;
+                    // 每10秒输出一次状态（如果队列为空）
+                    if (System.currentTimeMillis() - lastStatusLog > 10000) {
+                        logger.info("[StdioTransport.processLoop] 状态 - 已处理: {}, 空轮询: {}, 队列大小: {}, running: {}",
+                                processedCount, emptyPollCount, messageQueue.size(), running.get());
+                        lastStatusLog = System.currentTimeMillis();
+                        emptyPollCount = 0;
+                    }
                 }
             } catch (InterruptedException e) {
+                logger.warn("[StdioTransport.processLoop] 处理线程被中断");
                 Thread.currentThread().interrupt();
                 break;
             }
         }
+        logger.info("[StdioTransport.processLoop] 处理循环已退出，共处理 {} 条消息", processedCount);
     }
 
     /**
      * 处理消息
      */
     private void processMessage(String message) {
-        debug("processMessage: 收到消息: " + message);
+        logger.info("[StdioTransport.processMessage] ========== 开始处理消息 ==========");
+        logger.info("[StdioTransport.processMessage] 收到消息: {}", message);
+        long startTime = System.currentTimeMillis();
+
         try {
             // 简化版JSON解析
             JsonRpcMessage.Request request = parseRequest(message);
             if (request == null) {
-                debug("processMessage: 解析返回 null");
+                logger.error("[StdioTransport.processMessage] 消息解析返回null");
                 sendErrorResponse(null, JsonRpcMessage.ERROR_PARSE_ERROR, "Failed to parse request");
                 return;
             }
-            debug("processMessage: 解析后的请求: id=" + request.getId() + ", method=" + request.getMethod());
+            logger.info("[StdioTransport.processMessage] 解析成功: id={}, method={}, isNotification={}",
+                    request.getId(), request.getMethod(), request.isNotification());
+
             if (messageHandler != null) {
-                messageHandler.accept(request);
+                logger.info("[StdioTransport.processMessage] 调用messageHandler处理请求...");
+                try {
+                    messageHandler.accept(request);
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    logger.info("[StdioTransport.processMessage] messageHandler处理完成，耗时 {}ms", elapsed);
+                } catch (Exception handlerEx) {
+                    logger.error("[StdioTransport.processMessage] messageHandler执行时发生异常: {}", handlerEx.getMessage(), handlerEx);
+                    throw handlerEx;
+                }
+            } else {
+                logger.warn("[StdioTransport.processMessage] messageHandler未设置，无法处理请求");
             }
         } catch (Exception e) {
-            debug("processMessage: 错误: " + e.getMessage());
+            logger.error("[StdioTransport.processMessage] 处理消息时出错: {}", e.getMessage(), e);
             try {
                 sendErrorResponse(null, JsonRpcMessage.ERROR_PARSE_ERROR,
                         "Parse error: " + e.getMessage());
             } catch (IOException ioException) {
-                debug("Failed to send error response: " + ioException.getMessage());
+                logger.error("[StdioTransport.processMessage] 发送错误响应失败: {}", ioException.getMessage());
             }
+        } finally {
+            long elapsed = System.currentTimeMillis() - startTime;
+            logger.info("[StdioTransport.processMessage] ========== 消息处理结束，总耗时 {}ms ==========", elapsed);
         }
     }
 
@@ -759,25 +828,53 @@ public class StdioTransport implements McpTransport {
     @Override
     public void sendResponse(JsonRpcMessage.Response response) throws IOException {
         String json = serializeResponse(response);
-        debug("sendResponse: 发送响应: " + json);
         byte[] jsonBytes = json.getBytes(StandardCharsets.UTF_8);
+        int totalBytesToSend = jsonBytes.length + (useContentLength ? 0 : 1); // +1 for newline in non-ContentLength mode
+
+        logger.info("[StdioTransport.sendResponse] ========== 开始发送响应 ==========");
+        logger.info("[StdioTransport.sendResponse] 响应ID: {}, isError: {}", response.getId(), response.isError());
+        logger.info("[StdioTransport.sendResponse] JSON长度: {} 字节", jsonBytes.length);
+        logger.info("[StdioTransport.sendResponse] 使用ContentLength模式: {}", useContentLength);
+
+        // 记录响应内容摘要（前200字符）
+        String jsonPreview = json.length() > 200 ? json.substring(0, 200) + "..." : json;
+        logger.info("[StdioTransport.sendResponse] 响应内容摘要: {}", jsonPreview);
+
         synchronized (outputStream) {
-            if (useContentLength) {
-                // 标准MCP协议：使用Content-Length头部
-                outputStream.write("Content-Length: ".getBytes(StandardCharsets.UTF_8));
-                outputStream.write(String.valueOf(jsonBytes.length).getBytes(StandardCharsets.UTF_8));
-                outputStream.write('\n');
-                outputStream.write('\n');
-                debug("sendResponse: 使用Content-Length协议发送");
-            } else {
-                // 兼容模式：直接发送JSON（Qwen等客户端）
-                debug("sendResponse: 使用纯JSON模式发送");
+            try {
+                if (useContentLength) {
+                    // 标准MCP协议：使用Content-Length头部
+                    byte[] header = ("Content-Length: " + jsonBytes.length + "\n\n").getBytes(StandardCharsets.UTF_8);
+                    outputStream.write(header);
+                    logger.info("[StdioTransport.sendResponse] Content-Length头部已写入: {} 字节", header.length);
+                } else {
+                    // 兼容模式：直接发送JSON（Qwen等客户端）
+                    logger.info("[StdioTransport.sendResponse] 使用纯JSON模式（无Content-Length）");
+                }
+
+                // 写入JSON内容
+                outputStream.write(jsonBytes);
+                outputStream.write('\n');  // 每个消息后加换行符
+                logger.info("[StdioTransport.sendResponse] JSON内容和换行符已写入");
+
+                // 强制刷新输出流
+                outputStream.flush();
+                logger.info("[StdioTransport.sendResponse] 输出流已flush");
+
+                // 检查System.out是否出错
+                if (System.out.checkError()) {
+                    logger.error("[StdioTransport.sendResponse] System.out检测到错误!");
+                } else {
+                    logger.info("[StdioTransport.sendResponse] System.out状态正常");
+                }
+
+                logger.info("[StdioTransport.sendResponse] ========== 响应发送完成 ==========");
+                logger.info("[StdioTransport.sendResponse] 总发送字节数（估算）: {} 字节", totalBytesToSend);
+            } catch (IOException e) {
+                logger.error("[StdioTransport.sendResponse] 发送响应时发生IO异常: {}", e.getMessage(), e);
+                throw e;
             }
-            outputStream.write(jsonBytes);
-            outputStream.write('\n');  // 每个消息后加换行符
-            outputStream.flush();
         }
-        debug("sendResponse: 响应已发送");
     }
 
     /**
@@ -839,6 +936,10 @@ public class StdioTransport implements McpTransport {
             return serializeCapabilities((com.donglouqiaoque.aitools.mcp.protocol.McpSchema.Capabilities) value);
         } else if (value instanceof com.donglouqiaoque.aitools.mcp.protocol.McpSchema.ListToolsResult) {
             return serializeListToolsResult((com.donglouqiaoque.aitools.mcp.protocol.McpSchema.ListToolsResult) value);
+        } else if (value instanceof com.donglouqiaoque.aitools.mcp.protocol.McpSchema.ListPromptsResult) {
+            return serializeListPromptsResult((com.donglouqiaoque.aitools.mcp.protocol.McpSchema.ListPromptsResult) value);
+        } else if (value instanceof com.donglouqiaoque.aitools.mcp.protocol.McpSchema.ListResourcesResult) {
+            return serializeListResourcesResult((com.donglouqiaoque.aitools.mcp.protocol.McpSchema.ListResourcesResult) value);
         } else if (value instanceof com.donglouqiaoque.aitools.mcp.protocol.McpSchema.Tool) {
             return serializeTool((com.donglouqiaoque.aitools.mcp.protocol.McpSchema.Tool) value);
         } else if (value instanceof com.donglouqiaoque.aitools.mcp.protocol.McpSchema.CallToolResult) {
@@ -929,6 +1030,102 @@ public class StdioTransport implements McpTransport {
             sb.append(serializeTool(tools.get(i)));
         }
         sb.append("]}");
+        return sb.toString();
+    }
+
+    /**
+     * 序列化 ListPromptsResult
+     */
+    private String serializeListPromptsResult(com.donglouqiaoque.aitools.mcp.protocol.McpSchema.ListPromptsResult result) {
+        if (result == null || result.getPrompts() == null) return "{\"prompts\":[]}";
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"prompts\":[");
+        List<com.donglouqiaoque.aitools.mcp.protocol.McpSchema.Prompt> prompts = result.getPrompts();
+        for (int i = 0; i < prompts.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(serializePrompt(prompts.get(i)));
+        }
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    /**
+     * 序列化 Prompt
+     */
+    private String serializePrompt(com.donglouqiaoque.aitools.mcp.protocol.McpSchema.Prompt prompt) {
+        if (prompt == null) return "null";
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"name\":\"").append(escapeJson(prompt.getName())).append("\",");
+        sb.append("\"description\":\"").append(escapeJson(prompt.getDescription())).append("\"");
+        if (prompt.getArguments() != null) {
+            sb.append(",\"arguments\":").append(serializePromptArguments(prompt.getArguments()));
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+
+    /**
+     * 序列化 PromptArgument列表
+     */
+    private String serializePromptArguments(List<com.donglouqiaoque.aitools.mcp.protocol.McpSchema.PromptArgument> arguments) {
+        if (arguments == null || arguments.isEmpty()) return "[]";
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        for (int i = 0; i < arguments.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(serializePromptArgument(arguments.get(i)));
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    /**
+     * 序列化 PromptArgument
+     */
+    private String serializePromptArgument(com.donglouqiaoque.aitools.mcp.protocol.McpSchema.PromptArgument arg) {
+        if (arg == null) return "null";
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"name\":\"").append(escapeJson(arg.getName())).append("\",");
+        sb.append("\"description\":\"").append(escapeJson(arg.getDescription())).append("\",");
+        sb.append("\"required\":").append(arg.isRequired());
+        sb.append("}");
+        return sb.toString();
+    }
+
+    /**
+     * 序列化 ListResourcesResult
+     */
+    private String serializeListResourcesResult(com.donglouqiaoque.aitools.mcp.protocol.McpSchema.ListResourcesResult result) {
+        if (result == null || result.getResources() == null) return "{\"resources\":[]}";
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"resources\":[");
+        List<com.donglouqiaoque.aitools.mcp.protocol.McpSchema.Resource> resources = result.getResources();
+        for (int i = 0; i < resources.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(serializeResource(resources.get(i)));
+        }
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    /**
+     * 序列化 Resource
+     */
+    private String serializeResource(com.donglouqiaoque.aitools.mcp.protocol.McpSchema.Resource resource) {
+        if (resource == null) return "null";
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"uri\":\"").append(escapeJson(resource.getUri())).append("\",");
+        sb.append("\"name\":\"").append(escapeJson(resource.getName())).append("\"");
+        if (resource.getDescription() != null) {
+            sb.append(",\"description\":\"").append(escapeJson(resource.getDescription())).append("\"");
+        }
+        if (resource.getMimeType() != null) {
+            sb.append(",\"mimeType\":\"").append(escapeJson(resource.getMimeType())).append("\"");
+        }
+        sb.append("}");
         return sb.toString();
     }
 

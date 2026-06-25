@@ -96,7 +96,7 @@ public class AITools {
         registerBleSetBufferSizeTool(server);     // dlqq_ble_set_buffer_size
         registerBleSwitchTextHexTool(server);     // dlqq_ble_switch_text_hex
         registerExitBleTool(server);              // dlqq_exit_ble
-        
+
         // ========== 系统信息工具 ==========
         registerGetMcpVersionTool(server);          // dlqq_get_mcp_version
         registerCheckBluetoothTool(server);          // dlqq_check_bluetooth_open

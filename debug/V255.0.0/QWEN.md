@@ -708,6 +708,18 @@ donglouqiaoque-ai-tools/
 
 ---
 
+## 版本更新日志
+
+### V255.0.0 (2026-06-25)
+- **新增**: MCP服务器连接诊断日志增强
+  - 在 `StdioTransport` 中增加传输层启动、读取循环、消息处理的详细日志
+  - 在 `McpServer` 中增加消息处理、初始化流程的详细日志
+  - 在 `MCPServerMain` 中增强健康检查线程日志输出
+  - 日志文件位置：`./.dlqq/log/logger/` 和 `./.dlqq/log/stderr/`，按时间命名
+- **变更**: 日志目录从 `./log` 迁移到 `./.dlqq/log`
+
+---
+
 ## 许可证
 
 Apache License 2.0

@@ -22,7 +22,7 @@ public class MCPServerMain {
             String dateStr = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
 
             // 创建日志目录结构（必须在 Logger 初始化之前完成）
-            java.io.File logDir = new java.io.File("log");
+            java.io.File logDir = new java.io.File(".dlqq/log");
             java.io.File loggerDir = new java.io.File(logDir, "logger");
             java.io.File stderrDir = new java.io.File(logDir, "stderr");
 
@@ -37,7 +37,7 @@ public class MCPServerMain {
             }
 
             // 设置 SimpleLogger 的日志文件路径（带日期）
-            String loggerFilePath = "./log/logger/" + dateStr + ".log";
+            String loggerFilePath = "./.dlqq/log/logger/" + dateStr + ".log";
             System.setProperty("org.slf4j.simpleLogger.logFile", loggerFilePath);
             // 设置为追加模式
             System.setProperty("org.slf4j.simpleLogger.append", "true");
@@ -81,7 +81,7 @@ public class MCPServerMain {
         logger.info("MCP Server starting...");
         logger.info("Working directory: {}", System.getProperty("user.dir"));
         logger.info("Default charset: {}", java.nio.charset.Charset.defaultCharset().name());
-        logger.info("Log directory: {}", new java.io.File("log").getAbsolutePath());
+        logger.info("Log directory: {}", new java.io.File(".dlqq/log").getAbsolutePath());
         
         try {
             startServer();
@@ -165,44 +165,75 @@ public class MCPServerMain {
             int checkInterval = 5000;  // 每5秒检查一次
             int errorCount = 0;
             final int MAX_ERROR_COUNT = 3;
-            
+            int checkCount = 0;
+            long lastMemoryLog = System.currentTimeMillis();
+
+            logger.info("[HealthCheck] 健康检查线程启动，检查间隔={}ms", checkInterval);
+
             while (isRunning) {
                 try {
                     Thread.sleep(checkInterval);
-                    
-                    // 检查传输层是否还在运行
-                    if (transport != null && !transport.isRunning()) {
-                        logger.warn("[HealthCheck] 传输层已停止运行!");
-                        errorCount++;
+                    checkCount++;
 
-                        if (errorCount >= MAX_ERROR_COUNT) {
-                            logger.error("[HealthCheck] 连续 {} 次检查失败，准备重启...", MAX_ERROR_COUNT);
-                            try {
-                                // 停止旧服务器
-                                if (server != null) {
-                                    server.stop();
+                    // 每30秒输出一次内存状态
+                    if (System.currentTimeMillis() - lastMemoryLog > 30000) {
+                        Runtime runtime = Runtime.getRuntime();
+                        long totalMemory = runtime.totalMemory() / 1024 / 1024;
+                        long freeMemory = runtime.freeMemory() / 1024 / 1024;
+                        long maxMemory = runtime.maxMemory() / 1024 / 1024;
+                        logger.info("[HealthCheck] JVM内存状态 - 总内存:{}MB, 可用:{}MB, 最大:{}MB, 已用:{}MB",
+                                totalMemory, freeMemory, maxMemory, totalMemory - freeMemory);
+                        lastMemoryLog = System.currentTimeMillis();
+                    }
+
+                    // 检查传输层是否还在运行
+                    if (transport != null) {
+                        boolean transportRunning = transport.isRunning();
+                        if (checkCount % 12 == 0) {  // 每分钟输出一次状态
+                            logger.info("[HealthCheck] 状态正常 - 运行检查次数={}, 传输层状态={}", checkCount, transportRunning ? "运行中" : "已停止");
+                        }
+
+                        if (!transportRunning) {
+                            logger.warn("[HealthCheck] 传输层已停止运行!");
+                            errorCount++;
+
+                            if (errorCount >= MAX_ERROR_COUNT) {
+                                logger.error("[HealthCheck] 连续 {} 次检查失败，准备重启...", MAX_ERROR_COUNT);
+                                try {
+                                    // 停止旧服务器
+                                    if (server != null) {
+                                        logger.info("[HealthCheck] 停止旧服务器...");
+                                        server.stop();
+                                    }
+                                    // 重新启动
+                                    logger.info("[HealthCheck] 正在重新启动服务器...");
+                                    startServer();
+                                    errorCount = 0;
+                                    logger.info("[HealthCheck] 服务器重启成功");
+                                } catch (IOException e) {
+                                    logger.error("[HealthCheck] 重启失败: {}", e.getMessage(), e);
                                 }
-                                // 重新启动
-                                startServer();
-                                errorCount = 0;
-                                logger.info("[HealthCheck] 服务器重启成功");
-                            } catch (IOException e) {
-                                logger.error("[HealthCheck] 重启失败: {}", e.getMessage(), e);
                             }
+                        } else {
+                            if (errorCount > 0) {
+                                logger.info("[HealthCheck] 传输层恢复正常，重置错误计数");
+                            }
+                            errorCount = 0;  // 重置错误计数
                         }
                     } else {
-                        errorCount = 0;  // 重置错误计数
+                        logger.warn("[HealthCheck] transport为null");
                     }
                 } catch (InterruptedException e) {
+                    logger.warn("[HealthCheck] 健康检查线程被中断");
                     Thread.currentThread().interrupt();
                     break;
                 }
             }
-            logger.info("[HealthCheck] 健康检查线程已退出");
+            logger.info("[HealthCheck] 健康检查线程已退出，总检查次数={}", checkCount);
         });
         healthCheck.setDaemon(true);
         healthCheck.setName("MCP-HealthCheck");
         healthCheck.start();
-        logger.debug("Health check thread started");
+        logger.info("[HealthCheck] 健康检查线程已启动");
     }
 }
