@@ -1,6 +1,8 @@
 package com.donglouqiaoque.aitools.mcp.transport;
 
 import com.donglouqiaoque.aitools.mcp.protocol.JsonRpcMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -16,6 +18,8 @@ import java.util.function.Consumer;
  * 遵循MCP协议规范，使用Content-Length头分隔消息
  */
 public class StdioTransport implements McpTransport {
+
+    private static final Logger logger = LoggerFactory.getLogger(StdioTransport.class);
 
     private final BufferedInputStream inputStream;
     private final BufferedOutputStream outputStream;
@@ -46,8 +50,8 @@ public class StdioTransport implements McpTransport {
     }
     
     private void debug(String msg) {
-        // 启用调试输出到stderr
-        System.err.println("[MCP] " + msg);
+        // 使用日志框架输出调试信息，避免干扰MCP协议通信
+        logger.debug("[MCP] {}", msg);
     }
 
     @Override
@@ -114,7 +118,7 @@ public class StdioTransport implements McpTransport {
                 }
             } catch (IOException e) {
                 if (running.get()) {
-                    System.err.println("Error reading from stdin: " + e.getMessage());
+                    logger.error("Error reading from stdin: {}", e.getMessage(), e);
                 }
                 errorCount++;
                 if (errorCount >= MAX_ERROR_COUNT) {

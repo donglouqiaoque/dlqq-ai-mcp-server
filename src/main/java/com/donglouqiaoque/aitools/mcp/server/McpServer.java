@@ -4,6 +4,8 @@ import com.donglouqiaoque.aitools.mcp.protocol.JsonRpcMessage;
 import com.donglouqiaoque.aitools.mcp.protocol.McpSchema;
 import com.donglouqiaoque.aitools.mcp.protocol.McpSchema.*;
 import com.donglouqiaoque.aitools.mcp.transport.McpTransport;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.*;
@@ -15,6 +17,8 @@ import java.util.function.Function;
  * MCP服务器核心类
  */
 public class McpServer {
+
+    private static final Logger logger = LoggerFactory.getLogger(McpServer.class);
 
     private final String serverName;
     private final String serverVersion;
@@ -102,7 +106,7 @@ public class McpServer {
                         sendErrorResponse(request.getId(), JsonRpcMessage.ERROR_METHOD_NOT_FOUND,
                                 "Unknown method: " + method);
                     } else {
-                        System.err.println("忽略未知通知: " + method);
+                        logger.warn("忽略未知通知: {}", method);
                     }
             }
         } catch (Exception e) {
@@ -112,10 +116,10 @@ public class McpServer {
                     sendErrorResponse(request.getId(), JsonRpcMessage.ERROR_INTERNAL_ERROR,
                             "Internal error: " + e.getMessage());
                 } else {
-                    System.err.println("处理通知时出错: " + e.getMessage());
+                    logger.error("处理通知时出错: {}", e.getMessage(), e);
                 }
             } catch (IOException ioException) {
-                System.err.println("Failed to send error response: " + ioException.getMessage());
+                logger.error("Failed to send error response: {}", ioException.getMessage(), ioException);
             }
         }
     }
@@ -134,7 +138,7 @@ public class McpServer {
         this.clientProtocolVersion = (String) params.get("protocolVersion");
         this.initialized = true;
 
-        System.err.println("收到初始化请求，protocolVersion=" + this.clientProtocolVersion);
+        logger.info("收到初始化请求，protocolVersion={}", this.clientProtocolVersion);
 
         // 构建初始化结果
         InitializeResult result = new InitializeResult();
@@ -142,9 +146,9 @@ public class McpServer {
         result.setCapabilities(this.capabilities);
         result.setServerInfo(new ServerInfo(serverName, serverVersion));
 
-        System.err.println("发送初始化响应...");
+        logger.debug("发送初始化响应...");
         sendResponse(request.getId(), result);
-        System.err.println("初始化响应已发送");
+        logger.info("初始化响应已发送");
     }
 
     /**
@@ -153,7 +157,7 @@ public class McpServer {
     private void handleInitialized(JsonRpcMessage.Request request) {
         // 初始化确认是通知，不需要响应
         // 但需要确认服务器已正确初始化
-        System.err.println("MCP服务器初始化完成，准备处理请求");
+        logger.info("MCP服务器初始化完成，准备处理请求");
     }
 
     /**

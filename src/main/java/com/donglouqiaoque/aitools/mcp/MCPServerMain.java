@@ -3,13 +3,57 @@ package com.donglouqiaoque.aitools.mcp;
 import com.donglouqiaoque.aitools.mcp.server.McpServer;
 import com.donglouqiaoque.aitools.mcp.tools.AITools;
 import com.donglouqiaoque.aitools.mcp.transport.StdioTransport;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 /**
  * MCP服务器入口
  */
 public class MCPServerMain {
+
+    // 在静态初始化块中先创建目录和设置 stderr 重定向（在 Logger 初始化之前）
+    static {
+        try {
+            // 生成当前时间字符串（格式：yyyy-MM-dd_HH-mm-ss），每次启动都创建新文件
+            String dateStr = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+
+            // 创建日志目录结构（必须在 Logger 初始化之前完成）
+            java.io.File logDir = new java.io.File("log");
+            java.io.File loggerDir = new java.io.File(logDir, "logger");
+            java.io.File stderrDir = new java.io.File(logDir, "stderr");
+
+            if (!logDir.exists()) {
+                logDir.mkdirs();
+            }
+            if (!loggerDir.exists()) {
+                loggerDir.mkdirs();
+            }
+            if (!stderrDir.exists()) {
+                stderrDir.mkdirs();
+            }
+
+            // 设置 SimpleLogger 的日志文件路径（带日期）
+            String loggerFilePath = "./log/logger/" + dateStr + ".log";
+            System.setProperty("org.slf4j.simpleLogger.logFile", loggerFilePath);
+            // 设置为追加模式
+            System.setProperty("org.slf4j.simpleLogger.append", "true");
+
+            // 重定向 stderr 到带日期的文件
+            java.io.File stderrFile = new java.io.File(stderrDir, dateStr + ".log");
+            java.io.PrintStream stderrStream = new java.io.PrintStream(
+                new java.io.FileOutputStream(stderrFile, true), true, "UTF-8");
+            System.setErr(stderrStream);
+        } catch (Exception e) {
+            // 如果重定向失败，保持默认的 stderr
+        }
+    }
+
+    // Logger 必须在目录创建之后初始化
+    private static final Logger logger = LoggerFactory.getLogger(MCPServerMain.class);
 
     // 全局变量用于健康检查
     private static volatile boolean isRunning = true;
@@ -17,21 +61,27 @@ public class MCPServerMain {
     private static McpServer server;
 
     public static void main(String[] args) {
-        // 在最早阶段设置UTF-8编码
+        // 设置UTF-8编码
         System.setProperty("file.encoding", "UTF-8");
         System.setProperty("sun.stdout.encoding", "UTF-8");
         System.setProperty("sun.stderr.encoding", "UTF-8");
 
-        // 重新初始化标准输入输出流的编码
+        // 确保 SimpleLogger 追加模式设置（必须在 LoggerFactory 首次使用前）
+        System.setProperty("org.slf4j.simpleLogger.append", "true");
+
+        // 重新初始化 stdout 的编码
         try {
             System.setOut(new java.io.PrintStream(System.out, true, "UTF-8"));
-            System.setErr(new java.io.PrintStream(System.err, true, "UTF-8"));
         } catch (Exception ignored) {
         }
 
-        System.err.println("MCP Server starting...");
-        System.err.println("Working directory: " + System.getProperty("user.dir"));
-        System.err.println("Default charset: " + java.nio.charset.Charset.defaultCharset().name());
+        // 日志目录已在静态块中创建
+        // 注意： SimpleLogger 的日志文件路径在静态块中已设置，包含日期
+
+        logger.info("MCP Server starting...");
+        logger.info("Working directory: {}", System.getProperty("user.dir"));
+        logger.info("Default charset: {}", java.nio.charset.Charset.defaultCharset().name());
+        logger.info("Log directory: {}", new java.io.File("log").getAbsolutePath());
         
         try {
             startServer();
@@ -45,11 +95,10 @@ public class MCPServerMain {
             }
             
         } catch (IOException e) {
-            System.err.println("MCP服务器启动失败: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("MCP服务器启动失败: {}", e.getMessage(), e);
             System.exit(1);
         } catch (InterruptedException e) {
-            System.err.println("MCP服务器被中断");
+            logger.warn("MCP服务器被中断");
             isRunning = false;
         } finally {
             cleanup();
@@ -62,40 +111,49 @@ public class MCPServerMain {
     private static void startServer() throws IOException {
         // 创建传输层（stdio）
         transport = new StdioTransport();
-        System.err.println("Transport created");
+        logger.debug("Transport created");
 
         // 创建MCP服务器
+        String version = MCPServerMain.class.getPackage().getImplementationVersion();
+        if (version == null || version.isEmpty()) {
+            version = "255.0.0";
+        }
         server = new McpServer(
             "donglouqiaoque-ai-tools",
-            "1.0.0",
+            version,
             transport
         );
-        System.err.println("Server created");
+        logger.debug("Server created");
 
         // 注册AI工具
         AITools aiTools = new AITools();
         aiTools.registerTools(server);
-        System.err.println("Tools registered");
+        logger.debug("Tools registered");
 
         // 启动服务器
         server.start();
-        System.err.println("Server started, waiting for requests...");
+        logger.info("========================================");
+        logger.info("MCP Server started successfully!");
+        logger.info("Server name: donglouqiaoque-ai-tools");
+        logger.info("Server version: {}", version);
+        logger.info("Waiting for requests...");
+        logger.info("========================================");
     }
     
     /**
      * 清理资源
      */
     private static void cleanup() {
-        System.err.println("MCP Server cleaning up...");
+        logger.info("MCP Server cleaning up...");
         isRunning = false;
         if (server != null) {
             try {
                 server.stop();
             } catch (IOException e) {
-                System.err.println("Error stopping server: " + e.getMessage());
+                logger.error("Error stopping server: {}", e.getMessage(), e);
             }
         }
-        System.err.println("MCP Server exited");
+        logger.info("MCP Server exited");
     }
     
     /**
@@ -114,11 +172,11 @@ public class MCPServerMain {
                     
                     // 检查传输层是否还在运行
                     if (transport != null && !transport.isRunning()) {
-                        System.err.println("[HealthCheck] 传输层已停止运行!");
+                        logger.warn("[HealthCheck] 传输层已停止运行!");
                         errorCount++;
-                        
+
                         if (errorCount >= MAX_ERROR_COUNT) {
-                            System.err.println("[HealthCheck] 连续 " + MAX_ERROR_COUNT + " 次检查失败，准备重启...");
+                            logger.error("[HealthCheck] 连续 {} 次检查失败，准备重启...", MAX_ERROR_COUNT);
                             try {
                                 // 停止旧服务器
                                 if (server != null) {
@@ -127,9 +185,9 @@ public class MCPServerMain {
                                 // 重新启动
                                 startServer();
                                 errorCount = 0;
-                                System.err.println("[HealthCheck] 服务器重启成功");
+                                logger.info("[HealthCheck] 服务器重启成功");
                             } catch (IOException e) {
-                                System.err.println("[HealthCheck] 重启失败: " + e.getMessage());
+                                logger.error("[HealthCheck] 重启失败: {}", e.getMessage(), e);
                             }
                         }
                     } else {
@@ -140,11 +198,11 @@ public class MCPServerMain {
                     break;
                 }
             }
-            System.err.println("[HealthCheck] 健康检查线程已退出");
+            logger.info("[HealthCheck] 健康检查线程已退出");
         });
         healthCheck.setDaemon(true);
         healthCheck.setName("MCP-HealthCheck");
         healthCheck.start();
-        System.err.println("Health check thread started");
+        logger.debug("Health check thread started");
     }
 }
