@@ -4,6 +4,7 @@ import com.fazecast.jSerialComm.SerialPort;
 import com.fazecast.jSerialComm.SerialPortDataListener;
 import com.fazecast.jSerialComm.SerialPortEvent;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -1317,9 +1318,15 @@ public class UartTools {
         try {
             java.net.URL iconUrl = getClass().getResource("/image/logo.ico");
             if (iconUrl != null) {
-                guiWindow.setIconImage(new ImageIcon(iconUrl).getImage());
+                guiWindow.setIconImage(ImageIO.read(iconUrl));
+                System.err.println("窗口图标已设置: " + iconUrl);
+            } else {
+                System.err.println("警告: 未找到图标资源 /image/logo.ico");
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            System.err.println("设置窗口图标失败: " + e.getMessage());
+            e.printStackTrace();
+        }
 
         JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));

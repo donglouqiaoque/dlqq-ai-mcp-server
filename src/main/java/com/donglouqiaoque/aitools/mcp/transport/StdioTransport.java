@@ -60,6 +60,14 @@ public class StdioTransport implements McpTransport {
         // 启动处理线程
         executor.submit(this::processLoop);
     }
+    
+    /**
+     * 检查传输层是否正在运行
+     * 用于健康检查
+     */
+    public boolean isRunning() {
+        return running.get() && !executor.isShutdown() && !executor.isTerminated();
+    }
 
     @Override
     public void stop() throws IOException {
@@ -77,24 +85,51 @@ public class StdioTransport implements McpTransport {
 
     /**
      * 读取循环 - 按照MCP协议规范读取Content-Length分隔的消息
+     * 修复：增加重试机制，防止因临时EOF或IOException导致server断开
      */
     private void readLoop() {
+        int errorCount = 0;
+        final int MAX_ERROR_COUNT = 5;  // 最大连续错误次数
+        
         while (running.get()) {
             try {
                 String message = readMessage();
                 if (message != null) {
                     messageQueue.offer(message);
+                    errorCount = 0;  // 重置错误计数
                 } else {
-                    // 输入结束
-                    break;
+                    // EOF 或读取失败 - 可能是父进程暂时断开
+                    errorCount++;
+                    if (errorCount >= MAX_ERROR_COUNT) {
+                        debug("readLoop: 连续 " + MAX_ERROR_COUNT + " 次读取失败，退出循环");
+                        break;
+                    }
+                    debug("readLoop: 读取到null (EOF?)，重试第 " + errorCount + "/" + MAX_ERROR_COUNT + " 次");
+                    try {
+                        Thread.sleep(100);  // 短暂等待后重试
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                 }
             } catch (IOException e) {
                 if (running.get()) {
                     System.err.println("Error reading from stdin: " + e.getMessage());
                 }
-                break;
+                errorCount++;
+                if (errorCount >= MAX_ERROR_COUNT) {
+                    debug("readLoop: 连续 " + MAX_ERROR_COUNT + " 次IO错误，退出循环");
+                    break;
+                }
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
+        debug("readLoop: 读取循环已退出");
     }
 
     /**

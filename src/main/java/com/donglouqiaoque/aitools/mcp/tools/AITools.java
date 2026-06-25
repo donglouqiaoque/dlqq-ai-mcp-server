@@ -99,7 +99,7 @@ public class AITools {
         
         // ========== 系统信息工具 ==========
         registerGetMcpVersionTool(server);          // dlqq_get_mcp_version
-        registerOpenBluetoothTool(server);          // dlqq_open_bluetooth
+        registerCheckBluetoothTool(server);          // dlqq_check_bluetooth_open
     }
 
     // ==================== 文件操作工具 ====================
@@ -1774,7 +1774,7 @@ public class AITools {
 
         Map<String, Object> waitTimeProp = new HashMap<>();
         waitTimeProp.put("type", Arrays.asList("integer", "string"));
-        waitTimeProp.put("description", "等待时间（毫秒，模式3使用，默认0表示不等待）");
+        waitTimeProp.put("description", "等待时间（秒，模式3使用，默认0表示不等待，最大30秒）");
         properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -1784,6 +1784,7 @@ public class AITools {
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
             "模式3: 指定wait_time和line_count（start_line默认为-1），等待读取新数据\n" +
+            "注意：wait_time单位是秒，最大30秒\n" +
             "返回格式根据 dlqq_uart_switch_text_hex 设置（文本/HEX），保证与UI显示一致\n" +
             "如需固定格式，请使用 dlqq_uart_get_log_text（强制文本）或 dlqq_uart_get_log_hex（强制HEX）",
             inputSchema,
@@ -1792,7 +1793,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer waitTimeMs = parseInteger(arguments.get("wait_time"), 0);
+                Integer waitTimeSec = parseInteger(arguments.get("wait_time"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -1800,8 +1801,13 @@ public class AITools {
                 if (port < 1 || port > 65535) {
                     return errorResult("端口号必须在 1~65535 范围内");
                 }
+                if (waitTimeSec < 0 || waitTimeSec > 30) {
+                    return errorResult("wait_time必须在 0~30 秒范围内");
+                }
 
                 try {
+                    // 转换为毫秒
+                    int waitTimeMs = waitTimeSec * 1000;
                     String result = UartTools.getUartLog(port, startLine, endLine, lineCount, waitTimeMs);
                     return textResult(result);
                 } catch (Exception e) {
@@ -1840,7 +1846,7 @@ public class AITools {
 
         Map<String, Object> waitTimeProp = new HashMap<>();
         waitTimeProp.put("type", Arrays.asList("integer", "string"));
-        waitTimeProp.put("description", "等待时间（毫秒，模式3使用，默认0表示不等待）");
+        waitTimeProp.put("description", "等待时间（秒，模式3使用，默认0表示不等待，最大30秒）");
         properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -1850,6 +1856,7 @@ public class AITools {
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
             "模式3: 指定wait_time和line_count（start_line默认为-1），等待读取新数据\n" +
+            "注意：wait_time单位是秒，最大30秒\n" +
             "无论当前显示格式设置如何，始终返回文本格式",
             inputSchema,
             arguments -> {
@@ -1857,7 +1864,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer waitTimeMs = parseInteger(arguments.get("wait_time"), 0);
+                Integer waitTimeSec = parseInteger(arguments.get("wait_time"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -1865,8 +1872,13 @@ public class AITools {
                 if (port < 1 || port > 65535) {
                     return errorResult("端口号必须在 1~65535 范围内");
                 }
+                if (waitTimeSec < 0 || waitTimeSec > 30) {
+                    return errorResult("wait_time必须在 0~30 秒范围内");
+                }
 
                 try {
+                    // 转换为毫秒
+                    int waitTimeMs = waitTimeSec * 1000;
                     String result = UartTools.getUartLogText(port, startLine, endLine, lineCount, waitTimeMs);
                     return textResult(result);
                 } catch (Exception e) {
@@ -1905,7 +1917,7 @@ public class AITools {
 
         Map<String, Object> waitTimeProp = new HashMap<>();
         waitTimeProp.put("type", Arrays.asList("integer", "string"));
-        waitTimeProp.put("description", "等待时间（毫秒，模式3使用，默认0表示不等待）");
+        waitTimeProp.put("description", "等待时间（秒，模式3使用，默认0表示不等待，最大30秒）");
         properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -1915,6 +1927,7 @@ public class AITools {
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
             "模式3: 指定wait_time和line_count（start_line默认为-1），等待读取新数据\n" +
+            "注意：wait_time单位是秒，最大30秒\n" +
             "无论当前显示格式设置如何，始终返回HEX格式",
             inputSchema,
             arguments -> {
@@ -1922,7 +1935,7 @@ public class AITools {
                 Integer startLine = parseInteger(arguments.get("start_line"), null);
                 Integer endLine = parseInteger(arguments.get("end_line"), null);
                 Integer lineCount = parseInteger(arguments.get("line_count"), null);
-                Integer waitTimeMs = parseInteger(arguments.get("wait_time"), 0);
+                Integer waitTimeSec = parseInteger(arguments.get("wait_time"), 0);
 
                 if (port == null) {
                     return errorResult("必须指定端口号（port）");
@@ -1930,8 +1943,13 @@ public class AITools {
                 if (port < 1 || port > 65535) {
                     return errorResult("端口号必须在 1~65535 范围内");
                 }
+                if (waitTimeSec < 0 || waitTimeSec > 30) {
+                    return errorResult("wait_time必须在 0~30 秒范围内");
+                }
 
                 try {
+                    // 转换为毫秒
+                    int waitTimeMs = waitTimeSec * 1000;
                     String result = UartTools.getUartLogHex(port, startLine, endLine, lineCount, waitTimeMs);
                     return textResult(result);
                 } catch (Exception e) {
@@ -2838,7 +2856,7 @@ public class AITools {
 
         Map<String, Object> waitTimeProp = new HashMap<>();
         waitTimeProp.put("type", Arrays.asList("integer", "string"));
-        waitTimeProp.put("description", "等待时间（秒，默认0表示不等待）");
+        waitTimeProp.put("description", "等待时间（秒，默认0表示不等待，最大30秒）");
         properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
@@ -2848,6 +2866,7 @@ public class AITools {
             "模式1: 指定start_line和end_line，直接读取已有数据\n" +
             "模式2: 指定start_line和line_count，直接读取已有数据\n" +
             "模式3: 指定wait_time和line_count，等待读取新数据\n" +
+            "注意：wait_time单位是秒，最大30秒\n" +
             "返回格式根据 dlqq_ble_switch_text_hex 设置（文本/HEX）",
             inputSchema,
             arguments -> {
@@ -2862,6 +2881,9 @@ public class AITools {
                 }
                 if (port < 1 || port > 65535) {
                     return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (waitTimeSec < 0 || waitTimeSec > 30) {
+                    return errorResult("wait_time必须在 0~30 秒范围内");
                 }
 
                 try {
@@ -2902,13 +2924,14 @@ public class AITools {
 
         Map<String, Object> waitTimeProp = new HashMap<>();
         waitTimeProp.put("type", Arrays.asList("integer", "string"));
-        waitTimeProp.put("description", "等待时间（秒，默认0表示不等待）");
+        waitTimeProp.put("description", "等待时间（秒，默认0表示不等待，最大30秒）");
         properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
         server.addTool("dlqq_ble_get_log_text",
-            "获取BLE缓冲区日志数据（强制文本格式）。支持3种读取模式，同dlqq_ble_get_log。",
+            "获取BLE缓冲区日志数据（强制文本格式）。支持3种读取模式，同dlqq_ble_get_log。\n" +
+            "注意：wait_time单位是秒，最大30秒",
             inputSchema,
             arguments -> {
                 Integer port = parseInteger(arguments.get("port"), null);
@@ -2922,6 +2945,9 @@ public class AITools {
                 }
                 if (port < 1 || port > 65535) {
                     return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (waitTimeSec < 0 || waitTimeSec > 30) {
+                    return errorResult("wait_time必须在 0~30 秒范围内");
                 }
 
                 try {
@@ -2962,13 +2988,14 @@ public class AITools {
 
         Map<String, Object> waitTimeProp = new HashMap<>();
         waitTimeProp.put("type", Arrays.asList("integer", "string"));
-        waitTimeProp.put("description", "等待时间（秒，默认0表示不等待）");
+        waitTimeProp.put("description", "等待时间（秒，默认0表示不等待，最大30秒）");
         properties.put("wait_time", waitTimeProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
 
         server.addTool("dlqq_ble_get_log_hex",
-            "获取BLE缓冲区日志数据（强制HEX格式）。支持3种读取模式，同dlqq_ble_get_log。",
+            "获取BLE缓冲区日志数据（强制HEX格式）。支持3种读取模式，同dlqq_ble_get_log。\n" +
+            "注意：wait_time单位是秒，最大30秒",
             inputSchema,
             arguments -> {
                 Integer port = parseInteger(arguments.get("port"), null);
@@ -2982,6 +3009,9 @@ public class AITools {
                 }
                 if (port < 1 || port > 65535) {
                     return errorResult("端口号必须在 1~65535 范围内");
+                }
+                if (waitTimeSec < 0 || waitTimeSec > 30) {
+                    return errorResult("wait_time必须在 0~30 秒范围内");
                 }
 
                 try {
@@ -3215,22 +3245,22 @@ public class AITools {
     }
 
     /**
-     * 48. dlqq_open_bluetooth - 开启电脑蓝牙
+     * 48. dlqq_check_bluetooth_open - 检查电脑蓝牙是否开启
      */
-    private void registerOpenBluetoothTool(McpServer server) {
+    private void registerCheckBluetoothTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
-        server.addTool("dlqq_open_bluetooth",
-            "开启Windows电脑的蓝牙适配器（需要管理员权限）",
+        server.addTool("dlqq_check_bluetooth_open",
+            "检查Windows电脑的蓝牙适配器是否已开启",
             inputSchema,
             arguments -> {
                 StringBuilder result = new StringBuilder();
-                result.append("=== 蓝牙开启诊断 ===\n\n");
+                result.append("=== 蓝牙状态检查 ===\n\n");
 
                 try {
                     // 方法1: 检查蓝牙设备状态
-                    result.append("[1/4] 检查蓝牙设备状态...\n");
+                    result.append("[1/3] 检查蓝牙设备状态...\n");
                     ProcessBuilder checkPb = new ProcessBuilder(
                         "powershell.exe",
                         "-Command",
@@ -3250,37 +3280,17 @@ public class AITools {
                     checkProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
                     result.append(checkOutput.toString()).append("\n");
 
-                    // 方法2: 尝试启用被禁用的蓝牙设备
-                    result.append("[2/4] 尝试启用蓝牙设备...\n");
-                    ProcessBuilder pb = new ProcessBuilder(
-                        "powershell.exe",
-                        "-Command",
-                        "Get-PnpDevice -Class Bluetooth | Where-Object {$_.Status -eq 'Disabled'} | Enable-PnpDevice -Confirm:$false 2>&1; " +
-                        "if ($?) { Write-Host '蓝牙设备已启用' } else { Write-Host '没有禁用的蓝牙设备或需要管理员权限' }"
-                    );
-                    pb.redirectErrorStream(true);
-                    Process process = pb.start();
-
-                    StringBuilder output = new StringBuilder();
-                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                            new java.io.InputStreamReader(process.getInputStream(), "UTF-8"))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            output.append(line).append("\n");
-                        }
-                    }
-                    int exitCode = process.waitFor();
-                    result.append("退出码: ").append(exitCode).append("\n");
-                    result.append("输出: ").append(output.toString()).append("\n");
-
-                    // 方法3: 启动蓝牙服务
-                    result.append("[3/4] 启动蓝牙服务...\n");
+                    // 方法2: 检查蓝牙服务状态
+                    result.append("[2/3] 检查蓝牙服务状态...\n");
                     ProcessBuilder pb2 = new ProcessBuilder(
                         "powershell.exe",
                         "-Command",
-                        "$service = Get-Service -Name bthserv; " +
-                        "if ($service.Status -ne 'Running') { Start-Service -Name bthserv; Write-Host '蓝牙服务已启动' } " +
-                        "else { Write-Host '蓝牙服务已在运行' }"
+                        "$service = Get-Service -Name bthserv -ErrorAction SilentlyContinue; " +
+                        "if ($service) { " +
+                        "    Write-Host ('蓝牙服务状态: ' + $service.Status) " +
+                        "} else { " +
+                        "    Write-Host '未找到蓝牙服务' " +
+                        "}"
                     );
                     pb2.redirectErrorStream(true);
                     Process process2 = pb2.start();
@@ -3294,25 +3304,18 @@ public class AITools {
                         }
                     }
                     process2.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-                    result.append("输出: ").append(output2.toString()).append("\n");
+                    result.append(output2.toString()).append("\n");
 
-                    // 方法4: 尝试使用devcon或设备管理器
-                    result.append("[4/4] 尝试替代方法...\n");
+                    // 方法3: 检查蓝牙网络适配器
+                    result.append("[3/3] 检查蓝牙网络适配器...\n");
                     ProcessBuilder pb3 = new ProcessBuilder(
                         "powershell.exe",
                         "-Command",
-                        "# 尝试设置蓝牙设备电源\n" +
-                        "$adapter = Get-NetAdapter | Where-Object {$_.InterfaceDescription -like '*Bluetooth*'}\n" +
-                        "if ($adapter) {\n" +
-                        "    Write-Host \"找到蓝牙适配器: $($adapter.Name)\"\n" +
-                        "    if ($adapter.Status -eq 'Disabled') {\n" +
-                        "        Enable-NetAdapter -Name $adapter.Name\n" +
-                        "        Write-Host '蓝牙适配器已启用'\n" +
-                        "    } else {\n" +
-                        "        Write-Host \"蓝牙适配器状态: $($adapter.Status)\"\n" +
-                        "    }\n" +
-                        "} else {\n" +
-                        "    Write-Host '未找到蓝牙网络适配器'\n" +
+                        "$adapter = Get-NetAdapter | Where-Object {$_.InterfaceDescription -like '*Bluetooth*'}; " +
+                        "if ($adapter) { " +
+                        "    Write-Host ('蓝牙适配器: ' + $adapter.Name + ' - 状态: ' + $adapter.Status) " +
+                        "} else { " +
+                        "    Write-Host '未找到蓝牙网络适配器' " +
                         "}"
                     );
                     pb3.redirectErrorStream(true);
@@ -3327,10 +3330,10 @@ public class AITools {
                         }
                     }
                     process3.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-                    result.append("输出: ").append(output3.toString()).append("\n");
+                    result.append(output3.toString()).append("\n");
 
-                    result.append("\n=== 诊断完成 ===\n");
-                    result.append("如果蓝牙仍未开启，请尝试以下手动操作:\n");
+                    result.append("\n=== 检查完成 ===\n");
+                    result.append("如需开启蓝牙，请手动操作:\n");
                     result.append("1. 点击任务栏右下角的通知图标 → 展开快速设置 → 点击蓝牙图标开启\n");
                     result.append("2. 或按 Win+I → 蓝牙和设备 → 开启蓝牙开关\n");
                     result.append("3. 部分电脑需要按 Fn+功能键 开启蓝牙硬件开关\n");
