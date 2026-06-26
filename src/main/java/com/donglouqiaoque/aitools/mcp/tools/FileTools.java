@@ -277,7 +277,7 @@ public class FileTools {
     }
 
     /**
-     * 创建文件
+     * 创建文件（文件已存在时拒绝）
      *
      * @param filePath 文件路径
      * @param content  文件内容（null或空字符串则创建空文件）
@@ -304,12 +304,15 @@ public class FileTools {
             Files.createDirectories(parent);
         }
 
-        // 创建文件（如果不存在）
-        if (!Files.exists(path)) {
-            Files.createFile(path);
+        // 检查文件是否已存在
+        if (Files.exists(path)) {
+            throw new IOException("【拒绝创建】文件已存在: " + filePath + "\n如需覆盖文件内容，请使用 dlqq_overwrite_file；如需清空文件内容，请使用 dlqq_clear_file。");
         }
 
-        // 写入内容
+        // 创建文件
+        Files.createFile(path);
+
+        // 写入内容（支持空内容创建空文件）
         if (content != null && !content.isEmpty()) {
             Files.writeString(path, content, cs);
         }
@@ -343,8 +346,13 @@ public class FileTools {
             Files.createDirectories(parent);
         }
 
+        // 检查内容是否为空，拒绝写入空内容
+        if (content == null || content.isEmpty()) {
+            throw new IOException("【拒绝写入】不能使用空文本覆盖文件。如需清空文件内容，请使用专门的 dlqq_clear_file 工具。");
+        }
+
         // 直接写入内容（覆盖原有内容或创建新文件）
-        Files.writeString(path, content != null ? content : "", cs);
+        Files.writeString(path, content, cs);
     }
 
     /**
@@ -359,8 +367,9 @@ public class FileTools {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
 
+        // 检查内容是否为空，拒绝追加空内容
         if (content == null || content.isEmpty()) {
-            return;
+            throw new IOException("【拒绝追加】不能使用空文本追加文件。如需清空文件内容，请使用 dlqq_clear_file 工具。");
         }
 
         // 解析字符集，默认为 UTF-8
@@ -385,6 +394,37 @@ public class FileTools {
         } else {
             Files.writeString(path, content, cs, java.nio.file.StandardOpenOption.APPEND);
         }
+    }
+
+    /**
+     * 清空文件内容（保留文件本身）- 专门用于清空文件
+     *
+     * @param filePath 文件路径
+     * @param charset  字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
+     * @throws IOException 操作异常
+     */
+    public static void clearFile(String filePath, String charset) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
+        Path path = Paths.get(filePath);
+
+        // 解析字符集，默认为 UTF-8
+        Charset cs = StandardCharsets.UTF_8;
+        if (charset != null && !charset.trim().isEmpty()) {
+            try {
+                cs = Charset.forName(charset.trim());
+            } catch (Exception e) {
+                throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+            }
+        }
+
+        // 确保父目录存在
+        Path parent = path.getParent();
+        if (parent != null && !Files.exists(parent)) {
+            Files.createDirectories(parent);
+        }
+
+        // 写入空内容，清空文件
+        Files.writeString(path, "", cs);
     }
 
     /**
@@ -820,8 +860,13 @@ public class FileTools {
             oldContent.append(lines.get(i));
         }
 
+        // 检查新内容是否为空，拒绝写入空内容
+        if (newContent == null || newContent.isEmpty()) {
+            return "【拒绝修改】不能使用空文本替换文件内容。如需删除这些行，请使用 dlqq_remove_lines_in_file 工具；如需清空文件，请使用 dlqq_clear_file 工具。";
+        }
+
         // 准备新内容行
-        String[] newLines = newContent != null ? newContent.split("\\r?\\n") : new String[0];
+        String[] newLines = newContent.split("\\r?\\n");
 
         // 构建新文件内容
         List<String> resultLines = new ArrayList<>();
@@ -1042,6 +1087,11 @@ public class FileTools {
             return errorMsg.toString();
         }
 
+        // 检查插入内容是否为空，拒绝插入空内容
+        if (content == null || content.isEmpty()) {
+            return "【拒绝修改】不能使用空文本插入文件。如需清空文件，请使用 dlqq_clear_file 工具。";
+        }
+
         // 准备插入内容（支持多行）
         String[] insertLines = content.split("\\r?\\n");
 
@@ -1251,6 +1301,10 @@ public class FileTools {
 
         // 如果有替换，写回文件
         if (replaceCount > 0) {
+            // 检查替换后的内容是否为空，拒绝写入空内容
+            if (newContent == null || newContent.isEmpty()) {
+                return "【拒绝修改】替换后的内容为空。文本替换操作不能导致文件内容被完全删除。如需清空文件，请使用 dlqq_clear_file 工具。";
+            }
             Files.writeString(path, newContent, cs);
             // 标记文件已被修改
             markFileModified(filePath);
@@ -1258,6 +1312,21 @@ public class FileTools {
 
         // 生成对比报告
         return generateTextReplaceReport(lines, content, newContent, searchText, replaceText, useRegex, replaceCount, matchPositions);
+    }
+
+    /**
+     * 将匹配的文本替换为空（删除匹配的文本）- 专门用于删除文本
+     *
+     * @param filePath    文件路径
+     * @param searchText  搜索文本
+     * @param useRegex    是否使用正则表达式
+     * @param charset     字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
+     * @return 删除结果报告，包含修改前后对比
+     * @throws IOException 操作异常
+     */
+    public static String removeTextInFile(String filePath, String searchText, boolean useRegex, String charset) throws IOException {
+        // 调用 replaceTextInFile，将替换文本设为空字符串
+        return replaceTextInFile(filePath, searchText, "", useRegex, charset);
     }
 
     /**

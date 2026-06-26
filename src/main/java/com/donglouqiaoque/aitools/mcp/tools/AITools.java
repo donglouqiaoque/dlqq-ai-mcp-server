@@ -20,11 +20,13 @@ public class AITools {
         registerReadFileTool(server);           // dlqq_read_file
         registerCreateFileTool(server);           // dlqq_create_file
         registerOverwriteFileTool(server);        // dlqq_overwrite_file
+        registerClearFileTool(server); // dlqq_clear_file
         registerAppendFileTool(server);           // dlqq_append_file
         registerRemoveLinesTool(server);          // dlqq_remove_lines_in_file
         registerReplaceLinesTool(server);         // dlqq_replace_lines_in_file
         registerInsertTextTool(server);           // dlqq_insert_text_in_file
         registerReplaceTextTool(server);          // dlqq_replace_text_in_file
+        registerRemoveTextInFileTool(server);   // dlqq_remove_text_in_file
         registerDeleteFileTool(server);           // dlqq_delete_file
         registerCopyFileTool(server);             // dlqq_copy_file
         registerMoveFileTool(server);             // dlqq_move_file
@@ -250,6 +252,45 @@ public class AITools {
                     return textResult("文件覆盖成功: " + filePath);
                 } catch (IOException e) {
                     return errorResult("覆盖文件失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 2.5b dlqq_clear_file - 清空文件内容
+     */
+    private void registerClearFileTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "文件路径（支持绝对路径和相对路径）");
+        properties.put("file_path", pathProp);
+
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path"));
+
+        server.addTool("dlqq_clear_file",
+            "清空文件内容（保留文件本身）。将文件内容清空为空白，但保留文件。如需删除文件本身，请使用 dlqq_delete_file。",
+            inputSchema,
+            arguments -> {
+                String filePath = (String) arguments.get("file_path");
+                String charset = (String) arguments.get("charset");
+
+                if (filePath == null || filePath.trim().isEmpty()) {
+                    return errorResult("文件路径不能为空");
+                }
+
+                try {
+                    FileTools.clearFile(filePath, charset);
+                    return textResult("文件已清空: " + filePath);
+                } catch (IOException e) {
+                    return errorResult("清空文件失败: " + e.getMessage());
                 }
             }
         );
@@ -552,6 +593,70 @@ public class AITools {
                 try {
                     boolean useRegex = "regex".equalsIgnoreCase(mode);
                     String report = FileTools.replaceTextInFile(filePath, searchText, replaceText, useRegex, charset);
+                    // 检查是否被拒绝修改或未找到匹配
+                    if (report.startsWith("【拒绝修改】")) {
+                        return errorResult(report + "\n\n【读取示例】\n请使用以下命令读取文件全部内容：\n" +
+                            "{\"file_path\": \"" + filePath + "\", \"start_line\": 1, \"end_line\": -1}");
+                    }
+                    if (report.startsWith("【未替换】")) {
+                        return errorResult(report);
+                    }
+                    return textResult(report);
+                } catch (IOException e) {
+                    return errorResult("操作失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 5.5 dlqq_remove_text_in_file - 删除匹配的文本
+     */
+    private void registerRemoveTextInFileTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "文件路径");
+        properties.put("file_path", pathProp);
+
+        Map<String, Object> searchProp = new HashMap<>();
+        searchProp.put("type", "string");
+        searchProp.put("description", "要搜索并删除的文本或正则表达式");
+        properties.put("search_text", searchProp);
+
+        Map<String, Object> modeProp = new HashMap<>();
+        modeProp.put("type", "string");
+        modeProp.put("description", "模式：'text'（普通文本）或 'regex'（正则表达式）");
+        modeProp.put("enum", Arrays.asList("text", "regex"));
+        properties.put("mode", modeProp);
+
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "search_text"));
+
+        server.addTool("dlqq_remove_text_in_file",
+            "删除文件中匹配的文本。相当于将匹配文本替换为空字符串。支持普通文本模式和正则表达式模式。",
+            inputSchema,
+            arguments -> {
+                String filePath = (String) arguments.get("file_path");
+                String searchText = (String) arguments.get("search_text");
+                String mode = (String) arguments.getOrDefault("mode", "text");
+                String charset = (String) arguments.get("charset");
+
+                if (filePath == null || filePath.trim().isEmpty()) {
+                    return errorResult("文件路径不能为空");
+                }
+                if (searchText == null || searchText.isEmpty()) {
+                    return errorResult("搜索文本不能为空");
+                }
+
+                try {
+                    boolean useRegex = "regex".equalsIgnoreCase(mode);
+                    String report = FileTools.removeTextInFile(filePath, searchText, useRegex, charset);
                     // 检查是否被拒绝修改或未找到匹配
                     if (report.startsWith("【拒绝修改】")) {
                         return errorResult(report + "\n\n【读取示例】\n请使用以下命令读取文件全部内容：\n" +
