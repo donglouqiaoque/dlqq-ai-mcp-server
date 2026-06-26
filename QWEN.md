@@ -1,6 +1,8 @@
 ## Qwen Added Memories
 - 当前项目为Java语言开发，Maven构建。
 - 该项目为适用于QWEN的MCP服务器。
+- **运行环境要求**：Java 17+ 和 Python 3.8+，runtime目录提供安装包
+- **MCP配置位置**：配置放在settings.json（而非mcp.json），发行固件包含示例settings.json供参考
 - 允许你执行脚本，但脚本必须都放在该目录下：工程目录\ai_res\doc\script
 - 工程打包的jar文件要放在该目录下：工程目录\release\版本号
 - 每次修改完代码，都要构建一遍jar包，替换当前release目录下的文件。
@@ -8,6 +10,22 @@
 - 增减修改MCP服务器工具以后，README.md也要更新：工程目录\README.md
 - 增减修改MCP服务器工具以后，QWEN.md也要更新：工程目录\release/debug\V1.x.x/V255.x.x\QWEN.md
 - MCP服务器连接诊断日志：已在 StdioTransport、McpServer、MCPServerMain 中增加详细的连接诊断日志，帮助分析连接失败原因。日志文件位于 `./.dlqq/log/logger/` 和 `./.dlqq/log/stderr/` 目录下，按时间命名。
+
+## 运行环境要求
+
+### Java运行环境
+- **需要 Java 17 或更高版本**
+- 如果未安装Java，可在项目 `runtime/` 目录中找到Java 17安装包
+
+### Python运行环境（用于串口/BLE工具）
+- **需要 Python 3.8 或更高版本**
+- 如果未安装Python，可在项目 `runtime/` 目录中找到Python 3.13安装包（向下兼容3.8+）
+
+## MCP配置说明
+
+MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）。
+
+**发行固件包含示例 settings.json**，请参考该文件进行配置。
 
 ## 自动构建脚本
 

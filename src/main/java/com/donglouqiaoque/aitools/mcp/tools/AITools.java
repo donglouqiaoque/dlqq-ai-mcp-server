@@ -348,12 +348,13 @@ public class AITools {
                 }
 
                 try {
-                    boolean success = FileTools.removeLinesInFile(filePath, startLine, endLine, charset);
-                    if (success) {
-                        return textResult("成功删除第 " + startLine + " 行至第 " + endLine + " 行");
-                    } else {
-                        return errorResult("删除失败");
+                    String report = FileTools.removeLinesInFile(filePath, startLine, endLine, charset);
+                    // 检查是否被拒绝修改
+                    if (report.startsWith("【拒绝修改】")) {
+                        return errorResult(report + "\n\n【读取示例】\n请使用以下命令读取目标内容：\n" +
+                            "{\"file_path\": \"" + filePath + "\", \"start_line\": " + startLine + ", \"end_line\": " + endLine + "}");
                     }
+                    return textResult(report);
                 } catch (IOException e) {
                     return errorResult("操作失败: " + e.getMessage());
                 }
@@ -415,12 +416,13 @@ public class AITools {
                 }
 
                 try {
-                    boolean success = FileTools.replaceLinesInFile(filePath, startLine, endLine, content, charset);
-                    if (success) {
-                        return textResult("成功替换第 " + startLine + " 行至第 " + endLine + " 行的内容");
-                    } else {
-                        return errorResult("替换失败");
+                    String report = FileTools.replaceLinesInFile(filePath, startLine, endLine, content, charset);
+                    // 检查是否被拒绝修改
+                    if (report.startsWith("【拒绝修改】")) {
+                        return errorResult(report + "\n\n【读取示例】\n请使用以下命令读取目标内容：\n" +
+                            "{\"file_path\": \"" + filePath + "\", \"start_line\": " + startLine + ", \"end_line\": " + endLine + "}");
                     }
+                    return textResult(report);
                 } catch (IOException e) {
                     return errorResult("操作失败: " + e.getMessage());
                 }
@@ -476,12 +478,16 @@ public class AITools {
                 }
 
                 try {
-                    boolean success = FileTools.insertTextInFile(filePath, line, content, charset);
-                    if (success) {
-                        return textResult("成功在第 " + line + " 行前插入内容");
-                    } else {
-                        return errorResult("插入失败");
+                    String report = FileTools.insertTextInFile(filePath, line, content, charset);
+                    // 检查是否被拒绝修改
+                    if (report.startsWith("【拒绝修改】")) {
+                        // 计算建议读取的范围（插入点前后5行）
+                        int readStart = Math.max(1, line - 5);
+                        int readEnd = line + 5;
+                        return errorResult(report + "\n\n【读取示例】\n请使用以下命令读取插入位置附近的上下文：\n" +
+                            "{\"file_path\": \"" + filePath + "\", \"start_line\": " + readStart + ", \"end_line\": " + readEnd + "}");
                     }
+                    return textResult(report);
                 } catch (IOException e) {
                     return errorResult("操作失败: " + e.getMessage());
                 }
@@ -545,12 +551,16 @@ public class AITools {
 
                 try {
                     boolean useRegex = "regex".equalsIgnoreCase(mode);
-                    int count = FileTools.replaceTextInFile(filePath, searchText, replaceText, useRegex, charset);
-                    if (count > 0) {
-                        return textResult("成功替换 " + count + " 处内容");
-                    } else {
-                        return textResult("未找到匹配内容，未进行替换");
+                    String report = FileTools.replaceTextInFile(filePath, searchText, replaceText, useRegex, charset);
+                    // 检查是否被拒绝修改或未找到匹配
+                    if (report.startsWith("【拒绝修改】")) {
+                        return errorResult(report + "\n\n【读取示例】\n请使用以下命令读取文件全部内容：\n" +
+                            "{\"file_path\": \"" + filePath + "\", \"start_line\": 1, \"end_line\": -1}");
                     }
+                    if (report.startsWith("【未替换】")) {
+                        return errorResult(report);
+                    }
+                    return textResult(report);
                 } catch (IOException e) {
                     return errorResult("操作失败: " + e.getMessage());
                 }

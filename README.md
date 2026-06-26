@@ -140,6 +140,18 @@
 
 ## 快速开始
 
+### 运行环境要求
+
+#### Java运行环境
+
+- **需要 Java 17 或更高版本**
+- 如果未安装Java，可在项目 `runtime/` 目录中找到Java 17安装包
+
+#### Python运行环境（用于串口/BLE工具）
+
+- **需要 Python 3.8 或更高版本**
+- 如果未安装Python，可在项目 `runtime/` 目录中找到Python 3.13安装包（向下兼容3.8+）
+
 ### 1. 编译项目
 
 使用 Maven 构建（需要安装 Maven）：
@@ -154,7 +166,11 @@ mvn clean package
 
 #### Qwen Code 配置
 
-在项目根目录创建 `.qwen/mcp.json` 文件：
+MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）。
+
+**发行固件包含示例 settings.json**，请参考该文件进行配置。
+
+配置示例：
 
 ```json
 {
@@ -1376,12 +1392,13 @@ mvn clean package
 
 ## 技术栈
 
-- Java 17+
+- **Java 17+**（必需，runtime目录提供安装包）
+- **Python 3.8+**（串口/BLE工具必需，runtime目录提供3.13安装包）
 - MCP协议（Model Context Protocol）
 - Maven构建工具
 - 依赖：
   - jSerialComm（UART串口通信）
-  - tinyb（BLE蓝牙通信）
+  - Python bleak库（BLE蓝牙通信）
 
 ## 项目结构
 

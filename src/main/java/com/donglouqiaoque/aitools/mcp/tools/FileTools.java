@@ -9,8 +9,8 @@ import java.nio.channels.FileLock;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -19,6 +19,87 @@ import java.util.regex.PatternSyntaxException;
  * 文件操作工具 - 提供文件读写、修改、复制移动等功能
  */
 public class FileTools {
+
+    // 文件读取跟踪：记录每个文件被读取的行范围
+    // key: 文件绝对路径, value: 读取的行号集合（使用TreeSet便于范围查询）
+    private static final Map<String, Set<Integer>> fileReadTracker = new ConcurrentHashMap<>();
+
+    // 文件修改标记：记录文件是否被修改过
+    // key: 文件绝对路径, value: 是否已修改
+    private static final Map<String, Boolean> fileModifiedFlag = new ConcurrentHashMap<>();
+
+    /**
+     * 记录文件读取的行范围
+     */
+    private static void recordFileRead(String filePath, int startLine, int endLine) {
+        String normalizedPath = FileUtils.normalizePath(filePath);
+        Set<Integer> readLines = fileReadTracker.computeIfAbsent(normalizedPath, k -> new TreeSet<>());
+        for (int i = startLine; i <= endLine; i++) {
+            readLines.add(i);
+        }
+    }
+
+    /**
+     * 检查是否已读取指定行范围
+     * @return 未读取的行号列表，如果都已读取则返回空列表
+     */
+    private static List<Integer> checkUnreadLines(String filePath, int startLine, int endLine) {
+        String normalizedPath = FileUtils.normalizePath(filePath);
+        Set<Integer> readLines = fileReadTracker.get(normalizedPath);
+        List<Integer> unreadLines = new ArrayList<>();
+
+        if (readLines == null || readLines.isEmpty()) {
+            // 没有读取过该文件
+            for (int i = startLine; i <= endLine; i++) {
+                unreadLines.add(i);
+            }
+            return unreadLines;
+        }
+
+        // 检查每个要修改的行是否已读取
+        for (int i = startLine; i <= endLine; i++) {
+            if (!readLines.contains(i)) {
+                unreadLines.add(i);
+            }
+        }
+        return unreadLines;
+    }
+
+    /**
+     * 标记文件已被修改（会清空读取记录）
+     */
+    private static void markFileModified(String filePath) {
+        String normalizedPath = FileUtils.normalizePath(filePath);
+        fileModifiedFlag.put(normalizedPath, true);
+        // 清空读取记录，要求重新读取
+        fileReadTracker.remove(normalizedPath);
+    }
+
+    /**
+     * 检查文件是否被修改过
+     */
+    private static boolean isFileModified(String filePath) {
+        String normalizedPath = FileUtils.normalizePath(filePath);
+        return fileModifiedFlag.getOrDefault(normalizedPath, false);
+    }
+
+    /**
+     * 重置文件的修改标记和读取记录
+     */
+    public static void resetFileTracking(String filePath) {
+        String normalizedPath = FileUtils.normalizePath(filePath);
+        fileModifiedFlag.remove(normalizedPath);
+        fileReadTracker.remove(normalizedPath);
+    }
+
+    /**
+     * 重置文件的修改标记（不清除读取记录）
+     * 当AI重新读取文件后调用，允许基于新内容继续修改
+     */
+    private static void resetFileModified(String filePath) {
+        String normalizedPath = FileUtils.normalizePath(filePath);
+        fileModifiedFlag.remove(normalizedPath);
+    }
 
     /**
      * 读取文件内容（支持行范围和字符集）
@@ -82,11 +163,19 @@ public class FileTools {
 
         StringBuilder result = new StringBuilder();
         for (int i = startLine - 1; i < endLine && i < lines.size(); i++) {
-            result.append(lines.get(i));
+            // 添加行号（i+1是因为行号从1开始）
+            result.append(String.format("%-4d | %s", i + 1, lines.get(i)));
             if (i < endLine - 1) {
                 result.append(System.lineSeparator());
             }
         }
+
+        // 记录本次读取的行范围
+        recordFileRead(filePath, startLine, endLine);
+
+        // 如果文件之前被修改过，现在AI重新读取了最新内容
+        // 重置修改标记，允许基于新读取的内容继续修改
+        resetFileModified(filePath);
 
         return result.toString();
     }
@@ -390,10 +479,10 @@ public class FileTools {
      * @param startLine 起始行（1-based，包含）
      * @param endLine   结束行（1-based，包含）
      * @param charset   字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
-     * @return 是否成功删除
+     * @return 删除结果报告，包含修改前后的对比
      * @throws IOException 操作异常
      */
-    public static boolean removeLinesInFile(String filePath, int startLine, int endLine, String charset) throws IOException {
+    public static String removeLinesInFile(String filePath, int startLine, int endLine, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
@@ -412,7 +501,7 @@ public class FileTools {
 
         List<String> lines = Files.readAllLines(path, cs);
         if (lines.isEmpty()) {
-            return false;
+            return "错误：文件为空";
         }
 
         // 验证行号
@@ -430,6 +519,37 @@ public class FileTools {
         }
         if (startLine > endLine) {
             throw new IOException("起始行不能大于结束行");
+        }
+
+        // ========== 读取验证 ==========
+        // 检查文件是否被修改过
+        if (isFileModified(filePath)) {
+            return "【拒绝修改】文件已被修改过，读取记录已重置。请先重新读取文件内容，确认最新状态后再修改。";
+        }
+
+        // 检查是否已读取要修改的所有行
+        List<Integer> unreadLines = checkUnreadLines(filePath, startLine, endLine);
+        if (!unreadLines.isEmpty()) {
+            StringBuilder errorMsg = new StringBuilder();
+            errorMsg.append("【拒绝修改】您尚未读取以下行，请先使用 dlqq_read_file 读取后再修改：\n");
+            int showCount = Math.min(unreadLines.size(), 10);
+            for (int i = 0; i < showCount; i++) {
+                errorMsg.append("  - 第 ").append(unreadLines.get(i)).append(" 行\n");
+            }
+            if (unreadLines.size() > 10) {
+                errorMsg.append("  ... 还有 ").append(unreadLines.size() - 10).append(" 行未读取\n");
+            }
+            errorMsg.append("\n建议：使用 dlqq_read_file 读取第 ").append(startLine).append(" 行到第 ").append(endLine).append(" 行的内容。");
+            return errorMsg.toString();
+        }
+
+        // 保存被删除的内容（用于对比）
+        StringBuilder removedContent = new StringBuilder();
+        for (int i = startLine - 1; i < endLine && i < lines.size(); i++) {
+            if (i > startLine - 1) {
+                removedContent.append("\n");
+            }
+            removedContent.append(lines.get(i));
         }
 
         // 删除指定行
@@ -451,7 +571,122 @@ public class FileTools {
         }
 
         Files.writeString(path, result.toString(), cs);
-        return true;
+
+        // 标记文件已被修改
+        markFileModified(filePath);
+
+        // 生成删除报告（包含上下文）
+        return generateDeleteReportWithContext(lines, newLines, startLine, endLine, removedContent.toString());
+    }
+
+    /**
+     * 生成删除操作对比报告（包含上下文）
+     */
+    private static String generateDeleteReportWithContext(List<String> oldLines, List<String> newLines,
+                                                           int startLine, int endLine, String removedContent) {
+        StringBuilder report = new StringBuilder();
+        report.append("╔════════════════════════════════════════════════════════════════╗\n");
+        report.append("║  删除完成 - 修改前后对比报告                                    ║\n");
+        report.append("╚════════════════════════════════════════════════════════════════╝\n\n");
+
+        report.append("【位置】第 ").append(startLine).append(" 行 至 第 ").append(endLine).append(" 行\n\n");
+
+        int oldTotalLines = oldLines.size();
+        int newTotalLines = newLines.size();
+        int deletedCount = endLine - startLine + 1;
+
+        // ========== 展示删除前的上下文 ==========
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【删除前的文件状态】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        // 上文（前5行）
+        int contextBefore = 5;
+        int contextStart = Math.max(1, startLine - contextBefore);
+        if (contextStart < startLine) {
+            report.append("... 上文（第 ").append(contextStart).append("-").append(startLine - 1).append(" 行）...\n");
+            for (int i = contextStart - 1; i < startLine - 1 && i < oldLines.size(); i++) {
+                report.append(String.format("  %-4d | %s\n", i + 1, oldLines.get(i)));
+            }
+            report.append("\n");
+        }
+
+        // 被删除的内容
+        report.append("【已删除的内容】\n");
+        if (removedContent != null && !removedContent.isEmpty()) {
+            String[] removedContentLines = removedContent.split("\n");
+            for (int i = 0; i < removedContentLines.length; i++) {
+                report.append(String.format("- %-4d | %s\n", startLine + i, removedContentLines[i]));
+            }
+        } else {
+            report.append("(空)\n");
+        }
+
+        // 下文（后5行）
+        int contextAfter = 5;
+        int contextEnd = Math.min(oldTotalLines, endLine + contextAfter);
+        if (endLine < contextEnd) {
+            report.append("\n");
+            report.append("... 下文（第 ").append(endLine + 1).append("-").append(contextEnd).append(" 行）...\n");
+            for (int i = endLine; i < contextEnd && i < oldLines.size(); i++) {
+                report.append(String.format("  %-4d | %s\n", i + 1, oldLines.get(i)));
+            }
+        }
+
+        report.append("\n\n");
+
+        // ========== 展示删除后的上下文 ==========
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【删除后的文件状态】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        // 上文（前5行）- 在新文件中（位置不变）
+        if (contextStart < startLine) {
+            report.append("... 上文（第 ").append(contextStart).append("-").append(startLine - 1).append(" 行）...\n");
+            for (int i = contextStart - 1; i < startLine - 1 && i < newLines.size(); i++) {
+                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
+            }
+            report.append("\n");
+        }
+
+        // 删除位置的标记
+        report.append("【删除位置】第 ").append(startLine).append("-").append(endLine).append(" 行 (已删除)\n");
+
+        // 下文（后5行）- 在新文件中（行号已变化）
+        int newContextStart = startLine; // 删除后，原来的下文从startLine开始
+        int newContextEnd = Math.min(newTotalLines, startLine - 1 + contextAfter);
+        if (newContextStart <= newTotalLines && newContextStart <= newContextEnd) {
+            report.append("\n");
+            report.append("... 下文（原第 ").append(endLine + 1).append(" 行起，现第 ").append(newContextStart).append(" 行）...\n");
+            for (int i = newContextStart - 1; i < newContextEnd && i < newLines.size(); i++) {
+                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
+            }
+        }
+
+        report.append("\n\n");
+
+        // 统计信息
+        int diff = oldTotalLines - newTotalLines;
+
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【统计信息】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("  原文件总行数：").append(oldTotalLines).append(" 行\n");
+        report.append("  新文件总行数：").append(newTotalLines).append(" 行\n");
+        report.append("  删除行数：   -").append(deletedCount).append(" 行\n");
+        report.append("  实际减少：   -").append(diff).append(" 行\n");
+        report.append("\n");
+        report.append("【状态】✓ 删除成功\n");
+
+        // 结构检查提示
+        report.append("\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【结构检查】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("  请检查删除后的上下文连接是否正确。\n");
+        report.append("  上文和下文应该连续，不应该出现跳跃或重复。\n");
+
+        return report.toString();
     }
 
     /**
@@ -462,10 +697,10 @@ public class FileTools {
      * @param endLine     结束行（1-based，包含）
      * @param newContent  新的内容（支持多行）
      * @param charset     字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
-     * @return 是否成功替换
+     * @return 替换结果报告，包含修改前后的对比
      * @throws IOException 操作异常
      */
-    public static boolean replaceLinesInFile(String filePath, int startLine, int endLine, String newContent, String charset) throws IOException {
+    public static String replaceLinesInFile(String filePath, int startLine, int endLine, String newContent, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
@@ -484,7 +719,7 @@ public class FileTools {
 
         List<String> lines = Files.readAllLines(path, cs);
         if (lines.isEmpty()) {
-            return false;
+            return "错误：文件为空";
         }
 
         // 验证行号
@@ -502,6 +737,38 @@ public class FileTools {
         }
         if (startLine > endLine) {
             throw new IOException("起始行不能大于结束行");
+        }
+
+        // ========== 读取验证 ==========
+        // 检查文件是否被修改过
+        if (isFileModified(filePath)) {
+            return "【拒绝修改】文件已被修改过，读取记录已重置。请先重新读取文件内容，确认最新状态后再修改。";
+        }
+
+        // 检查是否已读取要修改的所有行
+        List<Integer> unreadLines = checkUnreadLines(filePath, startLine, endLine);
+        if (!unreadLines.isEmpty()) {
+            StringBuilder errorMsg = new StringBuilder();
+            errorMsg.append("【拒绝修改】您尚未读取以下行，请先使用 dlqq_read_file 读取后再修改：\n");
+            // 显示前10个未读取的行号
+            int showCount = Math.min(unreadLines.size(), 10);
+            for (int i = 0; i < showCount; i++) {
+                errorMsg.append("  - 第 ").append(unreadLines.get(i)).append(" 行\n");
+            }
+            if (unreadLines.size() > 10) {
+                errorMsg.append("  ... 还有 ").append(unreadLines.size() - 10).append(" 行未读取\n");
+            }
+            errorMsg.append("\n建议：使用 dlqq_read_file 读取第 ").append(startLine).append(" 行到第 ").append(endLine).append(" 行的内容。");
+            return errorMsg.toString();
+        }
+
+        // 保存原始内容（用于对比）
+        StringBuilder oldContent = new StringBuilder();
+        for (int i = startLine - 1; i < endLine && i < lines.size(); i++) {
+            if (i > startLine - 1) {
+                oldContent.append("\n");
+            }
+            oldContent.append(lines.get(i));
         }
 
         // 准备新内容行
@@ -535,7 +802,143 @@ public class FileTools {
         }
 
         Files.writeString(path, result.toString(), cs);
-        return true;
+
+        // 标记文件已被修改
+        markFileModified(filePath);
+
+        // 生成对比报告（包含上下文）
+        return generateDiffReportWithContext(lines, resultLines, startLine, endLine, oldContent.toString(), newContent);
+    }
+
+    /**
+     * 生成修改前后对比报告（包含上下文）
+     */
+    private static String generateDiffReportWithContext(List<String> oldLines, List<String> newLines,
+                                                         int startLine, int endLine, String oldContent, String newContent) {
+        StringBuilder report = new StringBuilder();
+        report.append("╔════════════════════════════════════════════════════════════════╗\n");
+        report.append("║  替换完成 - 修改前后对比报告                                    ║\n");
+        report.append("╚════════════════════════════════════════════════════════════════╝\n\n");
+
+        report.append("【位置】第 ").append(startLine).append(" 行 至 第 ").append(endLine).append(" 行\n\n");
+
+        int oldTotalLines = oldLines.size();
+        int newTotalLines = newLines.size();
+        int oldLineCount = (oldContent != null && !oldContent.isEmpty()) ? oldContent.split("\n").length : 0;
+        int newLineCount = (newContent != null && !newContent.isEmpty()) ? newContent.split("\r?\n").length : 0;
+        int newEndLine = startLine + newLineCount - 1;
+
+        // ========== 展示修改前的上下文 ==========
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【修改前的文件状态】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        // 上文（前5行）
+        int contextBefore = 5;
+        int contextStart = Math.max(1, startLine - contextBefore);
+        if (contextStart < startLine) {
+            report.append("... 上文（第 ").append(contextStart).append("-").append(startLine - 1).append(" 行）...\n");
+            for (int i = contextStart - 1; i < startLine - 1 && i < oldLines.size(); i++) {
+                report.append(String.format("  %-4d | %s\n", i + 1, oldLines.get(i)));
+            }
+            report.append("\n");
+        }
+
+        // 原始内容（被替换的部分）
+        report.append("【原始内容 - 将被替换】\n");
+        if (oldContent != null && !oldContent.isEmpty()) {
+            String[] oldContentLines = oldContent.split("\n");
+            for (int i = 0; i < oldContentLines.length; i++) {
+                report.append(String.format("- %-4d | %s\n", startLine + i, oldContentLines[i]));
+            }
+        } else {
+            report.append("(空)\n");
+        }
+
+        // 下文（后5行）
+        int contextAfter = 5;
+        int contextEnd = Math.min(oldTotalLines, endLine + contextAfter);
+        if (endLine < contextEnd) {
+            report.append("\n");
+            report.append("... 下文（第 ").append(endLine + 1).append("-").append(contextEnd).append(" 行）...\n");
+            for (int i = endLine; i < contextEnd && i < oldLines.size(); i++) {
+                report.append(String.format("  %-4d | %s\n", i + 1, oldLines.get(i)));
+            }
+        }
+
+        report.append("\n\n");
+
+        // ========== 展示修改后的上下文 ==========
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【修改后的文件状态】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        // 计算新文件中的对应位置
+        int lineDiff = newLineCount - oldLineCount;
+        int newContextEnd = Math.min(newTotalLines, newEndLine + contextAfter);
+
+        // 上文（前5行）- 在新文件中
+        int newContextStart = Math.max(1, startLine - contextBefore);
+        if (newContextStart < startLine) {
+            report.append("... 上文（第 ").append(newContextStart).append("-").append(startLine - 1).append(" 行）...\n");
+            for (int i = newContextStart - 1; i < startLine - 1 && i < newLines.size(); i++) {
+                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
+            }
+            report.append("\n");
+        }
+
+        // 新内容
+        report.append("【新内容 - 已替换】\n");
+        if (newContent != null && !newContent.isEmpty()) {
+            String[] newContentLines = newContent.split("\r?\n");
+            for (int i = 0; i < newContentLines.length; i++) {
+                report.append(String.format("+ %-4d | %s\n", startLine + i, newContentLines[i]));
+            }
+        } else {
+            report.append("(已删除)\n");
+        }
+
+        // 下文（后5行）- 在新文件中
+        if (newEndLine < newContextEnd) {
+            report.append("\n");
+            report.append("... 下文（第 ").append(newEndLine + 1).append("-").append(newContextEnd).append(" 行）...\n");
+            for (int i = newEndLine; i < newContextEnd && i < newLines.size(); i++) {
+                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
+            }
+        }
+
+        report.append("\n\n");
+
+        // 统计信息
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【统计信息】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("  原文件总行数：").append(oldTotalLines).append(" 行\n");
+        report.append("  新文件总行数：").append(newTotalLines).append(" 行\n");
+        report.append("  替换位置：    第 ").append(startLine).append("-").append(endLine).append(" 行\n");
+        report.append("  新内容位置：  第 ").append(startLine).append("-").append(newEndLine).append(" 行\n");
+        report.append("  原始行数：    ").append(oldLineCount).append(" 行\n");
+        report.append("  新行数：      ").append(newLineCount).append(" 行\n");
+        int diff = newLineCount - oldLineCount;
+        if (diff > 0) {
+            report.append("  变化：        +").append(diff).append(" 行 (新增)\n");
+        } else if (diff < 0) {
+            report.append("  变化：        ").append(diff).append(" 行 (删除)\n");
+        } else {
+            report.append("  变化：        0 行 (行数相同)\n");
+        }
+        report.append("\n");
+        report.append("【状态】✓ 替换成功\n");
+
+        // 结构检查提示
+        report.append("\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【结构检查】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("  请检查上文和下文的连接是否正确，确认没有破坏文件结构。\n");
+        report.append("  如果上下文不连续，可能需要重新调整修改范围。\n");
+
+        return report.toString();
     }
 
     /**
@@ -545,10 +948,10 @@ public class FileTools {
      * @param lineNum  插入位置（1-based，插入到该行之前）
      * @param content  要插入的内容
      * @param charset  字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
-     * @return 是否成功插入
+     * @return 插入结果报告，包含修改前后的对比
      * @throws IOException 操作异常
      */
-    public static boolean insertTextInFile(String filePath, int lineNum, String content, String charset) throws IOException {
+    public static String insertTextInFile(String filePath, int lineNum, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
@@ -566,6 +969,7 @@ public class FileTools {
         }
 
         List<String> lines = Files.readAllLines(path, cs);
+        int oldTotalLines = lines.size();
 
         // 验证行号
         if (lineNum < 1) {
@@ -573,6 +977,27 @@ public class FileTools {
         }
         if (lineNum > lines.size() + 1) {
             lineNum = lines.size() + 1;
+        }
+
+        // ========== 读取验证 ==========
+        // 检查文件是否被修改过
+        if (isFileModified(filePath)) {
+            return "【拒绝修改】文件已被修改过，读取记录已重置。请先重新读取文件内容，确认最新状态后再修改。";
+        }
+
+        // 插入操作需要检查插入位置的上下文是否已读取
+        // 检查插入点附近是否已读取（前后2行）
+        int checkStart = Math.max(1, lineNum - 2);
+        int checkEnd = Math.min(oldTotalLines, lineNum + 2);
+        List<Integer> unreadLines = checkUnreadLines(filePath, checkStart, checkEnd);
+        if (!unreadLines.isEmpty()) {
+            StringBuilder errorMsg = new StringBuilder();
+            errorMsg.append("【拒绝修改】您尚未读取插入位置附近的行，请先使用 dlqq_read_file 读取后再修改：\n");
+            for (Integer unreadLine : unreadLines) {
+                errorMsg.append("  - 第 ").append(unreadLine).append(" 行\n");
+            }
+            errorMsg.append("\n建议：使用 dlqq_read_file 读取第 ").append(checkStart).append(" 行到第 ").append(checkEnd).append(" 行的内容，了解插入位置的上下文。");
+            return errorMsg.toString();
         }
 
         // 准备插入内容（支持多行）
@@ -594,7 +1019,93 @@ public class FileTools {
         }
 
         Files.writeString(path, result.toString(), cs);
-        return true;
+
+        // 标记文件已被修改
+        markFileModified(filePath);
+
+        // 生成插入报告（包含上下文）
+        return generateInsertReportWithContext(lines, lineNum, content, oldTotalLines, lines.size());
+    }
+
+    /**
+     * 生成插入操作对比报告（包含上下文）
+     */
+    private static String generateInsertReportWithContext(List<String> newLines, int lineNum, String insertedContent,
+                                                         int oldTotalLines, int newTotalLines) {
+        StringBuilder report = new StringBuilder();
+        report.append("╔════════════════════════════════════════════════════════════════╗\n");
+        report.append("║  插入完成 - 修改前后对比报告                                    ║\n");
+        report.append("╚════════════════════════════════════════════════════════════════╝\n\n");
+
+        report.append("【位置】在第 ").append(lineNum).append(" 行之前插入\n\n");
+
+        int insertLineCount = (insertedContent != null && !insertedContent.isEmpty()) ? insertedContent.split("\\r?\\n").length : 0;
+        int newStartLine = lineNum;
+        int newEndLine = lineNum + insertLineCount - 1;
+
+        // ========== 展示插入后的上下文 ==========
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【插入后的文件状态】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        // 上文（前5行）
+        int contextBefore = 5;
+        int contextStart = Math.max(1, newStartLine - contextBefore);
+        if (contextStart < newStartLine) {
+            report.append("... 上文（第 ").append(contextStart).append("-").append(newStartLine - 1).append(" 行）...\n");
+            for (int i = contextStart - 1; i < newStartLine - 1 && i < newLines.size(); i++) {
+                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
+            }
+            report.append("\n");
+        }
+
+        // 插入的内容
+        report.append("【插入的内容】\n");
+        if (insertedContent != null && !insertedContent.isEmpty()) {
+            String[] insertContentLines = insertedContent.split("\\r?\\n");
+            for (int i = 0; i < insertContentLines.length; i++) {
+                report.append(String.format("+ %-4d | %s\n", newStartLine + i, insertContentLines[i]));
+            }
+        } else {
+            report.append("(空内容)\n");
+        }
+
+        // 下文（后5行）
+        int contextAfter = 5;
+        int contextEnd = Math.min(newTotalLines, newEndLine + contextAfter);
+        if (newEndLine < contextEnd) {
+            report.append("\n");
+            report.append("... 下文（第 ").append(newEndLine + 1).append("-").append(contextEnd).append(" 行）...\n");
+            for (int i = newEndLine; i < contextEnd && i < newLines.size(); i++) {
+                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
+            }
+        }
+
+        report.append("\n\n");
+
+        // 统计信息
+        int insertedCount = newTotalLines - oldTotalLines;
+
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【统计信息】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("  原文件总行数：").append(oldTotalLines).append(" 行\n");
+        report.append("  新文件总行数：").append(newTotalLines).append(" 行\n");
+        report.append("  插入位置：    第 ").append(lineNum).append(" 行之前\n");
+        report.append("  新插入行号：  第 ").append(newStartLine).append("-").append(newEndLine).append(" 行\n");
+        report.append("  插入行数：    +").append(insertedCount).append(" 行\n");
+        report.append("\n");
+        report.append("【状态】✓ 插入成功\n");
+
+        // 结构检查提示
+        report.append("\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【结构检查】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("  请检查插入的内容与上下文的连接是否正确。\n");
+        report.append("  上文、插入内容和下文应该构成完整的逻辑结构。\n");
+
+        return report.toString();
     }
 
     /**
@@ -605,10 +1116,10 @@ public class FileTools {
      * @param replaceText 替换文本
      * @param useRegex    是否使用正则表达式
      * @param charset     字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
-     * @return 替换次数
+     * @return 替换结果报告，包含修改前后对比
      * @throws IOException 操作异常
      */
-    public static int replaceTextInFile(String filePath, String searchText, String replaceText, boolean useRegex, String charset) throws IOException {
+    public static String replaceTextInFile(String filePath, String searchText, String replaceText, boolean useRegex, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
@@ -625,9 +1136,36 @@ public class FileTools {
             }
         }
 
+        // ========== 读取验证 ==========
+        // 检查文件是否被修改过
+        if (isFileModified(filePath)) {
+            return "【拒绝修改】文件已被修改过，读取记录已重置。请先重新读取文件内容，确认最新状态后再修改。";
+        }
+
+        // 读取文件所有行用于验证
+        List<String> lines = Files.readAllLines(path, cs);
+        int totalLines = lines.size();
+
+        // 检查是否已读取文件全部内容
+        List<Integer> unreadLines = checkUnreadLines(filePath, 1, totalLines);
+        if (!unreadLines.isEmpty()) {
+            StringBuilder errorMsg = new StringBuilder();
+            errorMsg.append("【拒绝修改】文本替换需要了解文件全部内容。您尚未读取以下行：\n");
+            int showCount = Math.min(unreadLines.size(), 10);
+            for (int i = 0; i < showCount; i++) {
+                errorMsg.append("  - 第 ").append(unreadLines.get(i)).append(" 行\n");
+            }
+            if (unreadLines.size() > 10) {
+                errorMsg.append("  ... 还有 ").append(unreadLines.size() - 10).append(" 行未读取\n");
+            }
+            errorMsg.append("\n建议：使用 dlqq_read_file 读取整个文件内容，或至少读取包含搜索文本的区域。");
+            return errorMsg.toString();
+        }
+
         String content = Files.readString(path, cs);
         String newContent;
         int replaceCount = 0;
+        List<int[]> matchPositions = new ArrayList<>(); // 记录匹配位置 [start, end]
 
         if (useRegex) {
             try {
@@ -637,14 +1175,20 @@ public class FileTools {
 
                 // 快速检查是否有匹配
                 if (!matcher.find()) {
-                    return 0;
+                    return "【未替换】未找到匹配的正则表达式: " + searchText;
                 }
 
-                // 重置matcher并执行替换
+                // 记录匹配位置
+                matcher.reset();
+                while (matcher.find()) {
+                    replaceCount++;
+                    matchPositions.add(new int[]{matcher.start(), matcher.end()});
+                }
+
+                // 执行替换
                 matcher.reset();
                 StringBuffer sb = new StringBuffer(content.length());
                 while (matcher.find()) {
-                    replaceCount++;
                     matcher.appendReplacement(sb, Matcher.quoteReplacement(replaceText));
                 }
                 matcher.appendTail(sb);
@@ -653,29 +1197,104 @@ public class FileTools {
                 throw new IOException("正则表达式语法错误: " + e.getMessage());
             }
         } else {
-            // 普通文本替换 - 使用String.replace()，内部优化更高效
+            // 普通文本替换
             if (!content.contains(searchText)) {
-                return 0;
+                return "【未替换】未找到文本: " + searchText;
             }
 
-            // 对于多次替换，使用String.replace()比手动循环更高效
-            // Java内部使用KMP或类似算法优化字符串查找
-            newContent = content.replace(searchText, replaceText);
-
-            // 计算替换次数
+            // 记录匹配位置
             int index = 0;
             while ((index = content.indexOf(searchText, index)) != -1) {
                 replaceCount++;
+                matchPositions.add(new int[]{index, index + searchText.length()});
                 index += searchText.length();
             }
+
+            // 执行替换
+            newContent = content.replace(searchText, replaceText);
         }
 
         // 如果有替换，写回文件
         if (replaceCount > 0) {
             Files.writeString(path, newContent, cs);
+            // 标记文件已被修改
+            markFileModified(filePath);
         }
 
-        return replaceCount;
+        // 生成对比报告
+        return generateTextReplaceReport(lines, content, newContent, searchText, replaceText, useRegex, replaceCount, matchPositions);
+    }
+
+    /**
+     * 生成文本替换对比报告
+     */
+    private static String generateTextReplaceReport(List<String> lines, String oldContent, String newContent,
+                                                     String searchText, String replaceText, boolean useRegex,
+                                                     int replaceCount, List<int[]> matchPositions) {
+        StringBuilder report = new StringBuilder();
+        report.append("╔════════════════════════════════════════════════════════════════╗\n");
+        report.append("║  文本替换完成 - 修改前后对比报告                                ║\n");
+        report.append("╚════════════════════════════════════════════════════════════════╝\n\n");
+
+        report.append("【搜索模式】").append(useRegex ? "正则表达式" : "普通文本").append("\n");
+        report.append("【搜索内容】").append(searchText).append("\n");
+        report.append("【替换为】  ").append(replaceText).append("\n");
+        report.append("【替换次数】").append(replaceCount).append(" 处\n\n");
+
+        // 显示匹配位置
+        if (!matchPositions.isEmpty()) {
+            report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            report.append("【匹配位置】\n");
+            report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            for (int i = 0; i < matchPositions.size() && i < 10; i++) {
+                int[] pos = matchPositions.get(i);
+                // 计算行号
+                int lineNum = 1;
+                int charCount = 0;
+                for (String line : lines) {
+                    if (charCount + line.length() + 1 > pos[0]) {
+                        break;
+                    }
+                    charCount += line.length() + 1; // +1 for newline
+                    lineNum++;
+                }
+                // 提取上下文
+                int contextStart = Math.max(0, pos[0] - 30);
+                int contextEnd = Math.min(oldContent.length(), pos[1] + 30);
+                String context = oldContent.substring(contextStart, contextEnd);
+                context = context.replace("\n", "\\n");
+
+                report.append(String.format("  第%d处: 第%d行, 字符位置 %d-%d\n", i + 1, lineNum, pos[0], pos[1]));
+                report.append(String.format("  上下文: ...%s...\n", context));
+                report.append("\n");
+            }
+            if (matchPositions.size() > 10) {
+                report.append("  ... 还有 ").append(matchPositions.size() - 10).append(" 处匹配 ...\n");
+            }
+        }
+
+        // 统计信息
+        int oldLineCount = oldContent.split("\n").length;
+        int newLineCount = newContent.split("\n").length;
+
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【统计信息】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("  原文件行数：").append(oldLineCount).append(" 行\n");
+        report.append("  新文件行数：").append(newLineCount).append(" 行\n");
+        report.append("  行数变化：  ").append(newLineCount - oldLineCount).append(" 行\n");
+        report.append("\n");
+        report.append("【状态】✓ 替换成功 (共 ").append(replaceCount).append(" 处)\n");
+
+        // 结构检查提示
+        report.append("\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("【结构检查】\n");
+        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        report.append("  文本替换可能影响文件中的多处位置。\n");
+        report.append("  请检查替换后的内容是否正确，特别是关键代码区域。\n");
+
+        return report.toString();
     }
 
     // ==================== 目录操作工具 ====================
