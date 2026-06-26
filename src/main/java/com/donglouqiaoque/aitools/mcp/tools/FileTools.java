@@ -221,6 +221,62 @@ public class FileTools {
     }
 
     /**
+     * 检测文件是否以换行符结尾
+     * @param path 文件路径
+     * @return 如果文件以换行符结尾返回true，否则返回false
+     */
+    private static boolean fileEndsWithNewline(Path path) throws IOException {
+        if (!Files.exists(path) || Files.size(path) == 0) {
+            return false;
+        }
+        // 读取文件最后几个字节检查是否以换行符结尾
+        try (InputStream is = Files.newInputStream(path)) {
+            long fileSize = Files.size(path);
+            int checkSize = (int) Math.min(fileSize, 10); // 检查最后10个字节
+            byte[] buffer = new byte[checkSize];
+            is.skip(fileSize - checkSize);
+            int read = is.read(buffer);
+            if (read > 0) {
+                // 检查最后一个有效字节是否是换行符
+                for (int i = read - 1; i >= 0; i--) {
+                    byte b = buffer[i];
+                    if (b == '\n' || b == '\r') {
+                        return true;
+                    }
+                    // 如果遇到非空白字符，说明文件不以换行符结尾
+                    if (b != ' ' && b != '\t') {
+                        return false;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 将行列表写回文件，保留文件原始的换行符结尾特性
+     * @param path 文件路径
+     * @param lines 行列表
+     * @param endsWithNewline 是否以换行符结尾
+     * @param charset 字符集
+     * @throws IOException 写入异常
+     */
+    private static void writeLinesToFile(Path path, List<String> lines, boolean endsWithNewline, Charset charset) throws IOException {
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < lines.size(); i++) {
+            result.append(lines.get(i));
+            if (i < lines.size() - 1) {
+                result.append(System.lineSeparator());
+            }
+        }
+        // 如果原文件以换行符结尾，在最后一行后也添加换行符
+        if (endsWithNewline && !lines.isEmpty()) {
+            result.append(System.lineSeparator());
+        }
+        Files.writeString(path, result.toString(), charset);
+    }
+
+    /**
      * 创建文件
      *
      * @param filePath 文件路径
@@ -561,16 +617,9 @@ public class FileTools {
             }
         }
 
-        // 写回文件
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < newLines.size(); i++) {
-            result.append(newLines.get(i));
-            if (i < newLines.size() - 1) {
-                result.append(System.lineSeparator());
-            }
-        }
-
-        Files.writeString(path, result.toString(), cs);
+        // 检测原文件是否以换行符结尾，保留这个特性
+        boolean endsWithNewline = fileEndsWithNewline(path);
+        writeLinesToFile(path, newLines, endsWithNewline, cs);
 
         // 标记文件已被修改
         markFileModified(filePath);
@@ -792,16 +841,9 @@ public class FileTools {
             resultLines.add(lines.get(i));
         }
 
-        // 写回文件
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < resultLines.size(); i++) {
-            result.append(resultLines.get(i));
-            if (i < resultLines.size() - 1) {
-                result.append(System.lineSeparator());
-            }
-        }
-
-        Files.writeString(path, result.toString(), cs);
+        // 检测原文件是否以换行符结尾，保留这个特性
+        boolean endsWithNewline = fileEndsWithNewline(path);
+        writeLinesToFile(path, resultLines, endsWithNewline, cs);
 
         // 标记文件已被修改
         markFileModified(filePath);
@@ -1009,16 +1051,9 @@ public class FileTools {
             lines.add(insertIndex, insertLines[i]);
         }
 
-        // 写回文件
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < lines.size(); i++) {
-            result.append(lines.get(i));
-            if (i < lines.size() - 1) {
-                result.append(System.lineSeparator());
-            }
-        }
-
-        Files.writeString(path, result.toString(), cs);
+        // 检测原文件是否以换行符结尾，保留这个特性
+        boolean endsWithNewline = fileEndsWithNewline(path);
+        writeLinesToFile(path, lines, endsWithNewline, cs);
 
         // 标记文件已被修改
         markFileModified(filePath);
