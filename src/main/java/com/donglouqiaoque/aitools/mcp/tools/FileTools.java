@@ -276,15 +276,113 @@ public class FileTools {
         Files.writeString(path, result.toString(), charset);
     }
 
+    // ========== ANSI 颜色代码 ==========
+    private static final String ANSI_RESET = "\u001B[0m";
+    private static final String ANSI_RED = "\u001B[31m";    // 删除 - 红色
+    private static final String ANSI_GREEN = "\u001B[32m";  // 新增 + 绿色
+    private static final String ANSI_YELLOW = "\u001B[33m"; // 警告/标题 - 黄色
+    private static final String ANSI_BLUE = "\u001B[34m";   // 信息 - 蓝色
+    private static final String ANSI_CYAN = "\u001B[36m";   // 行号 - 青色
+    private static final String ANSI_GRAY = "\u001B[90m";   // 上下文 - 灰色
+
+    // ========== 返回内容大小限制 ==========
+    // 目标最大返回大小（根据客户端接收能力动态调整，默认8KB）
+    private static final int TARGET_MAX_RESPONSE_SIZE = 8192;
+
+    /**
+     * 智能截断内容 - 根据目标大小动态计算显示行数
+     * 
+     * @param reportBuilder 报告构建器
+     * @param headerInfo 头部信息（用于计算已用空间）
+     * @param footerInfo 尾部信息（用于计算已用空间）
+     * @param lines 内容行数组
+     * @param startLineNum 起始行号
+     * @param prefix 行前缀（如 "- " 表示删除，"+ " 表示新增，"  "表示普通）
+     * @return 截断后的报告
+     */
+    private static StringBuilder appendContentWithSmartTruncation(
+            StringBuilder reportBuilder,
+            String headerInfo,
+            String footerInfo,
+            String[] lines,
+            int startLineNum,
+            String prefix) {
+        
+        // 计算头部和尾部已占用的空间
+        int headerLen = headerInfo != null ? headerInfo.length() : 0;
+        int footerLen = footerInfo != null ? footerInfo.length() : 0;
+        int availableSize = TARGET_MAX_RESPONSE_SIZE - headerLen - footerLen - 100; // 100为缓冲
+        
+        if (availableSize < 500) {
+            availableSize = 500; // 至少保留500字符
+        }
+        
+        // 如果内容很少，直接显示全部
+        StringBuilder fullContent = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            fullContent.append(String.format("%s%4d | %s\n", prefix, startLineNum + i, lines[i]));
+        }
+        
+        if (headerLen + fullContent.length() + footerLen <= TARGET_MAX_RESPONSE_SIZE) {
+            // 内容在限制范围内
+            reportBuilder.append(fullContent);
+        } else {
+            // 需要截断 - 显示开头和结尾
+            int halfAvailable = availableSize / 2;
+            StringBuilder headBuilder = new StringBuilder();
+            int headLines = 0;
+            
+            // 填充开头部分
+            for (int i = 0; i < lines.length && headBuilder.length() < halfAvailable; i++) {
+                headBuilder.append(String.format("%s%4d | %s\n", prefix, startLineNum + i, lines[i]));
+                headLines++;
+            }
+            
+            // 填充结尾部分（至少保留10行或剩余行）
+            int tailLines = Math.min(10, lines.length - headLines);
+            StringBuilder tailBuilder = new StringBuilder();
+            for (int i = lines.length - tailLines; i < lines.length; i++) {
+                tailBuilder.append(String.format("%s%4d | %s\n", prefix, startLineNum + i, lines[i]));
+            }
+            
+            // 如果开头+结尾超过可用空间，调整开头部分
+            if (headBuilder.length() + tailBuilder.length() > availableSize) {
+                int excess = headBuilder.length() + tailBuilder.length() - availableSize;
+                String headStr = headBuilder.toString();
+                // 估算每行平均长度，截去开头的多余行
+                int avgLineLen = headLines > 0 ? headStr.length() / headLines : 50;
+                int linesToRemove = excess / avgLineLen + 1;
+                String[] headLineArray = headStr.split("\n");
+                headBuilder = new StringBuilder();
+                for (int i = linesToRemove; i < headLineArray.length && i < headLineArray.length - tailLines + 3; i++) {
+                    if (i > linesToRemove) headBuilder.append("\n");
+                    headBuilder.append(headLineArray[i]);
+                }
+                headLines = Math.max(0, headLines - linesToRemove);
+            }
+            
+            reportBuilder.append(headBuilder);
+            int skippedLines = lines.length - headLines - tailLines;
+            if (skippedLines > 0) {
+                reportBuilder.append(String.format("%s ... (%d 行已省略，共 %d 行) ...\n", 
+                    prefix.isEmpty() ? " " : prefix, skippedLines, lines.length));
+            }
+            reportBuilder.append(tailBuilder);
+        }
+        
+        return reportBuilder;
+    }
+
     /**
      * 创建文件（文件已存在时拒绝）
      *
      * @param filePath 文件路径
      * @param content  文件内容（null或空字符串则创建空文件）
      * @param charset  字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
+     * @return 创建结果报告
      * @throws IOException 创建异常
      */
-    public static void createFile(String filePath, String content, String charset) throws IOException {
+    public static String createFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
 
@@ -313,9 +411,28 @@ public class FileTools {
         Files.createFile(path);
 
         // 写入内容（支持空内容创建空文件）
+        int lineCount = 0;
         if (content != null && !content.isEmpty()) {
             Files.writeString(path, content, cs);
+            lineCount = content.split("\r?\n", -1).length;
         }
+
+        // 生成创建报告（普通文本格式）
+        StringBuilder report = new StringBuilder();
+
+        String headerInfo = "创建文件：" + filePath + "\n行数：" + lineCount + " 行\n\n";
+        String footerInfo = "\n【状态】✓ 创建成功\n";
+        
+        report.append(headerInfo);
+        
+        if (content != null && !content.isEmpty()) {
+            String[] lines = content.split("\r?\n", -1);
+            // 使用智能截断
+            appendContentWithSmartTruncation(report, headerInfo, footerInfo, lines, 1, "  ");
+        }
+        
+        report.append(footerInfo);
+        return report.toString();
     }
 
     /**
@@ -324,9 +441,10 @@ public class FileTools {
      * @param filePath 文件路径
      * @param content  文件内容
      * @param charset  字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
+     * @return 覆盖结果报告
      * @throws IOException 写入异常
      */
-    public static void overwriteFile(String filePath, String content, String charset) throws IOException {
+    public static String overwriteFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
 
@@ -351,8 +469,35 @@ public class FileTools {
             throw new IOException("【拒绝写入】不能使用空文本覆盖文件。如需清空文件内容，请使用专门的 dlqq_clear_file 工具。");
         }
 
+        // 读取原文件内容（用于对比）
+        int oldLineCount = 0;
+        if (Files.exists(path)) {
+            List<String> oldLines = Files.readAllLines(path, cs);
+            oldLineCount = oldLines.size();
+        }
+
         // 直接写入内容（覆盖原有内容或创建新文件）
         Files.writeString(path, content, cs);
+
+        // 计算新文件行数
+        int newLineCount = content.split("\r?\n", -1).length;
+
+        // 生成覆盖报告（普通文本格式）
+        StringBuilder report = new StringBuilder();
+        
+        String headerInfo = "覆盖文件：" + filePath + "\n" + 
+            (oldLineCount > 0 ? "原文件行数：" + oldLineCount + " 行 → " : "") +
+            "新文件行数：" + newLineCount + " 行\n\n";
+        String footerInfo = "\n【状态】✓ 覆盖成功\n";
+        
+        report.append(headerInfo);
+
+        // 新内容 - 使用智能截断
+        String[] lines = content.split("\r?\n", -1);
+        appendContentWithSmartTruncation(report, headerInfo, footerInfo, lines, 1, "  ");
+
+        report.append(footerInfo);
+        return report.toString();
     }
 
     /**
@@ -361,9 +506,10 @@ public class FileTools {
      * @param filePath 文件路径
      * @param content  追加的内容
      * @param charset  字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
+     * @return 追加结果报告，包含文件末尾上下文
      * @throws IOException 写入异常
      */
-    public static void appendFile(String filePath, String content, String charset) throws IOException {
+    public static String appendFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
 
@@ -382,6 +528,14 @@ public class FileTools {
             }
         }
 
+        // 读取原文件末尾内容（用于显示上下文）
+        List<String> oldLines = new ArrayList<>();
+        int oldLineCount = 0;
+        if (Files.exists(path)) {
+            oldLines = Files.readAllLines(path, cs);
+            oldLineCount = oldLines.size();
+        }
+
         // 确保父目录存在
         Path parent = path.getParent();
         if (parent != null && !Files.exists(parent)) {
@@ -394,6 +548,46 @@ public class FileTools {
         } else {
             Files.writeString(path, content, cs, java.nio.file.StandardOpenOption.APPEND);
         }
+
+        // 生成追加报告
+        return generateAppendReport(filePath, content, oldLines, oldLineCount, cs);
+    }
+
+    /**
+     * 生成文件追加报告 - 普通文本格式
+     */
+    private static String generateAppendReport(String filePath, String content, List<String> oldLines, int oldLineCount, Charset cs) throws IOException {
+        StringBuilder report = new StringBuilder();
+
+        // 计算追加内容的行数
+        List<String> newContentLines = Arrays.asList(content.split("\n", -1));
+        if (newContentLines.size() == 1 && content.contains("\r\n")) {
+            newContentLines = Arrays.asList(content.split("\r\n", -1));
+        }
+
+        int newTotalLines = oldLineCount + newContentLines.size();
+        
+        String headerInfo = "追加内容到文件：" + filePath + "\n" +
+            "原文件行数：" + oldLineCount + " 行 → " +
+            "新文件行数：" + newTotalLines + " 行 (+" + newContentLines.size() + " 行)\n\n";
+        String footerInfo = "\n【状态】✓ 内容追加成功\n";
+        
+        report.append(headerInfo);
+
+        // 显示上文（最后5行）
+        if (oldLineCount > 0) {
+            int displayStart = Math.max(1, oldLineCount - 4);
+            for (int i = displayStart - 1; i < oldLineCount; i++) {
+                report.append(String.format("  %4d | %s\n", i + 1, oldLines.get(i)));
+            }
+        }
+
+        // 显示追加内容 - 使用智能截断
+        String[] lines = newContentLines.toArray(new String[0]);
+        appendContentWithSmartTruncation(report, headerInfo, footerInfo, lines, oldLineCount + 1, "  ");
+
+        report.append(footerInfo);
+        return report.toString();
     }
 
     /**
@@ -401,9 +595,10 @@ public class FileTools {
      *
      * @param filePath 文件路径
      * @param charset  字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
+     * @return 清空结果报告
      * @throws IOException 操作异常
      */
-    public static void clearFile(String filePath, String charset) throws IOException {
+    public static String clearFile(String filePath, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
 
@@ -417,6 +612,13 @@ public class FileTools {
             }
         }
 
+        // 读取原文件行数
+        int oldLineCount = 0;
+        if (Files.exists(path)) {
+            List<String> oldLines = Files.readAllLines(path, cs);
+            oldLineCount = oldLines.size();
+        }
+
         // 确保父目录存在
         Path parent = path.getParent();
         if (parent != null && !Files.exists(parent)) {
@@ -425,6 +627,14 @@ public class FileTools {
 
         // 写入空内容，清空文件
         Files.writeString(path, "", cs);
+
+        // 生成清空报告（普通文本格式）
+        StringBuilder report = new StringBuilder();
+
+        report.append("清空文件：").append(filePath).append("\n");
+        report.append("原文件行数：").append(oldLineCount).append(" 行 → 新文件行数：0 行\n");
+        report.append("\n【状态】✓ 清空成功").append("\n");
+        return report.toString();
     }
 
     /**
@@ -669,112 +879,45 @@ public class FileTools {
     }
 
     /**
-     * 生成删除操作对比报告（包含上下文）
+     * 生成删除操作对比报告 - 使用标准diff格式（Markdown兼容）
      */
     private static String generateDeleteReportWithContext(List<String> oldLines, List<String> newLines,
                                                            int startLine, int endLine, String removedContent) {
         StringBuilder report = new StringBuilder();
-        report.append("╔════════════════════════════════════════════════════════════════╗\n");
-        report.append("║  删除完成 - 修改前后对比报告                                    ║\n");
-        report.append("╚════════════════════════════════════════════════════════════════╝\n\n");
-
-        report.append("【位置】第 ").append(startLine).append(" 行 至 第 ").append(endLine).append(" 行\n\n");
 
         int oldTotalLines = oldLines.size();
         int newTotalLines = newLines.size();
         int deletedCount = endLine - startLine + 1;
+        
+        String headerInfo = "删除第 " + startLine + "-" + endLine + " 行\n" +
+            "原文件行数：" + oldTotalLines + " 行 → " +
+            "新文件行数：" + newTotalLines + " 行 (-" + deletedCount + " 行)\n\n";
+        String footerInfo = "\n【状态】✓ 删除成功\n";
+        
+        report.append(headerInfo);
 
-        // ========== 展示删除前的上下文 ==========
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【删除前的文件状态】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        // 计算显示范围
+        int displayStart = Math.max(1, startLine - 5);
+        int displayOldEnd = Math.min(oldTotalLines, endLine + 5);
 
         // 上文（前5行）
-        int contextBefore = 5;
-        int contextStart = Math.max(1, startLine - contextBefore);
-        if (contextStart < startLine) {
-            report.append("... 上文（第 ").append(contextStart).append("-").append(startLine - 1).append(" 行）...\n");
-            for (int i = contextStart - 1; i < startLine - 1 && i < oldLines.size(); i++) {
-                report.append(String.format("  %-4d | %s\n", i + 1, oldLines.get(i)));
-            }
-            report.append("\n");
+        for (int i = displayStart - 1; i < startLine - 1 && i < oldLines.size(); i++) {
+            report.append(String.format("  %4d | %s\n", i + 1, oldLines.get(i)));
         }
 
-        // 被删除的内容
-        report.append("【已删除的内容】\n");
+        // 被删除的内容 - 使用智能截断
         if (removedContent != null && !removedContent.isEmpty()) {
             String[] removedContentLines = removedContent.split("\n");
-            for (int i = 0; i < removedContentLines.length; i++) {
-                report.append(String.format("- %-4d | %s\n", startLine + i, removedContentLines[i]));
-            }
-        } else {
-            report.append("(空)\n");
+            appendContentWithSmartTruncation(report, headerInfo, footerInfo, removedContentLines, startLine, "- ");
         }
 
         // 下文（后5行）
-        int contextAfter = 5;
-        int contextEnd = Math.min(oldTotalLines, endLine + contextAfter);
-        if (endLine < contextEnd) {
-            report.append("\n");
-            report.append("... 下文（第 ").append(endLine + 1).append("-").append(contextEnd).append(" 行）...\n");
-            for (int i = endLine; i < contextEnd && i < oldLines.size(); i++) {
-                report.append(String.format("  %-4d | %s\n", i + 1, oldLines.get(i)));
-            }
+        int newStartIdx = startLine - 1;
+        for (int i = endLine; i < displayOldEnd && i < oldLines.size(); i++) {
+            report.append(String.format("  %4d | %s\n", newStartIdx + (i - endLine) + 1, oldLines.get(i)));
         }
 
-        report.append("\n\n");
-
-        // ========== 展示删除后的上下文 ==========
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【删除后的文件状态】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-
-        // 上文（前5行）- 在新文件中（位置不变）
-        if (contextStart < startLine) {
-            report.append("... 上文（第 ").append(contextStart).append("-").append(startLine - 1).append(" 行）...\n");
-            for (int i = contextStart - 1; i < startLine - 1 && i < newLines.size(); i++) {
-                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
-            }
-            report.append("\n");
-        }
-
-        // 删除位置的标记
-        report.append("【删除位置】第 ").append(startLine).append("-").append(endLine).append(" 行 (已删除)\n");
-
-        // 下文（后5行）- 在新文件中（行号已变化）
-        int newContextStart = startLine; // 删除后，原来的下文从startLine开始
-        int newContextEnd = Math.min(newTotalLines, startLine - 1 + contextAfter);
-        if (newContextStart <= newTotalLines && newContextStart <= newContextEnd) {
-            report.append("\n");
-            report.append("... 下文（原第 ").append(endLine + 1).append(" 行起，现第 ").append(newContextStart).append(" 行）...\n");
-            for (int i = newContextStart - 1; i < newContextEnd && i < newLines.size(); i++) {
-                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
-            }
-        }
-
-        report.append("\n\n");
-
-        // 统计信息
-        int diff = oldTotalLines - newTotalLines;
-
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【统计信息】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("  原文件总行数：").append(oldTotalLines).append(" 行\n");
-        report.append("  新文件总行数：").append(newTotalLines).append(" 行\n");
-        report.append("  删除行数：   -").append(deletedCount).append(" 行\n");
-        report.append("  实际减少：   -").append(diff).append(" 行\n");
-        report.append("\n");
-        report.append("【状态】✓ 删除成功\n");
-
-        // 结构检查提示
-        report.append("\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【结构检查】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("  请检查删除后的上下文连接是否正确。\n");
-        report.append("  上文和下文应该连续，不应该出现跳跃或重复。\n");
-
+        report.append(footerInfo);
         return report.toString();
     }
 
@@ -898,133 +1041,60 @@ public class FileTools {
     }
 
     /**
-     * 生成修改前后对比报告（包含上下文）
+     * 生成修改前后对比报告 - 使用标准diff格式（Markdown兼容）
      */
     private static String generateDiffReportWithContext(List<String> oldLines, List<String> newLines,
                                                          int startLine, int endLine, String oldContent, String newContent) {
         StringBuilder report = new StringBuilder();
-        report.append("╔════════════════════════════════════════════════════════════════╗\n");
-        report.append("║  替换完成 - 修改前后对比报告                                    ║\n");
-        report.append("╚════════════════════════════════════════════════════════════════╝\n\n");
-
-        report.append("【位置】第 ").append(startLine).append(" 行 至 第 ").append(endLine).append(" 行\n\n");
 
         int oldTotalLines = oldLines.size();
         int newTotalLines = newLines.size();
         int oldLineCount = (oldContent != null && !oldContent.isEmpty()) ? oldContent.split("\n").length : 0;
         int newLineCount = (newContent != null && !newContent.isEmpty()) ? newContent.split("\r?\n").length : 0;
         int newEndLine = startLine + newLineCount - 1;
+        int diff = newLineCount - oldLineCount;
+        
+        String headerInfo = "替换第 " + startLine + "-" + endLine + " 行\n" +
+            "原文件行数：" + oldTotalLines + " 行 → " +
+            "新文件行数：" + newTotalLines + " 行" +
+            (diff > 0 ? String.format(" (+%d 行)\n\n", diff) : diff < 0 ? String.format(" (%d 行)\n\n", diff) : "\n\n");
+        String footerInfo = "\n【状态】✓ 替换成功\n";
+        
+        report.append(headerInfo);
 
-        // ========== 展示修改前的上下文 ==========
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【修改前的文件状态】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        // 计算显示范围
+        int displayStart = Math.max(1, startLine - 5);
+        int displayOldEnd = Math.min(oldTotalLines, endLine + 5);
 
         // 上文（前5行）
-        int contextBefore = 5;
-        int contextStart = Math.max(1, startLine - contextBefore);
-        if (contextStart < startLine) {
-            report.append("... 上文（第 ").append(contextStart).append("-").append(startLine - 1).append(" 行）...\n");
-            for (int i = contextStart - 1; i < startLine - 1 && i < oldLines.size(); i++) {
-                report.append(String.format("  %-4d | %s\n", i + 1, oldLines.get(i)));
-            }
-            report.append("\n");
+        for (int i = displayStart - 1; i < startLine - 1 && i < oldLines.size(); i++) {
+            report.append(String.format("  %4d | %s\n", i + 1, oldLines.get(i)));
         }
 
-        // 原始内容（被替换的部分）
-        report.append("【原始内容 - 将被替换】\n");
+        // 原始内容（标记为-）
         if (oldContent != null && !oldContent.isEmpty()) {
             String[] oldContentLines = oldContent.split("\n");
             for (int i = 0; i < oldContentLines.length; i++) {
-                report.append(String.format("- %-4d | %s\n", startLine + i, oldContentLines[i]));
+                report.append(String.format("- %4d | %s\n", startLine + i, oldContentLines[i]));
             }
-        } else {
-            report.append("(空)\n");
+        }
+
+        // 新内容 - 使用智能截断
+        if (newContent != null && !newContent.isEmpty()) {
+            String[] newContentLines = newContent.split("\r?\n");
+            appendContentWithSmartTruncation(report, headerInfo, footerInfo, newContentLines, startLine, "+ ");
         }
 
         // 下文（后5行）
-        int contextAfter = 5;
-        int contextEnd = Math.min(oldTotalLines, endLine + contextAfter);
-        if (endLine < contextEnd) {
-            report.append("\n");
-            report.append("... 下文（第 ").append(endLine + 1).append("-").append(contextEnd).append(" 行）...\n");
-            for (int i = endLine; i < contextEnd && i < oldLines.size(); i++) {
-                report.append(String.format("  %-4d | %s\n", i + 1, oldLines.get(i)));
+        int newLineOffset = newLineCount - oldLineCount;
+        for (int i = endLine + 1; i <= displayOldEnd && i <= oldLines.size(); i++) {
+            int newLineNum = i + newLineOffset;
+            if (newLineNum <= newLines.size()) {
+                report.append(String.format("  %4d | %s\n", newLineNum, newLines.get(newLineNum - 1)));
             }
         }
 
-        report.append("\n\n");
-
-        // ========== 展示修改后的上下文 ==========
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【修改后的文件状态】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-
-        // 计算新文件中的对应位置
-        int lineDiff = newLineCount - oldLineCount;
-        int newContextEnd = Math.min(newTotalLines, newEndLine + contextAfter);
-
-        // 上文（前5行）- 在新文件中
-        int newContextStart = Math.max(1, startLine - contextBefore);
-        if (newContextStart < startLine) {
-            report.append("... 上文（第 ").append(newContextStart).append("-").append(startLine - 1).append(" 行）...\n");
-            for (int i = newContextStart - 1; i < startLine - 1 && i < newLines.size(); i++) {
-                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
-            }
-            report.append("\n");
-        }
-
-        // 新内容
-        report.append("【新内容 - 已替换】\n");
-        if (newContent != null && !newContent.isEmpty()) {
-            String[] newContentLines = newContent.split("\r?\n");
-            for (int i = 0; i < newContentLines.length; i++) {
-                report.append(String.format("+ %-4d | %s\n", startLine + i, newContentLines[i]));
-            }
-        } else {
-            report.append("(已删除)\n");
-        }
-
-        // 下文（后5行）- 在新文件中
-        if (newEndLine < newContextEnd) {
-            report.append("\n");
-            report.append("... 下文（第 ").append(newEndLine + 1).append("-").append(newContextEnd).append(" 行）...\n");
-            for (int i = newEndLine; i < newContextEnd && i < newLines.size(); i++) {
-                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
-            }
-        }
-
-        report.append("\n\n");
-
-        // 统计信息
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【统计信息】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("  原文件总行数：").append(oldTotalLines).append(" 行\n");
-        report.append("  新文件总行数：").append(newTotalLines).append(" 行\n");
-        report.append("  替换位置：    第 ").append(startLine).append("-").append(endLine).append(" 行\n");
-        report.append("  新内容位置：  第 ").append(startLine).append("-").append(newEndLine).append(" 行\n");
-        report.append("  原始行数：    ").append(oldLineCount).append(" 行\n");
-        report.append("  新行数：      ").append(newLineCount).append(" 行\n");
-        int diff = newLineCount - oldLineCount;
-        if (diff > 0) {
-            report.append("  变化：        +").append(diff).append(" 行 (新增)\n");
-        } else if (diff < 0) {
-            report.append("  变化：        ").append(diff).append(" 行 (删除)\n");
-        } else {
-            report.append("  变化：        0 行 (行数相同)\n");
-        }
-        report.append("\n");
-        report.append("【状态】✓ 替换成功\n");
-
-        // 结构检查提示
-        report.append("\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【结构检查】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("  请检查上文和下文的连接是否正确，确认没有破坏文件结构。\n");
-        report.append("  如果上下文不连续，可能需要重新调整修改范围。\n");
-
+        report.append(footerInfo);
         return report.toString();
     }
 
@@ -1113,83 +1183,45 @@ public class FileTools {
     }
 
     /**
-     * 生成插入操作对比报告（包含上下文）
+     * 生成插入操作对比报告 - 普通文本格式
      */
     private static String generateInsertReportWithContext(List<String> newLines, int lineNum, String insertedContent,
                                                          int oldTotalLines, int newTotalLines) {
         StringBuilder report = new StringBuilder();
-        report.append("╔════════════════════════════════════════════════════════════════╗\n");
-        report.append("║  插入完成 - 修改前后对比报告                                    ║\n");
-        report.append("╚════════════════════════════════════════════════════════════════╝\n\n");
-
-        report.append("【位置】在第 ").append(lineNum).append(" 行之前插入\n\n");
 
         int insertLineCount = (insertedContent != null && !insertedContent.isEmpty()) ? insertedContent.split("\\r?\\n").length : 0;
         int newStartLine = lineNum;
         int newEndLine = lineNum + insertLineCount - 1;
+        int insertedCount = newTotalLines - oldTotalLines;
+        
+        String headerInfo = "在第 " + lineNum + " 行之前插入\n" +
+            "原文件行数：" + oldTotalLines + " 行 → " +
+            "新文件行数：" + newTotalLines + " 行 (+" + insertedCount + " 行)\n\n";
+        String footerInfo = "\n【状态】✓ 插入成功\n";
+        
+        report.append(headerInfo);
 
-        // ========== 展示插入后的上下文 ==========
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【插入后的文件状态】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        // 计算显示范围
+        int displayStart = Math.max(1, newStartLine - 5);
+        int displayEnd = Math.min(newTotalLines, newEndLine + 5);
 
         // 上文（前5行）
-        int contextBefore = 5;
-        int contextStart = Math.max(1, newStartLine - contextBefore);
-        if (contextStart < newStartLine) {
-            report.append("... 上文（第 ").append(contextStart).append("-").append(newStartLine - 1).append(" 行）...\n");
-            for (int i = contextStart - 1; i < newStartLine - 1 && i < newLines.size(); i++) {
-                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
-            }
-            report.append("\n");
+        for (int i = displayStart - 1; i < newStartLine - 1 && i < newLines.size(); i++) {
+            report.append(String.format("  %4d | %s\n", i + 1, newLines.get(i)));
         }
 
-        // 插入的内容
-        report.append("【插入的内容】\n");
+        // 插入的内容 - 使用智能截断
         if (insertedContent != null && !insertedContent.isEmpty()) {
             String[] insertContentLines = insertedContent.split("\\r?\\n");
-            for (int i = 0; i < insertContentLines.length; i++) {
-                report.append(String.format("+ %-4d | %s\n", newStartLine + i, insertContentLines[i]));
-            }
-        } else {
-            report.append("(空内容)\n");
+            appendContentWithSmartTruncation(report, headerInfo, footerInfo, insertContentLines, newStartLine, "+ ");
         }
 
         // 下文（后5行）
-        int contextAfter = 5;
-        int contextEnd = Math.min(newTotalLines, newEndLine + contextAfter);
-        if (newEndLine < contextEnd) {
-            report.append("\n");
-            report.append("... 下文（第 ").append(newEndLine + 1).append("-").append(contextEnd).append(" 行）...\n");
-            for (int i = newEndLine; i < contextEnd && i < newLines.size(); i++) {
-                report.append(String.format("  %-4d | %s\n", i + 1, newLines.get(i)));
-            }
+        for (int i = newEndLine; i < displayEnd && i < newLines.size(); i++) {
+            report.append(String.format("  %4d | %s\n", i + 1, newLines.get(i)));
         }
 
-        report.append("\n\n");
-
-        // 统计信息
-        int insertedCount = newTotalLines - oldTotalLines;
-
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【统计信息】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("  原文件总行数：").append(oldTotalLines).append(" 行\n");
-        report.append("  新文件总行数：").append(newTotalLines).append(" 行\n");
-        report.append("  插入位置：    第 ").append(lineNum).append(" 行之前\n");
-        report.append("  新插入行号：  第 ").append(newStartLine).append("-").append(newEndLine).append(" 行\n");
-        report.append("  插入行数：    +").append(insertedCount).append(" 行\n");
-        report.append("\n");
-        report.append("【状态】✓ 插入成功\n");
-
-        // 结构检查提示
-        report.append("\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【结构检查】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("  请检查插入的内容与上下文的连接是否正确。\n");
-        report.append("  上文、插入内容和下文应该构成完整的逻辑结构。\n");
-
+        report.append(footerInfo);
         return report.toString();
     }
 
@@ -1201,10 +1233,12 @@ public class FileTools {
      * @param replaceText 替换文本
      * @param useRegex    是否使用正则表达式
      * @param charset     字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
+     * @param startLine   起始行号（1-based，可选，null表示读取全部）
+     * @param endLine     结束行号（1-based，可选，-1表示到末尾，null表示读取全部）
      * @return 替换结果报告，包含修改前后对比
      * @throws IOException 操作异常
      */
-    public static String replaceTextInFile(String filePath, String searchText, String replaceText, boolean useRegex, String charset) throws IOException {
+    public static String replaceTextInFile(String filePath, String searchText, String replaceText, boolean useRegex, String charset, Integer startLine, Integer endLine) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
@@ -1231,11 +1265,32 @@ public class FileTools {
         List<String> lines = Files.readAllLines(path, cs);
         int totalLines = lines.size();
 
-        // 检查是否已读取文件全部内容
-        List<Integer> unreadLines = checkUnreadLines(filePath, 1, totalLines);
+        // 处理行号范围
+        int checkStartLine = 1;
+        int checkEndLine = totalLines;
+        boolean isRangeMode = (startLine != null && endLine != null);
+
+        if (isRangeMode) {
+            // 使用传入的行范围
+            checkStartLine = Math.max(1, startLine);
+            checkEndLine = endLine == -1 ? totalLines : Math.min(endLine, totalLines);
+            if (checkStartLine > totalLines) {
+                checkStartLine = totalLines;
+            }
+            if (checkEndLine < checkStartLine) {
+                checkEndLine = checkStartLine;
+            }
+        }
+
+        // 检查是否已读取指定行范围
+        List<Integer> unreadLines = checkUnreadLines(filePath, checkStartLine, checkEndLine);
         if (!unreadLines.isEmpty()) {
             StringBuilder errorMsg = new StringBuilder();
-            errorMsg.append("【拒绝修改】文本替换需要了解文件全部内容。您尚未读取以下行：\n");
+            if (isRangeMode) {
+                errorMsg.append("【拒绝修改】您尚未读取指定行范围的内容。您尚未读取以下行：\n");
+            } else {
+                errorMsg.append("【拒绝修改】文本替换需要了解文件全部内容。您尚未读取以下行：\n");
+            }
             int showCount = Math.min(unreadLines.size(), 10);
             for (int i = 0; i < showCount; i++) {
                 errorMsg.append("  - 第 ").append(unreadLines.get(i)).append(" 行\n");
@@ -1243,7 +1298,11 @@ public class FileTools {
             if (unreadLines.size() > 10) {
                 errorMsg.append("  ... 还有 ").append(unreadLines.size() - 10).append(" 行未读取\n");
             }
-            errorMsg.append("\n建议：使用 dlqq_read_file 读取整个文件内容，或至少读取包含搜索文本的区域。");
+            if (isRangeMode) {
+                errorMsg.append("\n建议：请先使用 dlqq_read_file 读取第 ").append(checkStartLine).append("-").append(checkEndLine).append(" 行的内容。");
+            } else {
+                errorMsg.append("\n建议：使用 dlqq_read_file 读取整个文件内容，或传入start_line/end_line参数指定修改范围。");
+            }
             return errorMsg.toString();
         }
 
@@ -1321,83 +1380,95 @@ public class FileTools {
      * @param searchText  搜索文本
      * @param useRegex    是否使用正则表达式
      * @param charset     字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
+     * @param startLine   起始行号（1-based，可选，null表示读取全部）
+     * @param endLine     结束行号（1-based，可选，-1表示到末尾，null表示读取全部）
      * @return 删除结果报告，包含修改前后对比
      * @throws IOException 操作异常
      */
-    public static String removeTextInFile(String filePath, String searchText, boolean useRegex, String charset) throws IOException {
+    public static String removeTextInFile(String filePath, String searchText, boolean useRegex, String charset, Integer startLine, Integer endLine) throws IOException {
         // 调用 replaceTextInFile，将替换文本设为空字符串
-        return replaceTextInFile(filePath, searchText, "", useRegex, charset);
+        return replaceTextInFile(filePath, searchText, "", useRegex, charset, startLine, endLine);
     }
 
     /**
-     * 生成文本替换对比报告
+     * 生成文本替换对比报告 - 使用diff风格（带颜色）
      */
-    private static String generateTextReplaceReport(List<String> lines, String oldContent, String newContent,
+    private static String generateTextReplaceReport(List<String> oldLines, String oldContent, String newContent,
                                                      String searchText, String replaceText, boolean useRegex,
                                                      int replaceCount, List<int[]> matchPositions) {
         StringBuilder report = new StringBuilder();
-        report.append("╔════════════════════════════════════════════════════════════════╗\n");
-        report.append("║  文本替换完成 - 修改前后对比报告                                ║\n");
-        report.append("╚════════════════════════════════════════════════════════════════╝\n\n");
 
-        report.append("【搜索模式】").append(useRegex ? "正则表达式" : "普通文本").append("\n");
-        report.append("【搜索内容】").append(searchText).append("\n");
-        report.append("【替换为】  ").append(replaceText).append("\n");
-        report.append("【替换次数】").append(replaceCount).append(" 处\n\n");
+        // 分割新内容为行列表
+        List<String> newLines = Arrays.asList(newContent.split("\n", -1));
+        if (newLines.size() == 1 && newContent.contains("\r\n")) {
+            newLines = Arrays.asList(newContent.split("\r\n", -1));
+        }
 
-        // 显示匹配位置
-        if (!matchPositions.isEmpty()) {
-            report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-            report.append("【匹配位置】\n");
-            report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-            for (int i = 0; i < matchPositions.size() && i < 10; i++) {
-                int[] pos = matchPositions.get(i);
-                // 计算行号
-                int lineNum = 1;
-                int charCount = 0;
-                for (String line : lines) {
-                    if (charCount + line.length() + 1 > pos[0]) {
-                        break;
-                    }
-                    charCount += line.length() + 1; // +1 for newline
-                    lineNum++;
+        // 计算每处修改的行号
+        List<Integer> modifiedLineNumbers = new ArrayList<>();
+        for (int[] pos : matchPositions) {
+            int lineNum = 1;
+            int charCount = 0;
+            for (int i = 0; i < oldLines.size(); i++) {
+                String line = oldLines.get(i);
+                if (charCount + line.length() + 1 > pos[0]) {
+                    lineNum = i + 1;
+                    break;
                 }
-                // 提取上下文
-                int contextStart = Math.max(0, pos[0] - 30);
-                int contextEnd = Math.min(oldContent.length(), pos[1] + 30);
-                String context = oldContent.substring(contextStart, contextEnd);
-                context = context.replace("\n", "\\n");
-
-                report.append(String.format("  第%d处: 第%d行, 字符位置 %d-%d\n", i + 1, lineNum, pos[0], pos[1]));
-                report.append(String.format("  上下文: ...%s...\n", context));
-                report.append("\n");
+                charCount += line.length() + 1;
             }
-            if (matchPositions.size() > 10) {
-                report.append("  ... 还有 ").append(matchPositions.size() - 10).append(" 处匹配 ...\n");
+            if (!modifiedLineNumbers.contains(lineNum)) {
+                modifiedLineNumbers.add(lineNum);
             }
         }
 
-        // 统计信息
-        int oldLineCount = oldContent.split("\n").length;
-        int newLineCount = newContent.split("\n").length;
+        int diff = newLines.size() - oldLines.size();
+        String headerInfo = "文本替换：" + (useRegex ? "正则" : "普通文本") + " | " +
+            "替换次数：" + replaceCount + " 处\n" +
+            "原文件行数：" + oldLines.size() + " 行 → " +
+            "新文件行数：" + newLines.size() + " 行" +
+            (diff > 0 ? String.format(" (+%d 行)\n\n", diff) : diff < 0 ? String.format(" (%d 行)\n\n", diff) : "\n\n");
+        String footerInfo = "\n【状态】✓ 替换成功\n";
+        
+        report.append(headerInfo);
 
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【统计信息】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("  原文件行数：").append(oldLineCount).append(" 行\n");
-        report.append("  新文件行数：").append(newLineCount).append(" 行\n");
-        report.append("  行数变化：  ").append(newLineCount - oldLineCount).append(" 行\n");
-        report.append("\n");
-        report.append("【状态】✓ 替换成功 (共 ").append(replaceCount).append(" 处)\n");
+        // 为每处修改生成diff
+        int maxModifications = 20; // 最多显示20处修改，避免报告过长
+        for (int i = 0; i < modifiedLineNumbers.size() && i < maxModifications; i++) {
+            int modLine = modifiedLineNumbers.get(i);
+            int displayStart = Math.max(1, modLine - 3);
+            int displayOldEnd = Math.min(oldLines.size(), modLine + 3);
+            int displayNewEnd = Math.min(newLines.size(), modLine + 3);
 
-        // 结构检查提示
-        report.append("\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("【结构检查】\n");
-        report.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        report.append("  文本替换可能影响文件中的多处位置。\n");
-        report.append("  请检查替换后的内容是否正确，特别是关键代码区域。\n");
+            // 上文
+            for (int lineNum = displayStart; lineNum < modLine && lineNum <= oldLines.size(); lineNum++) {
+                report.append(String.format("  %4d | %s\n", lineNum, oldLines.get(lineNum - 1)));
+            }
 
+            // 修改行：原行（-），新行（+）
+            if (modLine <= oldLines.size()) {
+                report.append(String.format("- %4d | %s\n", modLine, oldLines.get(modLine - 1)));
+            }
+            if (modLine <= newLines.size()) {
+                report.append(String.format("+ %4d | %s\n", modLine, newLines.get(modLine - 1)));
+            }
+
+            // 下文
+            for (int lineNum = modLine + 1; lineNum <= displayOldEnd && lineNum <= oldLines.size(); lineNum++) {
+                report.append(String.format("  %4d | %s\n", lineNum, oldLines.get(lineNum - 1)));
+            }
+
+            if (i < modifiedLineNumbers.size() - 1 && i < maxModifications - 1) {
+                report.append("\n");
+            }
+        }
+        
+        // 如果有更多修改，显示省略信息
+        if (modifiedLineNumbers.size() > maxModifications) {
+            report.append("\n  ... (还有 ").append(modifiedLineNumbers.size() - maxModifications).append(" 处修改未显示) ...\n");
+        }
+
+        report.append(footerInfo);
         return report.toString();
     }
 

@@ -203,8 +203,8 @@ public class AITools {
                 }
 
                 try {
-                    FileTools.createFile(filePath, content, charset);
-                    return textResult("文件创建成功: " + filePath);
+                    String report = FileTools.createFile(filePath, content, charset);
+                    return textResult(report);
                 } catch (IOException e) {
                     return errorResult("创建文件失败: " + e.getMessage());
                 }
@@ -248,8 +248,8 @@ public class AITools {
                 }
 
                 try {
-                    FileTools.overwriteFile(filePath, content, charset);
-                    return textResult("文件覆盖成功: " + filePath);
+                    String report = FileTools.overwriteFile(filePath, content, charset);
+                    return textResult(report);
                 } catch (IOException e) {
                     return errorResult("覆盖文件失败: " + e.getMessage());
                 }
@@ -287,8 +287,8 @@ public class AITools {
                 }
 
                 try {
-                    FileTools.clearFile(filePath, charset);
-                    return textResult("文件已清空: " + filePath);
+                    String report = FileTools.clearFile(filePath, charset);
+                    return textResult(report);
                 } catch (IOException e) {
                     return errorResult("清空文件失败: " + e.getMessage());
                 }
@@ -335,8 +335,8 @@ public class AITools {
                 }
 
                 try {
-                    FileTools.appendFile(filePath, content, charset);
-                    return textResult("内容追加成功: " + filePath);
+                    String report = FileTools.appendFile(filePath, content, charset);
+                    return textResult(report);
                 } catch (IOException e) {
                     return errorResult("追加内容失败: " + e.getMessage());
                 }
@@ -568,10 +568,22 @@ public class AITools {
         charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
         properties.put("charset", charsetProp);
 
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "integer");
+        startLineProp.put("description", "起始行号（1-based，可选）。传入时可只读取指定行范围进行验证");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> endLineProp = new HashMap<>();
+        endLineProp.put("type", "integer");
+        endLineProp.put("description", "结束行号（1-based，可选，-1表示到末尾）。传入时可只读取指定行范围进行验证");
+        properties.put("end_line", endLineProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "search_text", "replace_text"));
 
         server.addTool("dlqq_replace_text_in_file",
-            "替换文件中的指定文本。支持普通文本模式和正则表达式模式。支持指定字符集编码（默认UTF-8）。",
+            "替换文件中的指定文本。支持普通文本模式和正则表达式模式。支持指定字符集编码（默认UTF-8）。" +
+            "传入start_line和end_line参数时，只需读取指定行范围即可修改；未传入时需读取全部文件内容。" +
+            "返回结果仅展示修改部分和上下5行代码的对比。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
@@ -579,6 +591,8 @@ public class AITools {
                 String replaceText = (String) arguments.get("replace_text");
                 String mode = (String) arguments.getOrDefault("mode", "text");
                 String charset = (String) arguments.get("charset");
+                Integer startLine = (Integer) arguments.get("start_line");
+                Integer endLine = (Integer) arguments.get("end_line");
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
@@ -592,7 +606,7 @@ public class AITools {
 
                 try {
                     boolean useRegex = "regex".equalsIgnoreCase(mode);
-                    String report = FileTools.replaceTextInFile(filePath, searchText, replaceText, useRegex, charset);
+                    String report = FileTools.replaceTextInFile(filePath, searchText, replaceText, useRegex, charset, startLine, endLine);
                     // 检查是否被拒绝修改或未找到匹配
                     if (report.startsWith("【拒绝修改】")) {
                         return errorResult(report + "\n\n【读取示例】\n请使用以下命令读取文件全部内容：\n" +
@@ -636,16 +650,30 @@ public class AITools {
         charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
         properties.put("charset", charsetProp);
 
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "integer");
+        startLineProp.put("description", "起始行号（1-based，可选）。传入时可只读取指定行范围进行验证");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> endLineProp = new HashMap<>();
+        endLineProp.put("type", "integer");
+        endLineProp.put("description", "结束行号（1-based，可选，-1表示到末尾）。传入时可只读取指定行范围进行验证");
+        properties.put("end_line", endLineProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "search_text"));
 
         server.addTool("dlqq_remove_text_in_file",
-            "删除文件中匹配的文本。相当于将匹配文本替换为空字符串。支持普通文本模式和正则表达式模式。",
+            "删除文件中匹配的文本。相当于将匹配文本替换为空字符串。支持普通文本模式和正则表达式模式。" +
+            "传入start_line和end_line参数时，只需读取指定行范围即可修改；未传入时需读取全部文件内容。" +
+            "返回结果仅展示修改部分和上下5行代码的对比。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
                 String searchText = (String) arguments.get("search_text");
                 String mode = (String) arguments.getOrDefault("mode", "text");
                 String charset = (String) arguments.get("charset");
+                Integer startLine = (Integer) arguments.get("start_line");
+                Integer endLine = (Integer) arguments.get("end_line");
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
@@ -656,7 +684,7 @@ public class AITools {
 
                 try {
                     boolean useRegex = "regex".equalsIgnoreCase(mode);
-                    String report = FileTools.removeTextInFile(filePath, searchText, useRegex, charset);
+                    String report = FileTools.removeTextInFile(filePath, searchText, useRegex, charset, startLine, endLine);
                     // 检查是否被拒绝修改或未找到匹配
                     if (report.startsWith("【拒绝修改】")) {
                         return errorResult(report + "\n\n【读取示例】\n请使用以下命令读取文件全部内容：\n" +
