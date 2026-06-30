@@ -15,7 +15,7 @@
 
 ## 工具列表
 
-本MCP服务器提供59个核心工具：
+本MCP服务器提供89个核心工具：
 
 ### 文件操作工具 (1-12)
 
@@ -117,6 +117,49 @@
 |---------|------|
 | `dlqq_clear_data` | 清除.dlqq数据目录（包括日志、Python脚本等），即使部分文件被占用也会返回成功 |
 | `dlqq_clear_cache` | 清除日志缓存文件（仅删除.dlqq/log下的日志），即使部分文件被占用也会返回成功 |
+
+### 项目脚本工具 (60-89)
+
+脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本，用于自动化项目构建、芯片操作等流程。
+
+**脚本配置说明**：首次使用前需通过 `dlqq_set_*_script` 工具设置脚本路径，或手动编辑 `.dlqq/settings/settings.properties` 文件。
+
+#### 执行类工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_build_project` | 构建项目（执行 script.build 配置的脚本） |
+| `dlqq_rebuild_project` | 重建项目（执行 script.rebuild 配置的脚本） |
+| `dlqq_chip_erase` | 擦除芯片（执行 script.chip.erase 配置的脚本） |
+| `dlqq_chip_download` | 下载固件到芯片（执行 script.chip.download 配置的脚本） |
+| `dlqq_erase_download` | 擦除并下载（执行 script.erase.download 配置的脚本） |
+| `dlqq_build_erase_download` | 构建、擦除并下载（执行 script.build.erase.download 配置的脚本） |
+| `dlqq_rebuild_erase_download` | 重建、擦除并下载（执行 script.rebuild.erase.download 配置的脚本） |
+| `dlqq_run_project` | 运行项目（执行 script.run 配置的脚本） |
+| `dlqq_debug_project` | 调试项目（执行 script.debug 配置的脚本） |
+| `dlqq_build_run_project` | 构建并运行（执行 script.build.run 配置的脚本） |
+| `dlqq_build_debug_project` | 构建并调试（执行 script.build.debug 配置的脚本） |
+| `dlqq_rebuild_run_project` | 重建并运行（执行 script.rebuild.run 配置的脚本） |
+| `dlqq_rebuild_debug_project` | 重建并调试（执行 script.rebuild.debug 配置的脚本） |
+
+#### 设置类工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_set_build_script` | 设置构建脚本路径（script.build） |
+| `dlqq_set_rebuild_script` | 设置重建脚本路径（script.rebuild） |
+| `dlqq_set_chip_erase_script` | 设置芯片擦除脚本路径（script.chip.erase） |
+| `dlqq_set_chip_download_script` | 设置芯片下载脚本路径（script.chip.download） |
+| `dlqq_set_erase_download_script` | 设置擦除下载脚本路径（script.erase.download） |
+| `dlqq_set_build_erase_download_script` | 设置构建擦除下载脚本路径（script.build.erase.download） |
+| `dlqq_set_rebuild_erase_download_script` | 设置重建擦除下载脚本路径（script.rebuild.erase.download） |
+| `dlqq_set_run_script` | 设置运行脚本路径（script.run） |
+| `dlqq_set_debug_script` | 设置调试脚本路径（script.debug） |
+| `dlqq_set_build_run_script` | 设置构建运行脚本路径（script.build.run） |
+| `dlqq_set_build_debug_script` | 设置构建调试脚本路径（script.build.debug） |
+| `dlqq_set_rebuild_run_script` | 设置重建运行脚本路径（script.rebuild.run） |
+| `dlqq_set_rebuild_debug_script` | 设置重建调试脚本路径（script.rebuild.debug） |
+| `dlqq_set_response_max_size` | 设置最大回复文本大小（response.max.size，默认32KB） |
 
 ## 参数类型说明
 

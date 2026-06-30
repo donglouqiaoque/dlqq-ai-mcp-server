@@ -106,6 +106,47 @@ public class AITools {
         // ========== 数据管理工具 ==========
         registerClearDataTool(server);              // dlqq_clear_data
         registerClearCacheTool(server);           // dlqq_clear_cache
+
+        // ========== 项目构建和芯片操作工具 ==========
+        registerBuildProjectTool(server);           // dlqq_build_project
+        registerRebuildProjectTool(server);         // dlqq_rebuild_project
+        registerChipEraseTool(server);              // dlqq_chip_erase
+        registerChipDownloadTool(server);           // dlqq_chip_download
+
+        // ========== 组合脚本执行工具 ==========
+        registerEraseDownloadTool(server);          // dlqq_erase_download
+        registerBuildEraseDownloadTool(server);   // dlqq_build_erase_download
+        registerRebuildEraseDownloadTool(server); // dlqq_rebuild_erase_download
+
+        // ========== 运行调试工具 ==========
+        registerRunProjectTool(server);             // dlqq_run_project
+        registerDebugProjectTool(server);           // dlqq_debug_project
+        registerBuildRunProjectTool(server);        // dlqq_build_run_project
+        registerBuildDebugProjectTool(server);      // dlqq_build_debug_project
+        registerRebuildRunProjectTool(server);      // dlqq_rebuild_run_project
+        registerRebuildDebugProjectTool(server);    // dlqq_rebuild_debug_project
+
+        // ========== 设置脚本路径工具 ==========
+        registerSetBuildScriptTool(server);         // dlqq_set_build_script
+        registerSetRebuildScriptTool(server);       // dlqq_set_rebuild_script
+        registerSetChipEraseScriptTool(server);     // dlqq_set_chip_erase_script
+        registerSetChipDownloadScriptTool(server);   // dlqq_set_chip_download_script
+
+        // ========== 组合脚本设置工具 ==========
+        registerSetEraseDownloadScriptTool(server);         // dlqq_set_erase_download_script
+        registerSetBuildEraseDownloadScriptTool(server);    // dlqq_set_build_erase_download_script
+        registerSetRebuildEraseDownloadScriptTool(server);  // dlqq_set_rebuild_erase_download_script
+
+        // ========== 运行调试设置工具 ==========
+        registerSetRunScriptTool(server);             // dlqq_set_run_script
+        registerSetDebugScriptTool(server);           // dlqq_set_debug_script
+        registerSetBuildRunScriptTool(server);        // dlqq_set_build_run_script
+        registerSetBuildDebugScriptTool(server);      // dlqq_set_build_debug_script
+        registerSetRebuildRunScriptTool(server);      // dlqq_set_rebuild_run_script
+        registerSetRebuildDebugScriptTool(server);    // dlqq_set_rebuild_debug_script
+
+        // ========== 响应大小限制工具 ==========
+        registerSetResponseMaxSizeTool(server);     // dlqq_set_response_max_size
     }
 
     // ==================== 文件操作工具 ====================
@@ -2466,7 +2507,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_ble_release_script",
-            "释放BLE Python脚本到项目目录下的.dlqq/python文件夹中。首次使用BLE工具前建议先执行此操作，以便查看和管理Python脚本。",
+            "释放BLE Python脚本到项目目录下的.dlqq/script/python文件夹中。首次使用BLE工具前建议先执行此操作，以便查看和管理Python脚本。",
             inputSchema,
             arguments -> {
                 String result = BleTools.bleReleaseScript();
@@ -3526,6 +3567,468 @@ public class AITools {
             inputSchema,
             arguments -> {
                 String result = McpTools.clearCache();
+                return textResult(result);
+            }
+        );
+    }
+
+    // ==================== 项目构建和芯片操作工具 ====================
+
+    private void registerBuildProjectTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_build_project",
+            "构建项目。执行settings.properties中script.build定义的脚本。默认执行util/build/build.bat。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.buildProject();
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerRebuildProjectTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_rebuild_project",
+            "重建项目（clean + build）。执行settings.properties中script.rebuild定义的脚本。默认执行util/build/rebuild.bat。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.rebuildProject();
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerChipEraseTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_chip_erase",
+            "擦除芯片。执行settings.properties中script.chip.erase定义的脚本。默认执行util/flash/erase.bat。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.chipErase();
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerChipDownloadTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_chip_download",
+            "下载固件到芯片。执行settings.properties中script.chip.download定义的脚本。默认执行util/flash/download.bat。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.chipDownload();
+                return textResult(result);
+            }
+        );
+    }
+
+    // ==================== 组合脚本执行工具 ====================
+
+    private void registerEraseDownloadTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_erase_download",
+            "擦除芯片并下载固件。执行settings.properties中script.erase.download定义的脚本。默认执行util/flash/erase_download.bat。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.eraseDownload();
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerBuildEraseDownloadTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_build_erase_download",
+            "构建项目、擦除芯片并下载固件。执行settings.properties中script.build.erase.download定义的脚本。默认执行util/build/build_erase_download.bat。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.buildEraseDownload();
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerRebuildEraseDownloadTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_rebuild_erase_download",
+            "重建项目、擦除芯片并下载固件。执行settings.properties中script.rebuild.erase.download定义的脚本。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.rebuildEraseDownload();
+                return textResult(result);
+            }
+        );
+    }
+
+    // ==================== 运行调试工具 ====================
+
+    private void registerRunProjectTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_run_project",
+            "运行项目。执行settings.properties中script.run定义的脚本。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.runProject();
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerDebugProjectTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_debug_project",
+            "调试项目。执行settings.properties中script.debug定义的脚本。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.debugProject();
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerBuildRunProjectTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_build_run_project",
+            "构建并运行项目。执行settings.properties中script.build.run定义的脚本。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.buildRunProject();
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerBuildDebugProjectTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_build_debug_project",
+            "构建并调试项目。执行settings.properties中script.build.debug定义的脚本。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.buildDebugProject();
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerRebuildRunProjectTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_rebuild_run_project",
+            "重建并运行项目。执行settings.properties中script.rebuild.run定义的脚本。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.rebuildRunProject();
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerRebuildDebugProjectTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_rebuild_debug_project",
+            "重建并调试项目。执行settings.properties中script.rebuild.debug定义的脚本。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.rebuildDebugProject();
+                return textResult(result);
+            }
+        );
+    }
+
+    // ==================== 设置脚本路径工具 ====================
+
+    private void registerSetBuildScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "构建脚本路径，例如：util/build/build.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_build_script",
+            "设置构建项目脚本的路径。将路径保存到settings.properties中的script.build配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setBuildScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerSetRebuildScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "重建脚本路径，例如：util/build/rebuild.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_rebuild_script",
+            "设置重建项目脚本的路径。将路径保存到settings.properties中的script.rebuild配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setRebuildScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerSetChipEraseScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "芯片擦除脚本路径，例如：util/flash/erase.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_chip_erase_script",
+            "设置芯片擦除脚本的路径。将路径保存到settings.properties中的script.chip.erase配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setChipEraseScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerSetChipDownloadScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "芯片下载脚本路径，例如：util/flash/download.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_chip_download_script",
+            "设置芯片下载脚本的路径。将路径保存到settings.properties中的script.chip.download配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setChipDownloadScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    // ==================== 组合脚本设置工具 ====================
+
+    private void registerSetEraseDownloadScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "擦除下载组合脚本路径，例如：util/flash/erase_download.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_erase_download_script",
+            "设置擦除并下载组合脚本的路径。将路径保存到settings.properties中的script.erase.download配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setEraseDownloadScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerSetBuildEraseDownloadScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "构建擦除下载组合脚本路径，例如：util/build/build_erase_download.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_build_erase_download_script",
+            "设置构建、擦除并下载组合脚本的路径。将路径保存到settings.properties中的script.build.erase.download配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setBuildEraseDownloadScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerSetRebuildEraseDownloadScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "重建擦除下载组合脚本路径，例如：util/build/rebuild_erase_download.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_rebuild_erase_download_script",
+            "设置重建、擦除并下载组合脚本的路径。将路径保存到settings.properties中的script.rebuild.erase.download配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setRebuildEraseDownloadScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    // ==================== 运行调试设置工具 ====================
+
+    private void registerSetRunScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "运行项目脚本路径，例如：util/run/run.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_run_script",
+            "设置运行项目脚本的路径。将路径保存到settings.properties中的script.run配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setRunScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerSetDebugScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "调试项目脚本路径，例如：util/run/debug.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_debug_script",
+            "设置调试项目脚本的路径。将路径保存到settings.properties中的script.debug配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setDebugScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerSetBuildRunScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "构建运行组合脚本路径，例如：util/build/build_run.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_build_run_script",
+            "设置构建并运行组合脚本的路径。将路径保存到settings.properties中的script.build.run配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setBuildRunScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerSetBuildDebugScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "构建调试组合脚本路径，例如：util/build/build_debug.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_build_debug_script",
+            "设置构建并调试组合脚本的路径。将路径保存到settings.properties中的script.build.debug配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setBuildDebugScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerSetRebuildRunScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "重建运行组合脚本路径，例如：util/build/rebuild_run.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_rebuild_run_script",
+            "设置重建并运行组合脚本的路径。将路径保存到settings.properties中的script.rebuild.run配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setRebuildRunScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    private void registerSetRebuildDebugScriptTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> scriptPathProp = new HashMap<>();
+        scriptPathProp.put("type", "string");
+        scriptPathProp.put("description", "重建调试组合脚本路径，例如：util/build/rebuild_debug.bat");
+        properties.put("script_path", scriptPathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool("dlqq_set_rebuild_debug_script",
+            "设置重建并调试组合脚本的路径。将路径保存到settings.properties中的script.rebuild.debug配置项。",
+            inputSchema,
+            arguments -> {
+                String scriptPath = (String) arguments.get("script_path");
+                String result = McpTools.setRebuildDebugScript(scriptPath);
+                return textResult(result);
+            }
+        );
+    }
+
+    // ==================== 响应大小限制工具 ====================
+
+    private void registerSetResponseMaxSizeTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> maxSizeProp = new HashMap<>();
+        maxSizeProp.put("type", "string");
+        maxSizeProp.put("description", "最大回复文本大小（字节），建议范围：1024-102400，默认32768");
+        properties.put("max_size", maxSizeProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("max_size"));
+
+        server.addTool("dlqq_set_response_max_size",
+            "设置最大回复文本大小限制（字节）。较大的值允许返回更多内容，但可能影响性能。建议范围：1024-102400。设置保存到settings.properties中的response.max.size配置项。",
+            inputSchema,
+            arguments -> {
+                String maxSize = (String) arguments.get("max_size");
+                String result = McpTools.setResponseMaxSize(maxSize);
                 return textResult(result);
             }
         );

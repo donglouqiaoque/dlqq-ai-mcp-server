@@ -2,6 +2,7 @@ package com.donglouqiaoque.aitools.mcp.tools;
 
 import java.io.*;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -13,6 +14,21 @@ import java.util.stream.Stream;
  * 提供版本信息、构建时间等查询功能，以及MCP数据管理功能
  */
 public class McpTools {
+
+    /**
+     * 脚本执行结果
+     */
+    private static class ScriptResult {
+        final String output;
+        final int exitCode;
+        final boolean success;
+
+        ScriptResult(String output, int exitCode) {
+            this.output = output;
+            this.exitCode = exitCode;
+            this.success = exitCode == 0;
+        }
+    }
 
     /**
      * 获取MCP服务器版本和构建信息
@@ -198,7 +214,17 @@ public class McpTools {
             }
         }
 
-        // 尝试删除python目录
+        // 尝试删除script/python目录
+        Path scriptPath = dlqqPath.resolve("script");
+        if (Files.exists(scriptPath)) {
+            java.util.List<String> scriptDeleted = new java.util.ArrayList<>();
+            java.util.List<String> scriptBusy = new java.util.ArrayList<>();
+            deleteDirectoryRecursiveCollect(scriptPath, ".dlqq/script", scriptDeleted, scriptBusy);
+            deletedItems.addAll(scriptDeleted);
+            busyFiles.addAll(scriptBusy);
+        }
+
+        // 尝试删除旧的python目录（向后兼容）
         Path pythonPath = dlqqPath.resolve("python");
         if (Files.exists(pythonPath)) {
             java.util.List<String> pythonDeleted = new java.util.ArrayList<>();
@@ -206,6 +232,16 @@ public class McpTools {
             deleteDirectoryRecursiveCollect(pythonPath, ".dlqq/python", pythonDeleted, pythonBusy);
             deletedItems.addAll(pythonDeleted);
             busyFiles.addAll(pythonBusy);
+        }
+
+        // 尝试删除settings目录
+        Path settingsPath = dlqqPath.resolve("settings");
+        if (Files.exists(settingsPath)) {
+            java.util.List<String> settingsDeleted = new java.util.ArrayList<>();
+            java.util.List<String> settingsBusy = new java.util.ArrayList<>();
+            deleteDirectoryRecursiveCollect(settingsPath, ".dlqq/settings", settingsDeleted, settingsBusy);
+            deletedItems.addAll(settingsDeleted);
+            busyFiles.addAll(settingsBusy);
         }
 
         // 最后删除.dlqq目录本身
@@ -343,5 +379,780 @@ public class McpTools {
                 }
             }
         }
+    }
+
+    // ==================== 配置读取工具 ====================
+
+    /**
+     * 从settings.properties读取指定key的配置值
+     * @param key 配置key
+     * @return 配置值，如果不存在返回null
+     */
+    public static String getConfigFromSettings(String key) {
+        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        if (!Files.exists(settingsPath)) {
+            return null;
+        }
+        try (BufferedReader reader = Files.newBufferedReader(settingsPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+                int equalIndex = line.indexOf('=');
+                if (equalIndex > 0) {
+                    String configKey = line.substring(0, equalIndex).trim();
+                    if (configKey.equals(key)) {
+                        return line.substring(equalIndex + 1).trim();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * 获取最大回复文本大小配置
+     * @return 最大字节数，默认8192
+     */
+    public static int getResponseMaxSize() {
+        String value = getConfigFromSettings("response.max.size");
+        if (value != null) {
+            try {
+                int size = Integer.parseInt(value);
+                if (size > 0) {
+                    return size;
+                }
+            } catch (NumberFormatException e) {
+                // 使用默认值
+            }
+        }
+        return 32768; // 默认32KB
+    }
+
+    // ==================== 脚本执行工具 ====================
+
+    /**
+     * 从settings.properties读取指定key的脚本路径
+     * @param key 配置key (如: script.build)
+     * @return 脚本路径，如果不存在返回null
+     */
+    private static String getScriptFromSettings(String key) {
+        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        if (!Files.exists(settingsPath)) {
+            return null;
+        }
+        try (BufferedReader reader = Files.newBufferedReader(settingsPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+                int equalIndex = line.indexOf('=');
+                if (equalIndex > 0) {
+                    String configKey = line.substring(0, equalIndex).trim();
+                    if (configKey.equals(key)) {
+                        return line.substring(equalIndex + 1).trim();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * 执行脚本文件（返回详细结果）
+     * @param scriptPath 脚本路径
+     * @param operationName 操作名称(用于日志)
+     * @param configKey 配置项key(用于提示)
+     * @return 脚本执行结果
+     */
+    private static ScriptResult executeScript(String scriptPath, String operationName, String configKey) {
+        if (scriptPath == null || scriptPath.isEmpty()) {
+            String output = "✗ 错误：未配置" + operationName + "脚本路径\n\n" +
+                   "请先使用以下工具设置脚本路径：\n" +
+                   "  dlqq_set_" + configKey + "_script\n\n" +
+                   "或在 .dlqq/settings/settings.properties 中手动设置：\n" +
+                   "  script." + configKey + "=your_script_path.bat";
+            return new ScriptResult(output, -1);
+        }
+
+        File scriptFile = new File(scriptPath);
+        if (!scriptFile.exists()) {
+            String output = "✗ 错误：脚本文件不存在\n" +
+                   "路径: " + scriptFile.getAbsolutePath() + "\n" +
+                   "请检查 .dlqq/settings/settings.properties 中的配置";
+            return new ScriptResult(output, -1);
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append("执行 ").append(operationName).append("\n");
+        result.append("===================\n\n");
+        result.append("脚本路径: ").append(scriptFile.getAbsolutePath()).append("\n\n");
+
+        int exitCode = -1;
+        try {
+            ProcessBuilder pb = new ProcessBuilder(scriptPath);
+            pb.directory(new File(System.getProperty("user.dir")));
+            pb.redirectErrorStream(true);
+
+            Process process = pb.start();
+
+            // 读取输出
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    result.append(line).append("\n");
+                }
+            }
+
+            exitCode = process.waitFor();
+            result.append("\n===================\n");
+            result.append("退出码: ").append(exitCode).append("\n");
+            if (exitCode == 0) {
+                result.append("✓ ").append(operationName).append(" 执行成功\n");
+            } else {
+                result.append("✗ ").append(operationName).append(" 执行失败\n");
+            }
+
+        } catch (IOException | InterruptedException e) {
+            result.append("\n===================\n");
+            result.append("✗ 执行异常: ").append(e.getMessage()).append("\n");
+        }
+
+        return new ScriptResult(result.toString(), exitCode);
+    }
+
+    /**
+     * 执行脚本文件（返回字符串结果，兼容旧代码）
+     * @param scriptPath 脚本路径
+     * @param operationName 操作名称(用于日志)
+     * @param configKey 配置项key(用于提示)
+     * @return 执行结果字符串
+     */
+    private static String executeScriptString(String scriptPath, String operationName, String configKey) {
+        return executeScript(scriptPath, operationName, configKey).output;
+    }
+
+    /**
+     * 构建项目
+     * 执行settings.properties中script.build定义的脚本
+     * @return 构建结果
+     */
+    public static String buildProject() {
+        String scriptPath = getScriptFromSettings("script.build");
+        return executeScriptString(scriptPath, "构建", "build");
+    }
+
+    /**
+     * 重建项目
+     * 执行settings.properties中script.rebuild定义的脚本
+     * @return 重建结果
+     */
+    public static String rebuildProject() {
+        String scriptPath = getScriptFromSettings("script.rebuild");
+        return executeScriptString(scriptPath, "重建", "rebuild");
+    }
+
+    /**
+     * 擦除芯片
+     * 执行settings.properties中script.chip.erase定义的脚本
+     * @return 擦除结果
+     */
+    public static String chipErase() {
+        String scriptPath = getScriptFromSettings("script.chip.erase");
+        return executeScriptString(scriptPath, "芯片擦除", "chip_erase");
+    }
+
+    /**
+     * 下载到芯片
+     * 执行settings.properties中script.chip.download定义的脚本
+     * @return 下载结果
+     */
+    public static String chipDownload() {
+        String scriptPath = getScriptFromSettings("script.chip.download");
+        return executeScriptString(scriptPath, "芯片下载", "chip_download");
+    }
+
+    // ==================== 设置脚本路径工具 ====================
+
+    /**
+     * 设置settings.properties中的指定key值
+     * @param key 配置key
+     * @param value 配置值
+     * @param description 配置描述（用于显示）
+     * @return 设置结果
+     */
+    private static String setScriptInSettings(String key, String value, String description) {
+        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+
+        // 检查settings目录是否存在
+        Path settingsDir = settingsPath.getParent();
+        if (!Files.exists(settingsDir)) {
+            try {
+                Files.createDirectories(settingsDir);
+            } catch (IOException e) {
+                return "✗ 错误：无法创建settings目录: " + e.getMessage();
+            }
+        }
+
+        // 读取现有配置
+        java.util.Map<String, String> config = new java.util.LinkedHashMap<>();
+        java.util.List<String> lines = new java.util.ArrayList<>();
+
+        if (Files.exists(settingsPath)) {
+            try (BufferedReader reader = Files.newBufferedReader(settingsPath, StandardCharsets.UTF_8)) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    lines.add(line);
+                    String trimmed = line.trim();
+                    if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                        continue;
+                    }
+                    int equalIndex = line.indexOf('=');
+                    if (equalIndex > 0) {
+                        String configKey = line.substring(0, equalIndex).trim();
+                        String configValue = line.substring(equalIndex + 1).trim();
+                        config.put(configKey, configValue);
+                    }
+                }
+            } catch (IOException e) {
+                return "✗ 错误：无法读取settings.properties: " + e.getMessage();
+            }
+        }
+
+        // 更新或添加配置
+        String oldValue = config.get(key);
+        config.put(key, value);
+
+        // 如果没有脚本配置节，添加一个
+        boolean hasScriptSection = lines.stream().anyMatch(l -> l.contains("Project build scripts"));
+
+        // 重写文件
+        try (BufferedWriter writer = Files.newBufferedWriter(settingsPath, StandardCharsets.UTF_8)) {
+            // 如果文件为空，写入默认头部
+            if (lines.isEmpty()) {
+                writer.write("# MCP Server Settings\n");
+                writer.write("# ==================\n\n");
+                writer.write("# Response size limits (bytes)\n");
+                writer.write("response.max.size=32768\n\n");
+                writer.write("# Project build scripts\n");
+                writer.write("# Scripts for build/rebuild/erase/download operations\n");
+            } else {
+                // 写入现有内容，但跳过旧值
+                boolean skipNextValue = false;
+                for (String line : lines) {
+                    String trimmed = line.trim();
+                    if (trimmed.startsWith(key + "=")) {
+                        // 跳过这个key的行，稍后写入新值
+                        continue;
+                    }
+                    writer.write(line);
+                    writer.write("\n");
+                }
+
+                // 如果没有脚本配置节，添加一个
+                if (!hasScriptSection) {
+                    writer.write("\n# Project build scripts\n");
+                    writer.write("# Scripts for build/rebuild/erase/download operations\n");
+                }
+            }
+
+            // 写入新的key-value
+            writer.write(key + "=" + value + "\n");
+
+        } catch (IOException e) {
+            return "✗ 错误：无法写入settings.properties: " + e.getMessage();
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append("✓ ").append(description).append("脚本路径已设置\n");
+        result.append("===================\n\n");
+        result.append("配置项: ").append(key).append("\n");
+        if (oldValue != null) {
+            result.append("旧值: ").append(oldValue).append("\n");
+        }
+        result.append("新值: ").append(value).append("\n\n");
+        result.append("配置文件: ").append(settingsPath.toAbsolutePath()).append("\n");
+
+        return result.toString();
+    }
+
+    /**
+     * 设置构建脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setBuildScript(String scriptPath) {
+        return setScriptInSettings("script.build", scriptPath, "构建项目");
+    }
+
+    /**
+     * 设置重建脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setRebuildScript(String scriptPath) {
+        return setScriptInSettings("script.rebuild", scriptPath, "重建项目");
+    }
+
+    /**
+     * 设置芯片擦除脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setChipEraseScript(String scriptPath) {
+        return setScriptInSettings("script.chip.erase", scriptPath, "芯片擦除");
+    }
+
+    /**
+     * 设置芯片下载脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setChipDownloadScript(String scriptPath) {
+        return setScriptInSettings("script.chip.download", scriptPath, "芯片下载");
+    }
+
+    // ==================== 组合脚本执行工具 ====================
+
+    /**
+     * 擦除并下载
+     * 优先执行script.erase.download组合脚本，如果不存在则按顺序执行script.chip.erase和script.chip.download
+     * 如果擦除失败则不执行下载
+     * @return 执行结果
+     */
+    public static String eraseDownload() {
+        String compositeScript = getScriptFromSettings("script.erase.download");
+
+        // 如果组合脚本存在，直接执行
+        if (compositeScript != null && !compositeScript.isEmpty()) {
+            return executeScriptString(compositeScript, "擦除并下载", "erase_download");
+        }
+
+        // 检查单独脚本是否存在
+        String eraseScript = getScriptFromSettings("script.chip.erase");
+        String downloadScript = getScriptFromSettings("script.chip.download");
+
+        if (eraseScript == null || eraseScript.isEmpty()) {
+            return "✗ 错误：未配置擦除脚本路径\n\n" +
+                   "组合脚本 script.erase.download 和单独脚本 script.chip.erase 都未配置\n" +
+                   "请先使用 dlqq_set_chip_erase_script 设置擦除脚本\n" +
+                   "或使用 dlqq_set_erase_download_script 设置组合脚本";
+        }
+
+        if (downloadScript == null || downloadScript.isEmpty()) {
+            return "✗ 错误：未配置下载脚本路径\n\n" +
+                   "组合脚本 script.erase.download 和单独脚本 script.chip.download 都未配置\n" +
+                   "请先使用 dlqq_set_chip_download_script 设置下载脚本\n" +
+                   "或使用 dlqq_set_erase_download_script 设置组合脚本";
+        }
+
+        // 按顺序执行：先擦除，成功后下载
+        StringBuilder result = new StringBuilder();
+        result.append("执行擦除并下载（分步模式）\n");
+        result.append("===================\n\n");
+        result.append("【注意】组合脚本未配置，将按顺序执行擦除→下载\n\n");
+
+        // 第一步：擦除
+        result.append("【步骤1/2】擦除芯片\n");
+        result.append("--------------------------------------------------\n");
+        ScriptResult eraseResult = executeScript(eraseScript, "芯片擦除", "chip_erase");
+        result.append(eraseResult.output);
+        result.append("\n");
+
+        if (!eraseResult.success) {
+            result.append("【终止】擦除失败，跳过后续下载步骤\n");
+            result.append("===================\n");
+            result.append("✗ 擦除并下载 执行失败（擦除步骤失败）\n");
+            return result.toString();
+        }
+
+        // 第二步：下载
+        result.append("【步骤2/2】下载固件\n");
+        result.append("--------------------------------------------------\n");
+        ScriptResult downloadResult = executeScript(downloadScript, "芯片下载", "chip_download");
+        result.append(downloadResult.output);
+        result.append("\n");
+
+        // 总结
+        result.append("===================\n");
+        if (downloadResult.success) {
+            result.append("✓ 擦除并下载 执行成功\n");
+        } else {
+            result.append("✗ 擦除并下载 执行失败（下载步骤失败，但擦除已成功）\n");
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * 构建、擦除并下载
+     * 优先执行组合脚本，如果不存在则按顺序执行build→erase→download
+     * 如果某一步失败则不执行后续步骤
+     * @return 执行结果
+     */
+    public static String buildEraseDownload() {
+        String compositeScript = getScriptFromSettings("script.build.erase.download");
+
+        // 如果组合脚本存在，直接执行
+        if (compositeScript != null && !compositeScript.isEmpty()) {
+            return executeScriptString(compositeScript, "构建、擦除并下载", "build_erase_download");
+        }
+
+        // 检查单独脚本是否存在
+        String buildScript = getScriptFromSettings("script.build");
+        String eraseScript = getScriptFromSettings("script.chip.erase");
+        String downloadScript = getScriptFromSettings("script.chip.download");
+
+        StringBuilder missingScripts = new StringBuilder();
+        if (buildScript == null || buildScript.isEmpty()) {
+            missingScripts.append("  - script.build (构建脚本)\n");
+        }
+        if (eraseScript == null || eraseScript.isEmpty()) {
+            missingScripts.append("  - script.chip.erase (擦除脚本)\n");
+        }
+        if (downloadScript == null || downloadScript.isEmpty()) {
+            missingScripts.append("  - script.chip.download (下载脚本)\n");
+        }
+
+        if (missingScripts.length() > 0) {
+            return "✗ 错误：缺少必要的脚本配置\n\n" +
+                   "组合脚本 script.build.erase.download 未配置，且以下单独脚本也未配置：\n" +
+                   missingScripts.toString() + "\n" +
+                   "请先使用相应的 dlqq_set_*_script 工具设置脚本\n" +
+                   "或使用 dlqq_set_build_erase_download_script 设置组合脚本";
+        }
+
+        // 按顺序执行
+        StringBuilder result = new StringBuilder();
+        result.append("执行构建、擦除并下载（分步模式）\n");
+        result.append("===================\n\n");
+        result.append("【注意】组合脚本未配置，将按顺序执行构建→擦除→下载\n\n");
+
+        // 第一步：构建
+        result.append("【步骤1/3】构建项目\n");
+        result.append("--------------------------------------------------\n");
+        ScriptResult buildResult = executeScript(buildScript, "构建", "build");
+        result.append(buildResult.output);
+        result.append("\n");
+
+        if (!buildResult.success) {
+            result.append("【终止】构建失败，跳过后续步骤\n");
+            result.append("===================\n");
+            result.append("✗ 构建、擦除并下载 执行失败（构建步骤失败）\n");
+            return result.toString();
+        }
+
+        // 第二步：擦除
+        result.append("【步骤2/3】擦除芯片\n");
+        result.append("--------------------------------------------------\n");
+        ScriptResult eraseResult = executeScript(eraseScript, "芯片擦除", "chip_erase");
+        result.append(eraseResult.output);
+        result.append("\n");
+
+        if (!eraseResult.success) {
+            result.append("【终止】擦除失败，跳过后续下载步骤\n");
+            result.append("===================\n");
+            result.append("✗ 构建、擦除并下载 执行失败（擦除步骤失败，但构建已成功）\n");
+            return result.toString();
+        }
+
+        // 第三步：下载
+        result.append("【步骤3/3】下载固件\n");
+        result.append("--------------------------------------------------\n");
+        ScriptResult downloadResult = executeScript(downloadScript, "芯片下载", "chip_download");
+        result.append(downloadResult.output);
+        result.append("\n");
+
+        // 总结
+        result.append("===================\n");
+        if (downloadResult.success) {
+            result.append("✓ 构建、擦除并下载 执行成功\n");
+        } else {
+            result.append("✗ 构建、擦除并下载 执行失败（下载步骤失败，但构建和擦除已成功）\n");
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * 重建、擦除并下载
+     * 优先执行组合脚本，如果不存在则按顺序执行rebuild→erase→download
+     * 如果某一步失败则不执行后续步骤
+     * @return 执行结果
+     */
+    public static String rebuildEraseDownload() {
+        String compositeScript = getScriptFromSettings("script.rebuild.erase.download");
+
+        // 如果组合脚本存在，直接执行
+        if (compositeScript != null && !compositeScript.isEmpty()) {
+            return executeScriptString(compositeScript, "重建、擦除并下载", "rebuild_erase_download");
+        }
+
+        // 检查单独脚本是否存在
+        String rebuildScript = getScriptFromSettings("script.rebuild");
+        String eraseScript = getScriptFromSettings("script.chip.erase");
+        String downloadScript = getScriptFromSettings("script.chip.download");
+
+        StringBuilder missingScripts = new StringBuilder();
+        if (rebuildScript == null || rebuildScript.isEmpty()) {
+            missingScripts.append("  - script.rebuild (重建脚本)\n");
+        }
+        if (eraseScript == null || eraseScript.isEmpty()) {
+            missingScripts.append("  - script.chip.erase (擦除脚本)\n");
+        }
+        if (downloadScript == null || downloadScript.isEmpty()) {
+            missingScripts.append("  - script.chip.download (下载脚本)\n");
+        }
+
+        if (missingScripts.length() > 0) {
+            return "✗ 错误：缺少必要的脚本配置\n\n" +
+                   "组合脚本 script.rebuild.erase.download 未配置，且以下单独脚本也未配置：\n" +
+                   missingScripts.toString() + "\n" +
+                   "请先使用相应的 dlqq_set_*_script 工具设置脚本\n" +
+                   "或使用 dlqq_set_rebuild_erase_download_script 设置组合脚本";
+        }
+
+        // 按顺序执行
+        StringBuilder result = new StringBuilder();
+        result.append("执行重建、擦除并下载（分步模式）\n");
+        result.append("===================\n\n");
+        result.append("【注意】组合脚本未配置，将按顺序执行重建→擦除→下载\n\n");
+
+        // 第一步：重建
+        result.append("【步骤1/3】重建项目\n");
+        result.append("--------------------------------------------------\n");
+        ScriptResult rebuildResult = executeScript(rebuildScript, "重建", "rebuild");
+        result.append(rebuildResult.output);
+        result.append("\n");
+
+        if (!rebuildResult.success) {
+            result.append("【终止】重建失败，跳过后续步骤\n");
+            result.append("===================\n");
+            result.append("✗ 重建、擦除并下载 执行失败（重建步骤失败）\n");
+            return result.toString();
+        }
+
+        // 第二步：擦除
+        result.append("【步骤2/3】擦除芯片\n");
+        result.append("--------------------------------------------------\n");
+        ScriptResult eraseResult = executeScript(eraseScript, "芯片擦除", "chip_erase");
+        result.append(eraseResult.output);
+        result.append("\n");
+
+        if (!eraseResult.success) {
+            result.append("【终止】擦除失败，跳过后续下载步骤\n");
+            result.append("===================\n");
+            result.append("✗ 重建、擦除并下载 执行失败（擦除步骤失败，但重建已成功）\n");
+            return result.toString();
+        }
+
+        // 第三步：下载
+        result.append("【步骤3/3】下载固件\n");
+        result.append("--------------------------------------------------\n");
+        ScriptResult downloadResult = executeScript(downloadScript, "芯片下载", "chip_download");
+        result.append(downloadResult.output);
+        result.append("\n");
+
+        // 总结
+        result.append("===================\n");
+        if (downloadResult.success) {
+            result.append("✓ 重建、擦除并下载 执行成功\n");
+        } else {
+            result.append("✗ 重建、擦除并下载 执行失败（下载步骤失败，但重建和擦除已成功）\n");
+        }
+
+        return result.toString();
+    }
+
+    // ==================== 运行和调试工具 ====================
+
+    /**
+     * 运行项目
+     * 执行settings.properties中script.run定义的脚本
+     * @return 执行结果
+     */
+    public static String runProject() {
+        String scriptPath = getScriptFromSettings("script.run");
+        return executeScriptString(scriptPath, "运行项目", "run");
+    }
+
+    /**
+     * 调试项目
+     * 执行settings.properties中script.debug定义的脚本
+     * @return 执行结果
+     */
+    public static String debugProject() {
+        String scriptPath = getScriptFromSettings("script.debug");
+        return executeScriptString(scriptPath, "调试项目", "debug");
+    }
+
+    /**
+     * 构建并运行项目
+     * 执行settings.properties中script.build.run定义的脚本
+     * @return 执行结果
+     */
+    public static String buildRunProject() {
+        String scriptPath = getScriptFromSettings("script.build.run");
+        return executeScriptString(scriptPath, "构建并运行", "build_run");
+    }
+
+    /**
+     * 构建并调试项目
+     * 执行settings.properties中script.build.debug定义的脚本
+     * @return 执行结果
+     */
+    public static String buildDebugProject() {
+        String scriptPath = getScriptFromSettings("script.build.debug");
+        return executeScriptString(scriptPath, "构建并调试", "build_debug");
+    }
+
+    /**
+     * 重建并运行项目
+     * 执行settings.properties中script.rebuild.run定义的脚本
+     * @return 执行结果
+     */
+    public static String rebuildRunProject() {
+        String scriptPath = getScriptFromSettings("script.rebuild.run");
+        return executeScriptString(scriptPath, "重建并运行", "rebuild_run");
+    }
+
+    /**
+     * 重建并调试项目
+     * 执行settings.properties中script.rebuild.debug定义的脚本
+     * @return 执行结果
+     */
+    public static String rebuildDebugProject() {
+        String scriptPath = getScriptFromSettings("script.rebuild.debug");
+        return executeScriptString(scriptPath, "重建并调试", "rebuild_debug");
+    }
+
+    // ==================== 组合脚本设置工具 ====================
+
+    /**
+     * 设置擦除下载组合脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setEraseDownloadScript(String scriptPath) {
+        return setScriptInSettings("script.erase.download", scriptPath, "擦除并下载");
+    }
+
+    /**
+     * 设置构建擦除下载组合脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setBuildEraseDownloadScript(String scriptPath) {
+        return setScriptInSettings("script.build.erase.download", scriptPath, "构建、擦除并下载");
+    }
+
+    /**
+     * 设置重建擦除下载组合脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setRebuildEraseDownloadScript(String scriptPath) {
+        return setScriptInSettings("script.rebuild.erase.download", scriptPath, "重建、擦除并下载");
+    }
+
+    // ==================== 运行调试设置工具 ====================
+
+    /**
+     * 设置运行项目脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setRunScript(String scriptPath) {
+        return setScriptInSettings("script.run", scriptPath, "运行项目");
+    }
+
+    /**
+     * 设置调试项目脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setDebugScript(String scriptPath) {
+        return setScriptInSettings("script.debug", scriptPath, "调试项目");
+    }
+
+    /**
+     * 设置构建运行组合脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setBuildRunScript(String scriptPath) {
+        return setScriptInSettings("script.build.run", scriptPath, "构建并运行");
+    }
+
+    /**
+     * 设置构建调试组合脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setBuildDebugScript(String scriptPath) {
+        return setScriptInSettings("script.build.debug", scriptPath, "构建并调试");
+    }
+
+    /**
+     * 设置重建运行组合脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setRebuildRunScript(String scriptPath) {
+        return setScriptInSettings("script.rebuild.run", scriptPath, "重建并运行");
+    }
+
+    /**
+     * 设置重建调试组合脚本路径
+     * @param scriptPath 脚本路径
+     * @return 设置结果
+     */
+    public static String setRebuildDebugScript(String scriptPath) {
+        return setScriptInSettings("script.rebuild.debug", scriptPath, "重建并调试");
+    }
+
+    /**
+     * 设置最大回复文本大小
+     * @param maxSize 最大字节数（必须为正整数，建议范围：1024-102400）
+     * @return 设置结果
+     */
+    public static String setResponseMaxSize(String maxSize) {
+        if (maxSize == null || maxSize.isEmpty()) {
+            return "✗ 错误：max_size 参数不能为空";
+        }
+
+        int size;
+        try {
+            size = Integer.parseInt(maxSize.trim());
+            if (size <= 0) {
+                return "✗ 错误：max_size 必须是正整数";
+            }
+            if (size < 1024) {
+                return "✗ 错误：max_size 不能小于1024字节（1KB），建议范围：1024-102400";
+            }
+            if (size > 102400) {
+                return "✗ 警告：max_size 超过102400字节（100KB）可能导致传输问题，请谨慎使用";
+            }
+        } catch (NumberFormatException e) {
+            return "✗ 错误：max_size 必须是有效的整数";
+        }
+
+        String result = setScriptInSettings("response.max.size", String.valueOf(size), "最大回复文本大小");
+
+        // 添加使用说明
+        if (result.startsWith("✓")) {
+            result = result + "\n提示：新的限制将在下次文件操作时生效\n";
+        }
+
+        return result;
     }
 }

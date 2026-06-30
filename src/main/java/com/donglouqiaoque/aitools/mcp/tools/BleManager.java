@@ -417,25 +417,25 @@ public class BleManager {
     }
 
     /**
-     * 从JAR提取Python脚本到.dlqq/python目录
-     * 如果.dlqq/python目录中已有脚本，优先使用已存在的脚本
+     * 从JAR提取Python脚本到.dlqq/script/python目录
+     * 如果.dlqq/script/python目录中已有脚本，优先使用已存在的脚本
      */
     private File extractPythonScript() {
         try {
             // 获取工作目录
             Path workDir = Paths.get(System.getProperty("user.dir"));
 
-            // 优先使用 .dlqq/python 目录
-            Path dlqqPythonDir = workDir.resolve(".dlqq").resolve("python");
+            // 优先使用 .dlqq/script/python 目录
+            Path dlqqPythonDir = workDir.resolve(".dlqq").resolve("script").resolve("python");
             File scriptFile = dlqqPythonDir.resolve("ble_service.py").toFile();
 
-            // 检查 .dlqq/python/ble_service.py 是否已存在
+            // 检查 .dlqq/script/python/ble_service.py 是否已存在
             if (Files.exists(scriptFile.toPath())) {
                 System.err.println(getInstanceId() + " 使用已存在的Python脚本: " + scriptFile.getAbsolutePath());
                 return scriptFile;
             }
 
-            // 不存在则提取到 .dlqq/python 目录
+            // 不存在则提取到 .dlqq/script/python 目录
             Path pythonDir = dlqqPythonDir;
 
             // 确保目录存在

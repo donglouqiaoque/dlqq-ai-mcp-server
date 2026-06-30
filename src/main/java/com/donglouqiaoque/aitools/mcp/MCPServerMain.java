@@ -36,6 +36,39 @@ public class MCPServerMain {
                 stderrDir.mkdirs();
             }
 
+            // 创建 settings 目录
+            java.io.File settingsDir = new java.io.File(logDir.getParentFile(), "settings");
+            if (!settingsDir.exists()) {
+                settingsDir.mkdirs();
+            }
+
+            // 创建默认的 settings.properties 文件
+            java.io.File settingsFile = new java.io.File(settingsDir, "settings.properties");
+            if (!settingsFile.exists()) {
+                try (java.io.FileWriter writer = new java.io.FileWriter(settingsFile)) {
+                    writer.write("# MCP Server Settings\n");
+                    writer.write("# ==================\n\n");
+                    writer.write("# Response size limits (bytes)\n");
+                    writer.write("response.max.size=32768\n\n");
+                    writer.write("# Project build scripts\n");
+                    writer.write("# Scripts for build/rebuild/erase/download/run/debug operations\n");
+                    writer.write("# 脚本路径为空表示未配置，执行时会提示需要先设置\n");
+                    writer.write("script.build=\n");
+                    writer.write("script.rebuild=\n");
+                    writer.write("script.chip.erase=\n");
+                    writer.write("script.chip.download=\n");
+                    writer.write("script.erase.download=\n");
+                    writer.write("script.build.erase.download=\n");
+                    writer.write("script.rebuild.erase.download=\n");
+                    writer.write("script.run=\n");
+                    writer.write("script.debug=\n");
+                    writer.write("script.build.run=\n");
+                    writer.write("script.build.debug=\n");
+                    writer.write("script.rebuild.run=\n");
+                    writer.write("script.rebuild.debug=\n");
+                }
+            }
+
             // 创建 .dlqq/.gitignore 文件，忽略该目录下的所有内容
             java.io.File gitignoreFile = new java.io.File(logDir.getParentFile(), ".gitignore");
             if (!gitignoreFile.exists()) {

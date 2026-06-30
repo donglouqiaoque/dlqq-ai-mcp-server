@@ -1,6 +1,6 @@
 # 鸫楼桥鹊 AI 工具 MCP 服务器
 
-一个功能丰富的 Java MCP 服务器，提供文件操作、目录管理、二进制文件处理、搜索、GUI对话框和串口通信等41个工具。
+一个功能丰富的 Java MCP 服务器，提供文件操作、目录管理、二进制文件处理、搜索、GUI对话框、串口通信和项目脚本执行等89个工具。
 
 ---
 
@@ -14,6 +14,7 @@
 | 搜索工具 | 2 | 文件搜索、目录搜索（支持正则） |
 | 对话框工具 | 3 | 文本输入、确认对话框、文件选择 |
 | 串口工具 | 15 | CH340串口通信、数据收发、缓冲区管理、显示格式切换 |
+| 项目脚本 | 27 | 构建、重建、擦除、下载、运行、调试等组合脚本执行与配置 |
 
 ---
 
@@ -624,6 +625,191 @@
 
 ---
 
+### 七、项目脚本工具（27个）
+
+项目脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本。脚本路径默认空，首次使用前需通过 `dlqq_set_*_script` 工具设置。
+
+#### 42. `dlqq_build_project` - 构建项目
+
+执行 settings.properties 中 `script.build` 配置的脚本。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_build_script` 设置脚本路径
+
+---
+
+#### 43. `dlqq_rebuild_project` - 重建项目
+
+执行 settings.properties 中 `script.rebuild` 配置的脚本。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_rebuild_script` 设置脚本路径
+
+---
+
+#### 44. `dlqq_chip_erase` - 擦除芯片
+
+执行 settings.properties 中 `script.chip.erase` 配置的脚本。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_chip_erase_script` 设置脚本路径
+
+---
+
+#### 45. `dlqq_chip_download` - 下载固件到芯片
+
+执行 settings.properties 中 `script.chip.download` 配置的脚本。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_chip_download_script` 设置脚本路径
+
+---
+
+#### 46. `dlqq_erase_download` - 擦除并下载
+
+执行 settings.properties 中 `script.erase.download` 配置的脚本（组合操作）。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_erase_download_script` 设置脚本路径
+
+---
+
+#### 47. `dlqq_build_erase_download` - 构建、擦除并下载
+
+执行 settings.properties 中 `script.build.erase.download` 配置的脚本（组合操作）。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_build_erase_download_script` 设置脚本路径
+
+---
+
+#### 48. `dlqq_rebuild_erase_download` - 重建、擦除并下载
+
+执行 settings.properties 中 `script.rebuild.erase.download` 配置的脚本（组合操作）。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_rebuild_erase_download_script` 设置脚本路径
+
+---
+
+#### 49. `dlqq_run_project` - 运行项目
+
+执行 settings.properties 中 `script.run` 配置的脚本。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_run_script` 设置脚本路径
+
+---
+
+#### 50. `dlqq_debug_project` - 调试项目
+
+执行 settings.properties 中 `script.debug` 配置的脚本。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_debug_script` 设置脚本路径
+
+---
+
+#### 51. `dlqq_build_run_project` - 构建并运行
+
+执行 settings.properties 中 `script.build.run` 配置的脚本（组合操作）。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_build_run_script` 设置脚本路径
+
+---
+
+#### 52. `dlqq_build_debug_project` - 构建并调试
+
+执行 settings.properties 中 `script.build.debug` 配置的脚本（组合操作）。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_build_debug_script` 设置脚本路径
+
+---
+
+#### 53. `dlqq_rebuild_run_project` - 重建并运行
+
+执行 settings.properties 中 `script.rebuild.run` 配置的脚本（组合操作）。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_rebuild_run_script` 设置脚本路径
+
+---
+
+#### 54. `dlqq_rebuild_debug_project` - 重建并调试
+
+执行 settings.properties 中 `script.rebuild.debug` 配置的脚本（组合操作）。
+
+**参数**：无
+
+**使用前提**：需先使用 `dlqq_set_rebuild_debug_script` 设置脚本路径
+
+---
+
+#### 55-68. `dlqq_set_*_script` - 设置脚本路径工具
+
+设置各类脚本的路径，保存到 settings.properties 文件中。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `script_path` | string | ✓ | 脚本文件路径 |
+
+**设置工具列表**：
+- `dlqq_set_build_script` - 设置 script.build
+- `dlqq_set_rebuild_script` - 设置 script.rebuild
+- `dlqq_set_chip_erase_script` - 设置 script.chip.erase
+- `dlqq_set_chip_download_script` - 设置 script.chip.download
+- `dlqq_set_erase_download_script` - 设置 script.erase.download
+- `dlqq_set_build_erase_download_script` - 设置 script.build.erase.download
+- `dlqq_set_rebuild_erase_download_script` - 设置 script.rebuild.erase.download
+- `dlqq_set_run_script` - 设置 script.run
+- `dlqq_set_debug_script` - 设置 script.debug
+- `dlqq_set_build_run_script` - 设置 script.build.run
+- `dlqq_set_build_debug_script` - 设置 script.build.debug
+- `dlqq_set_rebuild_run_script` - 设置 script.rebuild.run
+- `dlqq_set_rebuild_debug_script` - 设置 script.rebuild.debug
+
+**示例**：
+```json
+{
+  "script_path": "util/build/build.bat"
+}
+```
+
+---
+
+#### 69. `dlqq_set_response_max_size` - 设置最大回复文本大小
+
+设置文件操作返回内容的最大字节数（默认32KB）。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `max_size` | string | ✓ | 最大字节数（建议1024-102400） |
+
+**示例**：
+```json
+{
+  "max_size": "65536"
+}
+```
+
+---
+
 ## 使用示例
 
 ### 文件操作
@@ -673,6 +859,21 @@
 退出串口工具
 ```
 
+### 项目脚本操作
+
+```
+设置构建脚本路径为 util/build/build.bat
+构建项目
+擦除芯片并下载固件
+运行项目
+
+设置运行脚本路径为 scripts/run.bat
+运行项目
+
+设置调试脚本路径为 scripts/debug.bat
+调试项目
+```
+
 ---
 
 ## 技术信息
@@ -696,12 +897,16 @@ donglouqiaoque-ai-tools/
 │   │   │   ├── AITools.java        # 工具注册
 │   │   │   ├── FileTools.java      # 文件操作实现
 │   │   │   ├── DialogTools.java    # 对话框实现
-│   │   │   └── UartTools.java      # 串口工具实现
+│   │   │   ├── UartTools.java      # 串口工具实现
+│   │   │   ├── BleTools.java       # BLE蓝牙工具实现
+│   │   │   └── McpTools.java       # 项目脚本和数据管理工具实现
 │   │   └── server/
 │   │       └── McpServer.java      # MCP服务器核心
 │   └── utils/
 │       └── FileUtils.java          # 文件工具类
 ├── debug/V255.0.0/
+│   └── donglouqiaoque_ai_tools.jar # 可执行JAR
+├── release/V1.0.0/
 │   └── donglouqiaoque_ai_tools.jar # 可执行JAR
 └── pom.xml                          # Maven配置
 ```
@@ -710,7 +915,20 @@ donglouqiaoque-ai-tools/
 
 ## 版本更新日志
 
-### V255.0.0 (2026-06-25)
+### V255.0.0 (2026-06-30)
+- **新增**: 项目脚本工具（27个）
+  - 执行类工具13个：构建、重建、擦除、下载、运行、调试及组合操作
+  - 设置类工具13个：设置各类脚本路径
+  - 配置类工具1个：设置最大回复文本大小
+  - 脚本路径配置在 `.dlqq/settings/settings.properties` 中
+  - 默认脚本路径为空，首次执行会提示需要设置
+- **新增**: 响应大小配置 `dlqq_set_response_max_size`
+  - 可动态设置文件操作返回内容的最大字节数
+  - 默认32KB，建议范围1024-102400字节
+- **新增**: `.dlqq` 目录结构调整
+  - Python脚本移至 `.dlqq/script/python/`
+  - 新增配置目录 `.dlqq/settings/`
+  - 配置文件 `settings.properties` 自动创建
 - **新增**: MCP服务器连接诊断日志增强
   - 在 `StdioTransport` 中增加传输层启动、读取循环、消息处理的详细日志
   - 在 `McpServer` 中增加消息处理、初始化流程的详细日志

@@ -100,3 +100,49 @@ use_debug=false
 **说明**：
 - `dlqq_clear_data`：删除整个 .dlqq 目录及其所有内容。即使部分文件被占用（如日志文件正在被MCP服务器写入），也会返回成功结果，并告知哪些文件被占用。这是正常现象，被占用的文件将在MCP服务器重启后可以被清除。
 - `dlqq_clear_cache`：仅清除 .dlqq/log 目录下的日志文件，保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。
+
+### 项目脚本工具
+
+脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本。首次使用前需通过 `dlqq_set_*_script` 工具设置脚本路径。
+
+#### 执行类工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_build_project` | 构建项目 |
+| `dlqq_rebuild_project` | 重建项目 |
+| `dlqq_chip_erase` | 擦除芯片 |
+| `dlqq_chip_download` | 下载固件到芯片 |
+| `dlqq_erase_download` | 擦除并下载 |
+| `dlqq_build_erase_download` | 构建、擦除并下载 |
+| `dlqq_rebuild_erase_download` | 重建、擦除并下载 |
+| `dlqq_run_project` | 运行项目 |
+| `dlqq_debug_project` | 调试项目 |
+| `dlqq_build_run_project` | 构建并运行 |
+| `dlqq_build_debug_project` | 构建并调试 |
+| `dlqq_rebuild_run_project` | 重建并运行 |
+| `dlqq_rebuild_debug_project` | 重建并调试 |
+
+#### 设置类工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_set_build_script` | 设置构建脚本路径 |
+| `dlqq_set_rebuild_script` | 设置重建脚本路径 |
+| `dlqq_set_chip_erase_script` | 设置芯片擦除脚本路径 |
+| `dlqq_set_chip_download_script` | 设置芯片下载脚本路径 |
+| `dlqq_set_erase_download_script` | 设置擦除下载脚本路径 |
+| `dlqq_set_build_erase_download_script` | 设置构建擦除下载脚本路径 |
+| `dlqq_set_rebuild_erase_download_script` | 设置重建擦除下载脚本路径 |
+| `dlqq_set_run_script` | 设置运行脚本路径 |
+| `dlqq_set_debug_script` | 设置调试脚本路径 |
+| `dlqq_set_build_run_script` | 设置构建运行脚本路径 |
+| `dlqq_set_build_debug_script` | 设置构建调试脚本路径 |
+| `dlqq_set_rebuild_run_script` | 设置重建运行脚本路径 |
+| `dlqq_set_rebuild_debug_script` | 设置重建调试脚本路径 |
+| `dlqq_set_response_max_size` | 设置最大回复文本大小（默认32KB） |
+
+**说明**：
+- 所有脚本路径默认空，首次执行会提示需要先使用 `dlqq_set_*_script` 工具设置
+- 脚本配置保存在 `.dlqq/settings/settings.properties` 文件中
+- `response.max.size` 控制文件操作返回内容的最大字节数（默认32768）

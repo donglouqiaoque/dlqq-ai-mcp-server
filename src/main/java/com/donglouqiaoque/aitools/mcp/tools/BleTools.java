@@ -281,7 +281,7 @@ public class BleTools {
     private String releasePythonScript() {
         try {
             String projectDir = System.getProperty("user.dir");
-            String pythonDir = projectDir + File.separator + ".dlqq" + File.separator + "python";
+            String pythonDir = projectDir + File.separator + ".dlqq" + File.separator + "script" + File.separator + "python";
             File dir = new File(pythonDir);
             if (!dir.exists()) {
                 dir.mkdirs();
