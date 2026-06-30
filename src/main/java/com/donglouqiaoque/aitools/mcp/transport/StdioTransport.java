@@ -210,14 +210,15 @@ public class StdioTransport implements McpTransport {
 
         // 检查是否是直接发送的JSON（以{开头）
         if (firstLine.startsWith("{")) {
-            debug("readMessage: 检测到直接JSON消息（无Content-Length），切换到纯JSON模式");
+            debug("readMessage: 检测到直接JSON消息（无Content-Length），尝试读取完整JSON");
             useContentLength = false;  // 客户端不使用Content-Length，服务器也不使用
-            return firstLine;
+            // 尝试读取完整JSON（处理字符串值中包含换行符的情况）
+            return readCompleteJson(firstLine);
         }
 
         // 标准MCP模式：解析Content-Length头部
         int contentLength = -1;
-        
+
         // 第一行可能是Content-Length头
         if (firstLine.toLowerCase().startsWith("content-length:")) {
             try {
@@ -289,6 +290,105 @@ public class StdioTransport implements McpTransport {
     }
 
     /**
+     * 读取完整JSON消息（处理字符串值中包含换行符的情况）
+     */
+    private String readCompleteJson(String firstLine) throws IOException {
+        StringBuilder jsonBuilder = new StringBuilder(firstLine);
+        int braceCount = countBraces(firstLine);
+
+        debug("readCompleteJson: 初始大括号计数=" + braceCount);
+
+        // 如果第一行JSON已经完整，直接返回
+        if (braceCount == 0 && firstLine.trim().endsWith("}")) {
+            debug("readCompleteJson: JSON已完整");
+            return firstLine;
+        }
+
+        // 继续读取直到JSON完整（大括号平衡）
+        int timeout = 100; // 最大读取行数，防止无限循环
+        int linesRead = 1;
+
+        while (braceCount > 0 && timeout-- > 0) {
+            // 读取下一行
+            ByteArrayOutputStream lineBuffer = new ByteArrayOutputStream();
+            int b;
+            while (true) {
+                b = inputStream.read();
+                if (b == -1) {
+                    debug("readCompleteJson: EOF，已读取 " + linesRead + " 行");
+                    break;
+                }
+                if (b == '\n') break;
+                if (b != '\r') lineBuffer.write(b);
+            }
+
+            if (b == -1) break;
+
+            String line = new String(lineBuffer.toByteArray(), StandardCharsets.UTF_8);
+            jsonBuilder.append('\n').append(line);
+            linesRead++;
+
+            braceCount += countBraces(line);
+            debug("readCompleteJson: 读取第 " + linesRead + " 行，当前大括号计数=" + braceCount);
+
+            // 尝试验证JSON是否完整
+            if (braceCount == 0) {
+                String candidate = jsonBuilder.toString().trim();
+                if (candidate.endsWith("}")) {
+                    try {
+                        // 尝试解析验证
+                        gson.fromJson(candidate, Object.class);
+                        debug("readCompleteJson: JSON验证成功，总长度=" + candidate.length());
+                        return candidate;
+                    } catch (Exception e) {
+                        // JSON仍不合法，继续读取
+                        debug("readCompleteJson: JSON验证失败，继续读取: " + e.getMessage());
+                    }
+                }
+            }
+        }
+
+        debug("readCompleteJson: 返回已读取内容（可能不完整），共 " + linesRead + " 行");
+        return jsonBuilder.toString().trim();
+    }
+
+    /**
+     * 计算字符串中的大括号平衡值
+     * { 返回 +1, } 返回 -1
+     */
+    private int countBraces(String str) {
+        int count = 0;
+        boolean inString = false;
+        boolean escape = false;
+
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+
+            if (escape) {
+                escape = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                escape = true;
+                continue;
+            }
+
+            if (c == '"') {
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString) {
+                if (c == '{') count++;
+                else if (c == '}') count--;
+            }
+        }
+
+        return count;
+    }
+
+    /**
      * 处理循环
      */
     private void processLoop() {
@@ -326,6 +426,85 @@ public class StdioTransport implements McpTransport {
     }
 
     /**
+     * 预处理JSON消息，将字符串值内的真实换行符转为\\n转义
+     * 用于兼容AI直接传入换行符而不是\\n的情况
+     */
+    private String preprocessJsonNewlines(String json) {
+        if (json == null || json.isEmpty()) {
+            return json;
+        }
+
+        // 如果JSON中不包含真实换行符，直接返回
+        if (!json.contains("\n") && !json.contains("\r")) {
+            return json;
+        }
+
+        // 如果JSON已经合法（可以正常解析），不需要处理
+        try {
+            gson.fromJson(json, Object.class);
+            return json; // JSON合法，直接返回
+        } catch (Exception e) {
+            // JSON不合法，需要尝试修复
+            debug("preprocessJsonNewlines: JSON解析失败，尝试修复换行符: " + e.getMessage());
+        }
+
+        // 逐字符处理，只替换字符串值内的换行符
+        StringBuilder result = new StringBuilder();
+        boolean inString = false;
+        boolean escape = false;
+
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+
+            if (escape) {
+                // 当前字符被转义，直接添加
+                result.append(c);
+                escape = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                // 转义字符开始
+                result.append(c);
+                escape = true;
+                continue;
+            }
+
+            if (c == '"') {
+                // 字符串边界
+                inString = !inString;
+                result.append(c);
+                continue;
+            }
+
+            if (inString) {
+                // 在字符串值内，替换换行符
+                if (c == '\r') {
+                    // 检查是否是\r\n组合
+                    if (i + 1 < json.length() && json.charAt(i + 1) == '\n') {
+                        // \\r\\n -> \\n
+                        result.append('\\').append('n');
+                        i++; // 跳过下一个\n
+                    } else {
+                        // \\r -> \\n
+                        result.append('\\').append('n');
+                    }
+                } else if (c == '\n') {
+                    // \\n -> \\n
+                    result.append('\\').append('n');
+                } else {
+                    result.append(c);
+                }
+            } else {
+                // 在JSON结构外（非字符串值），保留原样
+                result.append(c);
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
      * 处理消息
      */
     private void processMessage(String message) {
@@ -334,8 +513,15 @@ public class StdioTransport implements McpTransport {
         long startTime = System.currentTimeMillis();
 
         try {
+            // 预处理：修复AI直接传入的真实换行符（将字符串值内的\n和\r\n转为\\n转义）
+            String preprocessedMessage = preprocessJsonNewlines(message);
+            if (!preprocessedMessage.equals(message)) {
+                logger.info("[StdioTransport.processMessage] 已预处理换行符，原始长度={},预处理后长度={}", 
+                    message.length(), preprocessedMessage.length());
+            }
+
             // 简化版JSON解析
-            JsonRpcMessage.Request request = parseRequest(message);
+            JsonRpcMessage.Request request = parseRequest(preprocessedMessage);
             if (request == null) {
                 logger.error("[StdioTransport.processMessage] 消息解析返回null");
                 sendErrorResponse(null, JsonRpcMessage.ERROR_PARSE_ERROR, "Failed to parse request");
