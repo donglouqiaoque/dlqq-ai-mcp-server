@@ -172,7 +172,7 @@ public class MCPServerMain {
             version = "255.0.0";
         }
         server = new McpServer(
-            "donglouqiaoque-ai-tools",
+            "dlqq-ai-tools",
             version,
             transport
         );
@@ -187,7 +187,7 @@ public class MCPServerMain {
         server.start();
         logger.info("========================================");
         logger.info("MCP Server started successfully!");
-        logger.info("Server name: donglouqiaoque-ai-tools");
+        logger.info("Server name: dlqq-ai-tools");
         logger.info("Server version: {}", version);
         logger.info("Waiting for requests...");
         logger.info("========================================");

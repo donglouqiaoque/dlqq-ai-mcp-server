@@ -10,7 +10,7 @@
     <version>${revision}</version>
     <packaging>jar</packaging>
 
-    <name>donglouqiaoque-ai-tools</name>
+    <name>dlqq-ai-tools</name>
     <description>AI工具集 - 提供MCP服务和AI对话功能</description>
 
     <properties>
@@ -93,6 +93,7 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.3.0</version>
                 <configuration>
+                    <finalName>dlqq_ai_tools</finalName>
                     <archive>
                         <manifest>
                             <mainClass>com.donglouqiaoque.aitools.mcp.MCPServerMain</mainClass>
@@ -113,13 +114,14 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <finalName>dlqq_ai_tools</finalName>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.donglouqiaoque.aitools.mcp.MCPServerMain</mainClass>
                                     <manifestEntries>
                                         <Implementation-Version>${revision}</Implementation-Version>
-                                        <Implementation-Title>donglouqiaoque-ai-tools</Implementation-Title>
+                                        <Implementation-Title>dlqq-ai-tools</Implementation-Title>
                                         <Implementation-Vendor>com.donglouqiaoque</Implementation-Vendor>
                                         <Build-Time>${maven.build.timestamp}</Build-Time>
                                     </manifestEntries>

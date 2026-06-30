@@ -1,4 +1,4 @@
-# 鸫楼桥鹊AI工具 (donglouqiaoque-ai-tools)
+# 鸫楼桥鹊AI工具 (dlqq-ai-tools)
 
 一个Java编写的AI工具集，支持MCP（Model Context Protocol）协议，专为Qwen Code集成使用。
 
@@ -15,26 +15,28 @@
 
 ## 工具列表
 
-本MCP服务器提供89个核心工具：
+本MCP服务器提供95个核心工具：
 
-### 文件操作工具 (1-12)
+### 文件操作工具 (1-14)
 
 | 工具名称 | 描述 |
 |---------|------|
 | `dlqq_read_file` | 读取文件指定行范围的内容（支持字符集） |
 | `dlqq_create_file` | 创建新文件（支持空文件或带内容，支持字符集） |
 | `dlqq_overwrite_file` | 覆盖文件内容（不管是否存在都直接写入，支持字符集） |
+| `dlqq_clear_file` | 清空文件内容（保留文件本身） |
 | `dlqq_append_file` | 在文件末尾追加内容（支持字符集） |
 | `dlqq_remove_lines_in_file` | 删除文件指定行范围的内容（支持字符集） |
 | `dlqq_replace_lines_in_file` | 替换文件指定行范围的内容（支持字符集） |
 | `dlqq_insert_text_in_file` | 在文件指定行插入内容（支持字符集） |
 | `dlqq_replace_text_in_file` | 替换文件中的文本（支持正则，支持字符集） |
+| `dlqq_remove_text_in_file` | 删除文件中匹配的文本（支持正则，相当于替换为空） |
 | `dlqq_delete_file` | 删除文件（带确认对话框） |
 | `dlqq_copy_file` | 复制文件 |
 | `dlqq_move_file` | 移动文件 |
 | `dlqq_rename_file` | 重命名文件（同目录下修改文件名） |
 
-### 目录操作工具 (13-18)
+### 目录操作工具 (15-22)
 
 | 工具名称 | 描述 |
 |---------|------|
@@ -44,22 +46,24 @@
 | `dlqq_copy_dir` | 复制文件夹（递归复制） |
 | `dlqq_move_dir` | 移动文件夹 |
 | `dlqq_rename_dir` | 重命名文件夹（同目录下修改文件夹名） |
+| `dlqq_list_dir_tree` | 列出文件夹完整目录结构（递归显示子目录和文件） |
+| `dlqq_list_dir_files` | 列出文件夹下的文件和子文件夹（只列出一层） |
 
-### 二进制文件操作工具 (19-20)
+### 二进制文件操作工具 (23-24)
 
 | 工具名称 | 描述 |
 |---------|------|
 | `dlqq_read_bin_file` | 读取二进制文件，返回十六进制文本 |
 | `dlqq_write_bin_file` | 将十六进制文本写入为二进制文件 |
 
-### 搜索工具 (21-22)
+### 搜索工具 (25-26)
 
 | 工具名称 | 描述 |
 |---------|------|
 | `dlqq_search_file` | 搜索文件，支持部分匹配和正则表达式 |
 | `dlqq_search_dir` | 搜索文件夹，支持部分匹配和正则表达式 |
 
-### 对话框工具 (23-25)
+### 对话框工具 (27-29)
 
 | 工具名称 | 描述 |
 |---------|------|
@@ -67,7 +71,7 @@
 | `dlqq_dialog_check` | 确认对话框，用户选择是/否（独立窗口） |
 | `dlqq_dialog_file_path` | 文件选择对话框（独立窗口） |
 
-### 串口工具 (26-41)
+### 串口工具 (30-45)
 
 | 工具名称 | 描述 |
 |---------|------|
@@ -88,7 +92,16 @@
 | `dlqq_uart_switch_text_hex` | 切换日志显示格式（文本/HEX） |
 | `dlqq_exit_uart` | 退出串口工具（关闭窗口及进程） |
 
-### BLE蓝牙工具 (42-57)
+### BLE库管理工具 (46-49)
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_ble_lib_has` | 检查Python BLE库（bleak）是否已安装 |
+| `dlqq_ble_lib_install` | 自动安装Python BLE依赖库（bleak） |
+| `dlqq_ble_lib_update` | 检查并更新Python BLE库到最新版本 |
+| `dlqq_ble_release_script` | 释放BLE Python脚本到项目目录 |
+
+### BLE蓝牙工具 (50-67)
 
 | 工具名称 | 描述 |
 |---------|------|
@@ -111,14 +124,21 @@
 | `dlqq_ble_switch_text_hex` | 切换日志显示格式（文本/HEX） |
 | `dlqq_exit_ble` | 退出BLE工具（关闭窗口及进程） |
 
-### 数据管理工具 (58-59)
+### 系统信息工具 (68-69)
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_get_mcp_version` | 获取MCP服务器版本信息、JAR文件修改时间和构建信息 |
+| `dlqq_check_bluetooth_open` | 检查Windows电脑的蓝牙适配器是否已开启 |
+
+### 数据管理工具 (70-71)
 
 | 工具名称 | 描述 |
 |---------|------|
 | `dlqq_clear_data` | 清除.dlqq数据目录（包括日志、Python脚本等），即使部分文件被占用也会返回成功 |
 | `dlqq_clear_cache` | 清除日志缓存文件（仅删除.dlqq/log下的日志），即使部分文件被占用也会返回成功 |
 
-### 项目脚本工具 (60-89)
+### 项目脚本工具 (72-98)
 
 脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本，用于自动化项目构建、芯片操作等流程。
 
@@ -218,11 +238,11 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 ```json
 {
   "mcpServers": {
-    "donglouqiaoque-ai-tools": {
+    "dlqq-ai-tools": {
       "command": "java",
       "args": [
         "-jar",
-        "A:\\MyProject\\Java\\donglouqiaoque_ai_tools\\release\\V1.0.0\\donglouqiaoque_ai_tools.jar"
+        "A:\\MyProject\\Java\\donglouqiaoque_ai_tools\\release\\V1.0.0\\dlqq_ai_tools.jar"
       ],
       "env": {
         "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"

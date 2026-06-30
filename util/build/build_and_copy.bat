@@ -27,7 +27,7 @@ if /i "%USE_DEBUG%"=="true" (
 )
 
 set "BUILD_DIR=%OUTPUT_BASE%\V%VERSION%"
-set "JAR_NAME=aitools-%VERSION%.jar"
+set "JAR_NAME=dlqq_ai_tools.jar"
 
 echo [INFO] Build mode: %BUILD_TYPE%
 echo [INFO] Version: %VERSION%
@@ -58,12 +58,12 @@ if not exist "%BUILD_DIR%" (
 
 REM Copy JAR
 echo [INFO] Copying JAR...
-copy /Y "target\%JAR_NAME%" "%BUILD_DIR%\donglouqiaoque_ai_tools.jar" >nul
+copy /Y "target\%JAR_NAME%" "%BUILD_DIR%\dlqq_ai_tools.jar" >nul
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] JAR copy failed!
     exit /b 1
 )
-echo [INFO] JAR: %BUILD_DIR%\donglouqiaoque_ai_tools.jar
+echo [INFO] JAR: %BUILD_DIR%\dlqq_ai_tools.jar
 
 echo.
 echo [INFO] ========================================

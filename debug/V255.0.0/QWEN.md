@@ -1,6 +1,6 @@
 # 鸫楼桥鹊 AI 工具 MCP 服务器
 
-一个功能丰富的 Java MCP 服务器，提供文件操作、目录管理、二进制文件处理、搜索、GUI对话框、串口通信和项目脚本执行等89个工具。
+一个功能丰富的 Java MCP 服务器，提供文件操作、目录管理、二进制文件处理、搜索、GUI对话框、串口通信、BLE蓝牙和项目脚本执行等95个工具。
 
 ---
 
@@ -8,13 +8,17 @@
 
 | 类别 | 工具数量 | 说明 |
 |------|----------|------|
-| 文件操作 | 12 | 读取、创建、覆盖、追加、删除、复制、移动、重命名、行编辑等 |
-| 目录操作 | 6 | 创建、删除、复制、移动、重命名文件夹 |
+| 文件操作 | 14 | 读取、创建、覆盖、清空、追加、删除、复制、移动、重命名、行编辑等 |
+| 目录操作 | 8 | 创建、删除、复制、移动、重命名、列出文件夹 |
 | 二进制文件 | 2 | 读取二进制为十六进制、将十六进制写入二进制 |
 | 搜索工具 | 2 | 文件搜索、目录搜索（支持正则） |
 | 对话框工具 | 3 | 文本输入、确认对话框、文件选择 |
-| 串口工具 | 15 | CH340串口通信、数据收发、缓冲区管理、显示格式切换 |
-| 项目脚本 | 27 | 构建、重建、擦除、下载、运行、调试等组合脚本执行与配置 |
+| 串口工具 | 16 | CH340串口通信、数据收发、缓冲区管理、显示格式切换 |
+| BLE库管理 | 4 | Python BLE库安装、更新、状态检查 |
+| BLE蓝牙 | 18 | BLE设备扫描、连接、数据读写、通知订阅 |
+| 系统信息 | 2 | 版本信息获取、蓝牙状态检查 |
+| 数据管理 | 2 | 清除.dlqq数据目录和日志缓存 |
+| 项目脚本 | 32 | 构建、重建、擦除、下载、运行、调试等组合脚本执行与配置 |
 
 ---
 
@@ -25,11 +29,11 @@
 ```json
 {
   "mcpServers": {
-    "donglouqiaoque-ai-tools": {
+    "dlqq-ai-tools": {
       "command": "java",
       "args": [
         "-jar",
-        "A:\\MyProject\\Java\\donglouqiaoque_ai_tools\\debug\\V255.0.0\\donglouqiaoque_ai_tools.jar"
+        "A:\\MyProject\\Java\\donglouqiaoque_ai_tools\\debug\\V255.0.0\\dlqq_ai_tools.jar"
       ],
       "env": {
         "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"
@@ -67,7 +71,7 @@
 
 ## 工具详细说明
 
-### 一、文件操作工具（12个）
+### 一、文件操作工具（14个）
 
 #### 1. `dlqq_read_file` - 读取文件
 
@@ -246,7 +250,7 @@
 
 ---
 
-### 二、目录操作工具（6个）
+### 二、目录操作工具（8个）
 
 #### 13. `dlqq_mdir` - 创建文件夹
 
@@ -425,7 +429,7 @@
 
 ---
 
-### 六、串口工具（15个）
+### 六、串口工具（16个）
 
 串口工具支持多实例管理，每个实例通过**端口号**区分。
 
@@ -625,11 +629,260 @@
 
 ---
 
-### 七、项目脚本工具（27个）
+### 七、BLE库管理工具（4个）
+
+#### 42. `dlqq_ble_lib_has` - 检查BLE库安装状态
+
+检查Python BLE库（bleak）是否已安装，返回Python版本和各库的安装状态及版本信息。
+
+**参数**：无
+
+---
+
+#### 43. `dlqq_ble_lib_install` - 安装BLE库
+
+自动安装Python BLE依赖库（bleak）。需要先确保Python 3.8+已安装且python命令可用。
+
+**参数**：无
+
+---
+
+#### 44. `dlqq_ble_lib_update` - 更新BLE库
+
+检查Python BLE库是否有新版本可用，如果有更新会弹出对话框让用户选择是否立即更新。
+
+**参数**：无
+
+---
+
+#### 45. `dlqq_ble_release_script` - 释放BLE脚本
+
+释放BLE Python脚本到项目目录下的.dlqq/script/python文件夹中。
+
+**参数**：无
+
+---
+
+### 八、BLE蓝牙工具（18个）
+
+BLE蓝牙工具支持多实例管理，每个实例通过**端口号**区分。
+
+#### 46. `dlqq_run_ble` - 启动BLE工具
+
+打开BLE蓝牙工具，指定Python服务端口号。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `port` | string | ✓ | 服务器端口号（1~65535） |
+
+---
+
+#### 47. `dlqq_ble_scan` - 扫描BLE设备
+
+扫描周围的BLE蓝牙设备。
+
+**参数**：无
+
+---
+
+#### 48. `dlqq_ble_get_devices` - 获取设备列表
+
+获取扫描到的BLE设备列表。
+
+**参数**：无
+
+---
+
+#### 49. `dlqq_ble_connect` - 连接BLE设备
+
+连接指定的BLE设备。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `address` | string | ✓ | 设备地址 |
+
+---
+
+#### 50. `dlqq_ble_disconnect` - 断开连接
+
+断开当前连接的BLE设备。
+
+**参数**：无
+
+---
+
+#### 51. `dlqq_ble_discover` - 发现服务
+
+发现已连接BLE设备的服务和特征。
+
+**参数**：无
+
+---
+
+#### 52. `dlqq_ble_read` - 读取特征值
+
+读取BLE设备的特征值。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `service_uuid` | string | ✓ | 服务UUID |
+| `characteristic_uuid` | string | ✓ | 特征UUID |
+
+---
+
+#### 53. `dlqq_ble_write_text` - 写入文本
+
+向BLE设备写入文本数据。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `service_uuid` | string | ✓ | 服务UUID |
+| `characteristic_uuid` | string | ✓ | 特征UUID |
+| `text` | string | ✓ | 要写入的文本 |
+
+---
+
+#### 54. `dlqq_ble_write_hex` - 写入HEX数据
+
+向BLE设备写入16进制数据。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `service_uuid` | string | ✓ | 服务UUID |
+| `characteristic_uuid` | string | ✓ | 特征UUID |
+| `hex_array` | array | ✓ | 16进制字符串数组 |
+
+---
+
+#### 55. `dlqq_ble_subscribe` - 订阅通知
+
+订阅或取消订阅BLE设备的特征通知。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `service_uuid` | string | ✓ | 服务UUID |
+| `characteristic_uuid` | string | ✓ | 特征UUID |
+| `subscribe` | boolean | ✓ | true=订阅，false=取消订阅 |
+
+---
+
+#### 56. `dlqq_ble_get_log` - 获取日志
+
+获取BLE缓冲区日志数据。支持3种读取模式。
+
+**参数**：同 `dlqq_uart_get_log`
+
+---
+
+#### 57. `dlqq_ble_get_log_text` - 获取日志（强制文本）
+
+获取BLE缓冲区日志数据（强制文本格式）。
+
+**参数**：同 `dlqq_ble_get_log`
+
+---
+
+#### 58. `dlqq_ble_get_log_hex` - 获取日志（强制HEX）
+
+获取BLE缓冲区日志数据（强制HEX格式）。
+
+**参数**：同 `dlqq_ble_get_log`
+
+---
+
+#### 59. `dlqq_ble_clear` - 清除缓冲区
+
+清除BLE工具接收的数据缓冲区。
+
+**参数**：无
+
+---
+
+#### 60. `dlqq_ble_get_line_count` - 获取行数
+
+获取BLE工具缓冲区当前的日志行数。
+
+**参数**：无
+
+---
+
+#### 61. `dlqq_ble_set_buffer_size` - 设置缓冲区大小
+
+设置BLE工具的数据缓冲区大小，单位字节。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `size_bytes` | integer | ✓ | 缓冲区大小（字节） |
+
+---
+
+#### 62. `dlqq_ble_switch_text_hex` - 切换显示格式
+
+切换BLE日志的显示格式。
+
+**参数**：
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `format` | string | ✓ | `text` 或 `hex` |
+
+---
+
+#### 63. `dlqq_exit_ble` - 退出BLE工具
+
+关闭指定端口号的BLE工具窗口及其进程。
+
+**参数**：无
+
+---
+
+### 九、系统信息工具（2个）
+
+#### 64. `dlqq_get_mcp_version` - 获取版本信息
+
+获取MCP服务器的版本信息、JAR文件修改时间和构建信息。
+
+**参数**：无
+
+---
+
+#### 65. `dlqq_check_bluetooth_open` - 检查蓝牙状态
+
+检查Windows电脑的蓝牙适配器是否已开启。
+
+**参数**：无
+
+---
+
+### 十、数据管理工具（2个）
+
+#### 66. `dlqq_clear_data` - 清除数据目录
+
+清除.dlqq数据目录，删除整个.dlqq目录及其所有内容。
+
+**参数**：无
+
+---
+
+#### 67. `dlqq_clear_cache` - 清除日志缓存
+
+清除.dlqq/log目录下的日志缓存文件，保留目录结构。
+
+**参数**：无
+
+---
+
+### 十一、项目脚本工具（27个）
 
 项目脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本。脚本路径默认空，首次使用前需通过 `dlqq_set_*_script` 工具设置。
 
-#### 42. `dlqq_build_project` - 构建项目
+#### 68. `dlqq_build_project` - 构建项目
 
 执行 settings.properties 中 `script.build` 配置的脚本。
 
@@ -639,7 +892,7 @@
 
 ---
 
-#### 43. `dlqq_rebuild_project` - 重建项目
+#### 69. `dlqq_rebuild_project` - 重建项目
 
 执行 settings.properties 中 `script.rebuild` 配置的脚本。
 
@@ -649,7 +902,7 @@
 
 ---
 
-#### 44. `dlqq_chip_erase` - 擦除芯片
+#### 70. `dlqq_chip_erase` - 擦除芯片
 
 执行 settings.properties 中 `script.chip.erase` 配置的脚本。
 
@@ -659,7 +912,7 @@
 
 ---
 
-#### 45. `dlqq_chip_download` - 下载固件到芯片
+#### 71. `dlqq_chip_download` - 下载固件到芯片
 
 执行 settings.properties 中 `script.chip.download` 配置的脚本。
 
@@ -669,7 +922,7 @@
 
 ---
 
-#### 46. `dlqq_erase_download` - 擦除并下载
+#### 72. `dlqq_erase_download` - 擦除并下载
 
 执行 settings.properties 中 `script.erase.download` 配置的脚本（组合操作）。
 
@@ -679,7 +932,7 @@
 
 ---
 
-#### 47. `dlqq_build_erase_download` - 构建、擦除并下载
+#### 73. `dlqq_build_erase_download` - 构建、擦除并下载
 
 执行 settings.properties 中 `script.build.erase.download` 配置的脚本（组合操作）。
 
@@ -689,7 +942,7 @@
 
 ---
 
-#### 48. `dlqq_rebuild_erase_download` - 重建、擦除并下载
+#### 74. `dlqq_rebuild_erase_download` - 重建、擦除并下载
 
 执行 settings.properties 中 `script.rebuild.erase.download` 配置的脚本（组合操作）。
 
@@ -699,7 +952,7 @@
 
 ---
 
-#### 49. `dlqq_run_project` - 运行项目
+#### 75. `dlqq_run_project` - 运行项目
 
 执行 settings.properties 中 `script.run` 配置的脚本。
 
@@ -709,7 +962,7 @@
 
 ---
 
-#### 50. `dlqq_debug_project` - 调试项目
+#### 76. `dlqq_debug_project` - 调试项目
 
 执行 settings.properties 中 `script.debug` 配置的脚本。
 
@@ -719,7 +972,7 @@
 
 ---
 
-#### 51. `dlqq_build_run_project` - 构建并运行
+#### 77. `dlqq_build_run_project` - 构建并运行
 
 执行 settings.properties 中 `script.build.run` 配置的脚本（组合操作）。
 
@@ -729,7 +982,7 @@
 
 ---
 
-#### 52. `dlqq_build_debug_project` - 构建并调试
+#### 78. `dlqq_build_debug_project` - 构建并调试
 
 执行 settings.properties 中 `script.build.debug` 配置的脚本（组合操作）。
 
@@ -739,7 +992,7 @@
 
 ---
 
-#### 53. `dlqq_rebuild_run_project` - 重建并运行
+#### 79. `dlqq_rebuild_run_project` - 重建并运行
 
 执行 settings.properties 中 `script.rebuild.run` 配置的脚本（组合操作）。
 
@@ -749,7 +1002,7 @@
 
 ---
 
-#### 54. `dlqq_rebuild_debug_project` - 重建并调试
+#### 80. `dlqq_rebuild_debug_project` - 重建并调试
 
 执行 settings.properties 中 `script.rebuild.debug` 配置的脚本（组合操作）。
 
@@ -759,7 +1012,7 @@
 
 ---
 
-#### 55-68. `dlqq_set_*_script` - 设置脚本路径工具
+#### 81-94. `dlqq_set_*_script` - 设置脚本路径工具
 
 设置各类脚本的路径，保存到 settings.properties 文件中。
 
@@ -792,7 +1045,7 @@
 
 ---
 
-#### 69. `dlqq_set_response_max_size` - 设置最大回复文本大小
+#### 95. `dlqq_set_response_max_size` - 设置最大回复文本大小
 
 设置文件操作返回内容的最大字节数（默认32KB）。
 
@@ -889,7 +1142,7 @@
 ## 项目结构
 
 ```
-donglouqiaoque-ai-tools/
+dlqq-ai-tools/
 ├── src/main/java/com/donglouqiaoque/aitools/
 │   ├── mcp/
 │   │   ├── MCPServerMain.java      # MCP服务器入口
