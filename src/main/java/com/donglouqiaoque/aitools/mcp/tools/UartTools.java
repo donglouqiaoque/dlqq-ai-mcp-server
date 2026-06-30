@@ -579,12 +579,7 @@ public class UartTools {
 
         UartTools tools = getInstance(port);
 
-        // 检查串口是否已打开
-        if (!tools.isPortOpen || tools.currentPort == null) {
-            return "错误：串口未打开，请先使用 dlqq_uart_open_com 打开串口";
-        }
-
-        // 获取原始日志
+        // 获取原始日志（允许串口未打开时获取缓冲区日志）
         String rawLog = getUartLogCore(port, start_line, end_line, line_count, timeout_sec);
 
         // 如果是错误消息（包含"错误："或"等待超时"），直接返回
@@ -630,14 +625,7 @@ public class UartTools {
             return "错误：端口 " + port + " 的串口工具实例未启动，请先使用 dlqq_run_uart 启动";
         }
 
-        UartTools tools = getInstance(port);
-
-        // 检查串口是否已打开
-        if (!tools.isPortOpen || tools.currentPort == null) {
-            return "错误：串口未打开，请先使用 dlqq_uart_open_com 打开串口";
-        }
-
-        // 直接返回原始日志（文本格式）
+        // 直接返回原始日志（文本格式），允许串口未打开时获取缓冲区日志
         return getUartLogCore(port, start_line, end_line, line_count, timeout_sec);
     }
 
@@ -664,12 +652,7 @@ public class UartTools {
 
         UartTools tools = getInstance(port);
 
-        // 检查串口是否已打开
-        if (!tools.isPortOpen || tools.currentPort == null) {
-            return "错误：串口未打开，请先使用 dlqq_uart_open_com 打开串口";
-        }
-
-        // 获取原始日志
+        // 获取原始日志（允许串口未打开时获取缓冲区日志）
         String rawLog = getUartLogCore(port, start_line, end_line, line_count, timeout_sec);
 
         // 如果是错误消息，直接返回

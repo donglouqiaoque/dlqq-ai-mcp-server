@@ -72,6 +72,7 @@ public class AITools {
         registerUartSetTextSizeTool(server);      // dlqq_uart_set_text_size
         registerUartSwitchTextHexTool(server);    // dlqq_uart_switch_text_hex
         registerExitUartTool(server);             // dlqq_exit_uart
+        registerRerunUartTool(server);            // dlqq_rerun_uart
 
         // ========== BLE库管理工具 (30-33) ==========
         registerBleLibHasTool(server);          // dlqq_ble_lib_has
@@ -98,6 +99,7 @@ public class AITools {
         registerBleSetBufferSizeTool(server);     // dlqq_ble_set_buffer_size
         registerBleSwitchTextHexTool(server);     // dlqq_ble_switch_text_hex
         registerExitBleTool(server);              // dlqq_exit_ble
+        registerRerunBleTool(server);             // dlqq_rerun_ble
 
         // ========== 系统信息工具 ==========
         registerGetMcpVersionTool(server);          // dlqq_get_mcp_version
@@ -494,7 +496,10 @@ public class AITools {
                     return errorResult("起始行和结束行必须指定");
                 }
                 if (content == null) {
-                    content = "";
+                    return errorResult("错误：content 参数为空。可能原因：\n" +
+                        "1. JSON 字符串中的换行符 \\n 被当作实际换行，导致解析失败\n" +
+                        "2. content 内容过长或包含特殊字符\n" +
+                        "建议：将 \\n 替换为 \\\n 或使用 dlqq_insert_text_in_file 工具逐行插入");
                 }
 
                 try {
@@ -2348,6 +2353,56 @@ public class AITools {
         );
     }
 
+    /**
+     * 41a. dlqq_rerun_uart - 重新启动串口工具
+     */
+    private void registerRerunUartTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "串口工具的端口号（先关闭再启动该端口）");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_rerun_uart",
+            "重新启动指定端口号的串口工具。先关闭该端口的串口工具（如果正在运行），然后重新启动。用于刷新串口工具窗口或解决连接问题。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    // 先关闭（如果正在运行）
+                    StringBuilder result = new StringBuilder();
+                    try {
+                        String exitResult = UartTools.exitUart(port);
+                        result.append("关闭旧窗口: ").append(exitResult).append("\n");
+                    } catch (Exception e) {
+                        result.append("旧窗口未运行或关闭失败: ").append(e.getMessage()).append("\n");
+                    }
+
+                    // 等待一小段时间确保进程完全关闭
+                    Thread.sleep(500);
+
+                    // 重新启动
+                    String runResult = UartTools.runUart(port);
+                    result.append("启动新窗口: ").append(runResult);
+                    return textResult(result.toString());
+                } catch (Exception e) {
+                    return errorResult("重新启动串口工具失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
     // ==================== 工具方法 ====================
 
     /**
@@ -3408,6 +3463,56 @@ public class AITools {
                     return textResult(result);
                 } catch (Exception e) {
                     return errorResult("关闭BLE工具失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 47a. dlqq_rerun_ble - 重新启动BLE工具
+     */
+    private void registerRerunBleTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", Arrays.asList("integer", "string"));
+        portProp.put("description", "BLE工具的Python端口号（先关闭再启动该端口）");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port"));
+
+        server.addTool("dlqq_rerun_ble",
+            "重新启动指定端口号的BLE工具。先关闭该端口的BLE工具（如果正在运行），然后重新启动。用于刷新BLE工具窗口或解决连接问题。",
+            inputSchema,
+            arguments -> {
+                Integer port = parseInteger(arguments.get("port"), null);
+
+                if (port == null) {
+                    return errorResult("必须指定端口号（port）");
+                }
+                if (port < 1 || port > 65535) {
+                    return errorResult("端口号必须在 1~65535 范围内");
+                }
+
+                try {
+                    // 先关闭（如果正在运行）
+                    StringBuilder result = new StringBuilder();
+                    try {
+                        String exitResult = BleTools.exitBle(port);
+                        result.append("关闭旧窗口: ").append(exitResult).append("\n");
+                    } catch (Exception e) {
+                        result.append("旧窗口未运行或关闭失败: ").append(e.getMessage()).append("\n");
+                    }
+
+                    // 等待一小段时间确保进程完全关闭
+                    Thread.sleep(500);
+
+                    // 重新启动
+                    String runResult = BleTools.runBle(port);
+                    result.append("启动新窗口: ").append(runResult);
+                    return textResult(result.toString());
+                } catch (Exception e) {
+                    return errorResult("重新启动BLE工具失败: " + e.getMessage());
                 }
             }
         );

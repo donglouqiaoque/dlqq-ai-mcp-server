@@ -1,6 +1,9 @@
 package com.donglouqiaoque.aitools.mcp.transport;
 
 import com.donglouqiaoque.aitools.mcp.protocol.JsonRpcMessage;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,8 +31,13 @@ public class StdioTransport implements McpTransport {
     private final AtomicBoolean running;
     private final BlockingQueue<String> messageQueue;
     private volatile boolean useContentLength = true;  // 是否使用Content-Length协议
+    private final Gson gson;  // Gson JSON解析器
 
     public StdioTransport() {
+        // 初始化Gson解析器
+        this.gson = new GsonBuilder()
+            .setLenient()  // 宽松模式，允许不规范的JSON
+            .create();
         // 强制使用UTF-8编码的输入输出流
         this.inputStream = new BufferedInputStream(System.in);
         this.outputStream = new BufferedOutputStream(System.out);
@@ -364,32 +372,47 @@ public class StdioTransport implements McpTransport {
     }
 
     /**
-     * 解析JSON-RPC请求（简化实现）
+     * 解析JSON-RPC请求（使用Gson标准库）
      */
     @SuppressWarnings("unchecked")
     private JsonRpcMessage.Request parseRequest(String json) {
         debug("parseRequest: 解析 JSON: " + json);
-        // 提取 id（支持数字和字符串）
-        Object id = extractJsonId(json);
-        debug("parseRequest: id=" + id);
+        try {
+            // 使用Gson解析为Map
+            Map<String, Object> map = gson.fromJson(json, new TypeToken<Map<String, Object>>(){}.getType());
+            if (map == null) {
+                debug("parseRequest: Gson解析返回null");
+                return null;
+            }
 
-        // 提取 method
-        String method = extractJsonValue(json, "method");
-        debug("parseRequest: method=" + method);
-        if (method == null) {
-            debug("parseRequest: method 为 null，返回 null");
+            // 提取 id（支持数字、字符串和null）
+            Object id = map.get("id");
+            debug("parseRequest: id=" + id);
+
+            // 提取 method
+            String method = (String) map.get("method");
+            debug("parseRequest: method=" + method);
+            if (method == null) {
+                debug("parseRequest: method 为 null，返回 null");
+                return null;
+            }
+
+            // 提取 params
+            Map<String, Object> params = (Map<String, Object>) map.get("params");
+            if (params == null) {
+                params = new java.util.HashMap<>();
+            }
+            debug("parseRequest: params=" + params);
+
+            JsonRpcMessage.Request request = new JsonRpcMessage.Request();
+            request.setId(id);
+            request.setMethod(method);
+            request.setParams(params);
+            return request;
+        } catch (Exception e) {
+            logger.error("[StdioTransport] Gson解析JSON失败: " + e.getMessage() + ", JSON: " + json);
             return null;
         }
-
-        // 提取 params
-        Map<String, Object> params = extractJsonObject(json, "params");
-        debug("parseRequest: params=" + params);
-
-        JsonRpcMessage.Request request = new JsonRpcMessage.Request();
-        request.setId(id);
-        request.setMethod(method);
-        request.setParams(params);
-        return request;
     }
 
     /**
