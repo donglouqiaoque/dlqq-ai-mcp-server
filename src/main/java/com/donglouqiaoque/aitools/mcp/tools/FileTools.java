@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import java.util.stream.Collectors;
 
 /**
  * 文件操作工具 - 提供文件读写、修改、复制移动等功能
@@ -2166,5 +2167,245 @@ public class FileTools {
         } else {
             return String.format("%.1f GB", size / (1024.0 * 1024 * 1024));
         }
+    }
+
+    // ==================== 文本搜索工具 ====================
+
+    /**
+     * 搜索结果类
+     */
+    public static class TextSearchResult {
+        public final String filePath;
+        public final int lineNumber;
+        public final String lineContent;
+        public final List<String> contextLines;
+
+        public TextSearchResult(String filePath, int lineNumber, String lineContent, List<String> contextLines) {
+            this.filePath = filePath;
+            this.lineNumber = lineNumber;
+            this.lineContent = lineContent;
+            this.contextLines = contextLines;
+        }
+    }
+
+    /**
+     * 在指定目录下搜索文本内容
+     *
+     * @param searchPath      搜索目录路径
+     * @param pattern         搜索模式
+     * @param useRegex        是否使用正则表达式
+     * @param ignoreCase      是否忽略大小写
+     * @param textExtensions  文本文件后缀名列表（如 [".java", ".txt", ".c"]）
+     * @param maxFiles        最大搜索文件数（-1表示无限制）
+     * @param maxFileSize     最大文件大小（字节，-1表示无限制）
+     * @return 搜索结果列表
+     * @throws IOException 搜索异常
+     */
+    public static List<TextSearchResult> searchTextInFiles(
+            String searchPath,
+            String pattern,
+            boolean useRegex,
+            boolean ignoreCase,
+            List<String> textExtensions,
+            int maxFiles,
+            long maxFileSize) throws IOException {
+
+        searchPath = FileUtils.normalizePath(searchPath);
+        Path path = Paths.get(searchPath);
+        if (!Files.exists(path)) {
+            throw new IOException("目录不存在: " + searchPath);
+        }
+        if (!Files.isDirectory(path)) {
+            throw new IOException("路径不是目录: " + searchPath);
+        }
+
+        List<TextSearchResult> results = new ArrayList<>();
+
+        // 准备匹配器
+        Pattern regex = null;
+        String searchPattern = ignoreCase ? pattern.toLowerCase() : pattern;
+
+        if (useRegex) {
+            try {
+                int flags = ignoreCase ? Pattern.CASE_INSENSITIVE : 0;
+                regex = Pattern.compile(pattern, flags);
+            } catch (PatternSyntaxException e) {
+                throw new IOException("正则表达式语法错误: " + e.getMessage());
+            }
+        }
+
+        // 准备文件扩展名过滤器
+        Set<String> extensionSet = textExtensions.stream()
+            .map(ext -> ext.toLowerCase().startsWith(".") ? ext.toLowerCase() : "." + ext.toLowerCase())
+            .collect(Collectors.toSet());
+
+        // 遍历文件
+        final List<TextSearchResult> finalResults = results;
+        final Pattern finalRegex = regex;
+        final String finalSearchPattern = searchPattern;
+
+        try (var paths = Files.walk(path)) {
+            paths.filter(Files::isRegularFile)
+                .filter(p -> isTextFile(p, extensionSet))
+                .filter(p -> {
+                    try {
+                        return maxFileSize <= 0 || Files.size(p) <= maxFileSize;
+                    } catch (IOException e) {
+                        return false;
+                    }
+                })
+                .limit(maxFiles > 0 ? maxFiles : Long.MAX_VALUE)
+                .forEach(p -> {
+                    try {
+                        searchInFile(p, finalRegex, finalSearchPattern, useRegex, ignoreCase, finalResults);
+                    } catch (IOException e) {
+                        // 跳过读取失败的文件
+                    }
+                });
+        }
+
+        return finalResults;
+    }
+
+    /**
+     * 在单个文件中搜索文本
+     *
+     * @param filePath   文件路径
+     * @param pattern    搜索模式
+     * @param useRegex   是否使用正则表达式
+     * @param ignoreCase 是否忽略大小写
+     * @return 搜索结果列表
+     * @throws IOException 搜索异常
+     */
+    public static List<TextSearchResult> searchTextInSingleFile(
+            String filePath,
+            String pattern,
+            boolean useRegex,
+            boolean ignoreCase) throws IOException {
+
+        filePath = FileUtils.normalizePath(filePath);
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path)) {
+            throw new IOException("文件不存在: " + filePath);
+        }
+        if (!Files.isRegularFile(path)) {
+            throw new IOException("路径不是文件: " + filePath);
+        }
+
+        List<TextSearchResult> results = new ArrayList<>();
+
+        // 准备匹配器
+        Pattern regex = null;
+        String searchPattern = ignoreCase ? pattern.toLowerCase() : pattern;
+
+        if (useRegex) {
+            try {
+                int flags = ignoreCase ? Pattern.CASE_INSENSITIVE : 0;
+                regex = Pattern.compile(pattern, flags);
+            } catch (PatternSyntaxException e) {
+                throw new IOException("正则表达式语法错误: " + e.getMessage());
+            }
+        }
+
+        // 搜索文件
+        searchInFile(path, regex, searchPattern, useRegex, ignoreCase, results);
+
+        return results;
+    }
+
+    /**
+     * 检查是否为文本文件
+     */
+    private static boolean isTextFile(Path path, Set<String> extensionSet) {
+        String fileName = path.getFileName().toString().toLowerCase();
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex > 0) {
+            String ext = fileName.substring(dotIndex);
+            return extensionSet.contains(ext);
+        }
+        // 如果没有扩展名但包含 "*"（表示所有文件）
+        return extensionSet.contains("*") || extensionSet.contains(".*");
+    }
+
+    /**
+     * 在单个文件中搜索文本
+     */
+    private static void searchInFile(Path file, Pattern regex, String searchPattern,
+                                     boolean useRegex, boolean ignoreCase,
+                                     List<TextSearchResult> results) throws IOException {
+        List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            boolean matched;
+
+            if (useRegex) {
+                matched = regex.matcher(line).find();
+            } else {
+                String checkLine = ignoreCase ? line.toLowerCase() : line;
+                matched = checkLine.contains(searchPattern);
+            }
+
+            if (matched) {
+                // 获取上下文（前后3行）
+                List<String> context = new ArrayList<>();
+                int startLine = Math.max(0, i - 3);
+                int endLine = Math.min(lines.size() - 1, i + 3);
+
+                for (int j = startLine; j <= endLine; j++) {
+                    String prefix = (j == i) ? ">>> " : "    ";
+                    context.add(prefix + String.format("%4d", j + 1) + " | " + lines.get(j));
+                }
+
+                results.add(new TextSearchResult(
+                    file.toString(),
+                    i + 1,
+                    line,
+                    context
+                ));
+            }
+        }
+    }
+
+    /**
+     * 格式化搜索结果为字符串
+     */
+    public static String formatSearchResults(List<TextSearchResult> results, int maxResults) {
+        if (results.isEmpty()) {
+            return "未找到匹配的文本";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("找到 ").append(results.size()).append(" 处匹配\n");
+        sb.append("=" .repeat(60)).append("\n\n");
+
+        int displayCount = maxResults > 0 ? Math.min(results.size(), maxResults) : results.size();
+
+        for (int i = 0; i < displayCount; i++) {
+            TextSearchResult r = results.get(i);
+            sb.append("[").append(i + 1).append("] ").append(r.filePath).append("\n");
+            sb.append("    第 ").append(r.lineNumber).append(" 行: ").append(truncate(r.lineContent, 80)).append("\n");
+            sb.append("    上下文:\n");
+            for (String ctx : r.contextLines) {
+                sb.append("    ").append(ctx).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        if (results.size() > displayCount) {
+            sb.append("... 还有 ").append(results.size() - displayCount).append(" 处匹配未显示\n");
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * 截断长文本
+     */
+    private static String truncate(String s, int maxLength) {
+        if (s.length() <= maxLength) {
+            return s;
+        }
+        return s.substring(0, maxLength - 3) + "...";
     }
 }

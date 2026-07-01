@@ -659,4 +659,99 @@ public class BleTools {
         }
         return "无法获取";
     }
+
+    /**
+     * 检查Windows电脑的蓝牙适配器是否已开启
+     */
+    public static String checkBluetoothOpen() {
+        StringBuilder result = new StringBuilder();
+        result.append("=== 蓝牙状态检查 ===\n\n");
+
+        try {
+            // 方法1: 检查蓝牙设备状态
+            result.append("[1/3] 检查蓝牙设备状态...\n");
+            ProcessBuilder checkPb = new ProcessBuilder(
+                "powershell.exe",
+                "-Command",
+                "Get-PnpDevice -Class Bluetooth | Select-Object Name, Status, InstanceId | Format-Table -AutoSize"
+            );
+            checkPb.redirectErrorStream(true);
+            Process checkProcess = checkPb.start();
+
+            StringBuilder checkOutput = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(checkProcess.getInputStream(), "UTF-8"))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    checkOutput.append(line).append("\n");
+                }
+            }
+            checkProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            result.append(checkOutput.toString()).append("\n");
+
+            // 方法2: 检查蓝牙服务状态
+            result.append("[2/3] 检查蓝牙服务状态...\n");
+            ProcessBuilder pb2 = new ProcessBuilder(
+                "powershell.exe",
+                "-Command",
+                "$service = Get-Service -Name bthserv -ErrorAction SilentlyContinue; " +
+                "if ($service) { " +
+                "    Write-Host ('蓝牙服务状态: ' + $service.Status) " +
+                "} else { " +
+                "    Write-Host '未找到蓝牙服务' " +
+                "}"
+            );
+            pb2.redirectErrorStream(true);
+            Process process2 = pb2.start();
+
+            StringBuilder output2 = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process2.getInputStream(), "UTF-8"))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output2.append(line).append("\n");
+                }
+            }
+            process2.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            result.append(output2.toString()).append("\n");
+
+            // 方法3: 检查蓝牙网络适配器
+            result.append("[3/3] 检查蓝牙网络适配器...\n");
+            ProcessBuilder pb3 = new ProcessBuilder(
+                "powershell.exe",
+                "-Command",
+                "$adapter = Get-NetAdapter | Where-Object {$_.InterfaceDescription -like '*Bluetooth*'}; " +
+                "if ($adapter) { " +
+                "    Write-Host ('蓝牙适配器: ' + $adapter.Name + ' - 状态: ' + $adapter.Status) " +
+                "} else { " +
+                "    Write-Host '未找到蓝牙网络适配器' " +
+                "}"
+            );
+            pb3.redirectErrorStream(true);
+            Process process3 = pb3.start();
+
+            StringBuilder output3 = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process3.getInputStream(), "UTF-8"))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output3.append(line).append("\n");
+                }
+            }
+            process3.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            result.append(output3.toString()).append("\n");
+
+            result.append("\n=== 检查完成 ===\n");
+            result.append("如需开启蓝牙，请手动操作:\n");
+            result.append("1. 点击任务栏右下角的通知图标 → 展开快速设置 → 点击蓝牙图标开启\n");
+            result.append("2. 或按 Win+I → 蓝牙和设备 → 开启蓝牙开关\n");
+            result.append("3. 部分电脑需要按 Fn+功能键 开启蓝牙硬件开关\n");
+
+            return result.toString();
+        } catch (Exception e) {
+            result.append("\n错误: ").append(e.getMessage()).append("\n");
+            result.append(e.toString()).append("\n");
+            return result.toString();
+        }
+    }
 }

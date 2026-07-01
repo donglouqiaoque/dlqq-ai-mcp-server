@@ -5,7 +5,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.util.*;
 import java.util.jar.*;
 import java.util.stream.Stream;
 
@@ -721,6 +721,139 @@ public class McpTools {
         return setScriptInSettings("script.chip.download", scriptPath, "芯片下载");
     }
 
+    // ==================== 搜索配置工具 ====================
+
+    /**
+     * 获取搜索配置值
+     * @param key 配置key
+     * @return 配置值，不存在返回null
+     */
+    public static String getSearchConfig(String key) {
+        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        if (!Files.exists(settingsPath)) {
+            return null;
+        }
+
+        try (BufferedReader reader = Files.newBufferedReader(settingsPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                int equalIndex = line.indexOf('=');
+                if (equalIndex > 0) {
+                    String configKey = line.substring(0, equalIndex).trim();
+                    String configValue = line.substring(equalIndex + 1).trim();
+                    if (configKey.equals(key)) {
+                        return configValue;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * 设置搜索配置
+     * @param key 配置key
+     * @param value 配置值
+     * @param description 配置描述
+     * @return 设置结果
+     */
+    public static String setSearchConfig(String key, String value, String description) {
+        // 复用 setScriptInSettings 的逻辑，但使用不同的描述前缀
+        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+
+        // 检查settings目录是否存在
+        Path settingsDir = settingsPath.getParent();
+        if (!Files.exists(settingsDir)) {
+            try {
+                Files.createDirectories(settingsDir);
+            } catch (IOException e) {
+                return "✗ 错误：无法创建settings目录: " + e.getMessage();
+            }
+        }
+
+        // 读取现有配置
+        java.util.Map<String, String> config = new java.util.LinkedHashMap<>();
+        java.util.List<String> lines = new java.util.ArrayList<>();
+
+        if (Files.exists(settingsPath)) {
+            try (BufferedReader reader = Files.newBufferedReader(settingsPath, StandardCharsets.UTF_8)) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    lines.add(line);
+                    String trimmed = line.trim();
+                    if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                        continue;
+                    }
+                    int equalIndex = line.indexOf('=');
+                    if (equalIndex > 0) {
+                        String configKey = line.substring(0, equalIndex).trim();
+                        String configValue = line.substring(equalIndex + 1).trim();
+                        config.put(configKey, configValue);
+                    }
+                }
+            } catch (IOException e) {
+                return "✗ 错误：无法读取settings.properties: " + e.getMessage();
+            }
+        }
+
+        // 更新配置
+        String oldValue = config.get(key);
+        config.put(key, value);
+
+        // 检查是否有搜索配置节
+        boolean hasSearchSection = lines.stream().anyMatch(l -> l.contains("Text search config"));
+
+        // 重写文件
+        try (BufferedWriter writer = Files.newBufferedWriter(settingsPath, StandardCharsets.UTF_8)) {
+            if (lines.isEmpty()) {
+                // 写入默认头部
+                writer.write("# MCP Server Settings\n");
+                writer.write("# ==================\n\n");
+                writer.write("# Response size limits (bytes)\n");
+                writer.write("response.max.size=32768\n\n");
+                writer.write("# Project build scripts\n");
+                writer.write("# Scripts for build/rebuild/erase/download operations\n");
+            } else {
+                // 写入现有内容，跳过旧的key
+                for (String line : lines) {
+                    String trimmed = line.trim();
+                    if (trimmed.startsWith(key + "=")) {
+                        continue;
+                    }
+                    writer.write(line);
+                    writer.write("\n");
+                }
+
+                // 如果没有搜索配置节，添加一个
+                if (!hasSearchSection) {
+                    writer.write("\n# Text search config\n");
+                    writer.write("# Configuration for dlqq_search_text tool\n");
+                }
+            }
+
+            // 写入新的key-value
+            writer.write(key + "=" + value + "\n");
+
+        } catch (IOException e) {
+            return "✗ 错误：无法写入settings.properties: " + e.getMessage();
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append("✓ ").append(description).append("已设置\n");
+        if (oldValue != null) {
+            result.append("  旧值: ").append(oldValue).append("\n");
+        }
+        result.append("  新值: ").append(value).append("\n");
+
+        return result.toString();
+    }
+
     // ==================== 组合脚本执行工具 ====================
 
     /**
@@ -1154,5 +1287,235 @@ public class McpTools {
         }
 
         return result;
+    }
+
+    // ==================== 通用属性操作工具 ====================
+
+    /**
+     * 设置属性到settings.properties
+     * @param key 属性键
+     * @param value 属性值
+     * @return 设置结果消息
+     */
+    public static String setProperty(String key, String value) {
+        if (key == null || key.isEmpty()) {
+            return "✗ 错误：属性键不能为空";
+        }
+        if (value == null) {
+            return "✗ 错误：属性值不能为null";
+        }
+
+        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+
+        // 检查settings目录是否存在
+        Path settingsDir = settingsPath.getParent();
+        if (!Files.exists(settingsDir)) {
+            try {
+                Files.createDirectories(settingsDir);
+            } catch (IOException e) {
+                return "✗ 错误：无法创建settings目录: " + e.getMessage();
+            }
+        }
+
+        // 读取现有配置
+        Map<String, String> config = new LinkedHashMap<>();
+        List<String> lines = new ArrayList<>();
+
+        if (Files.exists(settingsPath)) {
+            try (BufferedReader reader = Files.newBufferedReader(settingsPath, StandardCharsets.UTF_8)) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    lines.add(line);
+                    String trimmed = line.trim();
+                    if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                        continue;
+                    }
+                    int equalIndex = line.indexOf('=');
+                    if (equalIndex > 0) {
+                        String configKey = line.substring(0, equalIndex).trim();
+                        String configValue = line.substring(equalIndex + 1).trim();
+                        config.put(configKey, configValue);
+                    }
+                }
+            } catch (IOException e) {
+                return "✗ 错误：无法读取settings.properties: " + e.getMessage();
+            }
+        }
+
+        // 更新配置
+        String oldValue = config.get(key);
+        config.put(key, value);
+
+        // 重写文件
+        try (BufferedWriter writer = Files.newBufferedWriter(settingsPath, StandardCharsets.UTF_8)) {
+            if (lines.isEmpty()) {
+                // 写入默认头部
+                writer.write("# MCP Server Settings\n");
+                writer.write("# ==================\n\n");
+            } else {
+                // 过滤掉旧的key行
+                for (String line : lines) {
+                    String trimmed = line.trim();
+                    if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
+                        int equalIndex = line.indexOf('=');
+                        if (equalIndex > 0) {
+                            String configKey = line.substring(0, equalIndex).trim();
+                            if (!configKey.equals(key)) {
+                                writer.write(line + "\n");
+                            }
+                        } else {
+                            writer.write(line + "\n");
+                        }
+                    } else {
+                        writer.write(line + "\n");
+                    }
+                }
+            }
+            // 写入新值
+            writer.write(key + "=" + value + "\n");
+        } catch (IOException e) {
+            return "✗ 错误：无法写入settings.properties: " + e.getMessage();
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append("✓ 属性设置成功\n");
+        result.append("===================\n\n");
+        result.append("键: ").append(key).append("\n");
+        if (oldValue != null) {
+            result.append("旧值: ").append(oldValue).append("\n");
+        }
+        result.append("新值: ").append(value).append("\n");
+        result.append("\n配置文件: ").append(settingsPath.toAbsolutePath().toString());
+
+        return result.toString();
+    }
+
+    /**
+     * 批量设置多个属性
+     * @param properties Map<key, value>
+     * @return 设置结果消息
+     */
+    public static String setProperties(Map<String, String> properties) {
+        if (properties == null || properties.isEmpty()) {
+            return "✗ 错误：至少指定一个属性";
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append("✓ 批量设置属性\n");
+        result.append("===================\n\n");
+
+        for (Map.Entry<String, String> entry : properties.entrySet()) {
+            String r = setProperty(entry.getKey(), entry.getValue());
+            // 提取成功消息的核心部分
+            if (r.startsWith("✓")) {
+                result.append("✓ ").append(entry.getKey()).append(" = ").append(entry.getValue()).append("\n");
+            } else {
+                result.append("✗ ").append(entry.getKey()).append(": ").append(r).append("\n");
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * 获取所有属性
+     * @return 所有属性的Map
+     */
+    public static Map<String, String> getAllProperties() {
+        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        Map<String, String> config = new LinkedHashMap<>();
+
+        if (!Files.exists(settingsPath)) {
+            return config;
+        }
+
+        try (BufferedReader reader = Files.newBufferedReader(settingsPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                int equalIndex = line.indexOf('=');
+                if (equalIndex > 0) {
+                    String configKey = line.substring(0, equalIndex).trim();
+                    String configValue = line.substring(equalIndex + 1).trim();
+                    config.put(configKey, configValue);
+                }
+            }
+        } catch (IOException e) {
+            // 返回空map
+        }
+
+        return config;
+    }
+
+    /**
+     * 格式化属性列表为字符串
+     * @param properties 属性Map
+     * @return 格式化后的字符串
+     */
+    public static String formatProperties(Map<String, String> properties) {
+        if (properties.isEmpty()) {
+            return "暂无配置属性";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("配置属性列表\n");
+        sb.append("=".repeat(60)).append("\n\n");
+
+        // 按类别分组
+        Map<String, Map<String, String>> categories = new LinkedHashMap<>();
+        categories.put("response", new LinkedHashMap<>());
+        categories.put("search", new LinkedHashMap<>());
+        categories.put("script", new LinkedHashMap<>());
+        categories.put("other", new LinkedHashMap<>());
+
+        for (Map.Entry<String, String> entry : properties.entrySet()) {
+            String key = entry.getKey();
+            String category = "other";
+            if (key.startsWith("response.")) {
+                category = "response";
+            } else if (key.startsWith("search.")) {
+                category = "search";
+            } else if (key.startsWith("script.")) {
+                category = "script";
+            }
+            categories.get(category).put(key, entry.getValue());
+        }
+
+        // 输出各分类
+        if (!categories.get("response").isEmpty()) {
+            sb.append("[响应大小限制]\n");
+            for (Map.Entry<String, String> entry : categories.get("response").entrySet()) {
+                sb.append("  ").append(entry.getKey()).append(" = ").append(entry.getValue()).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        if (!categories.get("search").isEmpty()) {
+            sb.append("[搜索配置]\n");
+            for (Map.Entry<String, String> entry : categories.get("search").entrySet()) {
+                sb.append("  ").append(entry.getKey()).append(" = ").append(entry.getValue()).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        if (!categories.get("script").isEmpty()) {
+            sb.append("[脚本配置]\n");
+            for (Map.Entry<String, String> entry : categories.get("script").entrySet()) {
+                sb.append("  ").append(entry.getKey()).append(" = ").append(entry.getValue()).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        if (!categories.get("other").isEmpty()) {
+            sb.append("[其他配置]\n");
+            for (Map.Entry<String, String> entry : categories.get("other").entrySet()) {
+                sb.append("  ").append(entry.getKey()).append(" = ").append(entry.getValue()).append("\n");
+            }
+        }
+
+        return sb.toString();
     }
 }

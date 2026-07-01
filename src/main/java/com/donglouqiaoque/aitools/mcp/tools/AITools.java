@@ -46,9 +46,11 @@ public class AITools {
         registerReadBinFileTool(server);          // dlqq_read_bin_file
         registerWriteBinFileTool(server);         // dlqq_write_bin_file
 
-        // ========== 搜索工具 (20-21) ==========
+        // ========== 搜索工具 (25-28) ==========
         registerSearchFileTool(server);           // dlqq_search_file
         registerSearchDirTool(server);            // dlqq_search_dir
+        registerSearchTextInDirTool(server);      // dlqq_search_text_in_dir
+        registerSearchTextInFileTool(server);     // dlqq_search_text_in_file
 
         // ========== 对话框工具 (22-24) ==========
         registerDialogTextTool(server);           // dlqq_dialog_text
@@ -105,9 +107,9 @@ public class AITools {
         registerGetMcpVersionTool(server);          // dlqq_get_mcp_version
         registerCheckBluetoothTool(server);          // dlqq_check_bluetooth_open
 
-        // ========== 数据管理工具 ==========
-        registerClearDataTool(server);              // dlqq_clear_data
-        registerClearCacheTool(server);           // dlqq_clear_cache
+        // ========== MCP数据管理工具 ==========
+        registerClearMcpDataTool(server);           // dlqq_clear_mcp_data
+        registerClearMcpCacheTool(server);          // dlqq_clear_mcp_cache
 
         // ========== 项目构建和芯片操作工具 ==========
         registerBuildProjectTool(server);           // dlqq_build_project
@@ -128,27 +130,9 @@ public class AITools {
         registerRebuildRunProjectTool(server);      // dlqq_rebuild_run_project
         registerRebuildDebugProjectTool(server);    // dlqq_rebuild_debug_project
 
-        // ========== 设置脚本路径工具 ==========
-        registerSetBuildScriptTool(server);         // dlqq_set_build_script
-        registerSetRebuildScriptTool(server);       // dlqq_set_rebuild_script
-        registerSetChipEraseScriptTool(server);     // dlqq_set_chip_erase_script
-        registerSetChipDownloadScriptTool(server);   // dlqq_set_chip_download_script
-
-        // ========== 组合脚本设置工具 ==========
-        registerSetEraseDownloadScriptTool(server);         // dlqq_set_erase_download_script
-        registerSetBuildEraseDownloadScriptTool(server);    // dlqq_set_build_erase_download_script
-        registerSetRebuildEraseDownloadScriptTool(server);  // dlqq_set_rebuild_erase_download_script
-
-        // ========== 运行调试设置工具 ==========
-        registerSetRunScriptTool(server);             // dlqq_set_run_script
-        registerSetDebugScriptTool(server);           // dlqq_set_debug_script
-        registerSetBuildRunScriptTool(server);        // dlqq_set_build_run_script
-        registerSetBuildDebugScriptTool(server);      // dlqq_set_build_debug_script
-        registerSetRebuildRunScriptTool(server);      // dlqq_set_rebuild_run_script
-        registerSetRebuildDebugScriptTool(server);    // dlqq_set_rebuild_debug_script
-
-        // ========== 响应大小限制工具 ==========
-        registerSetResponseMaxSizeTool(server);     // dlqq_set_response_max_size
+        // ========== MCP数据管理工具 ==========
+        registerGetMcpPropertiesTool(server);       // dlqq_get_mcp_properties
+        registerSetMcpPropertiesTool(server);       // dlqq_set_mcp_properties
     }
 
     // ==================== 文件操作工具 ====================
@@ -1459,6 +1443,177 @@ public class AITools {
         );
     }
 
+    /**
+     * 17b. dlqq_search_text_in_dir - 在目录下的文本文件中搜索内容
+     */
+    private void registerSearchTextInDirTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "搜索目录路径");
+        properties.put("search_path", pathProp);
+
+        Map<String, Object> patternProp = new HashMap<>();
+        patternProp.put("type", "string");
+        patternProp.put("description", "搜索文本模式");
+        properties.put("pattern", patternProp);
+
+        Map<String, Object> modeProp = new HashMap<>();
+        modeProp.put("type", "string");
+        modeProp.put("description", "模式：'text'（部分匹配）或 'regex'（正则表达式）");
+        modeProp.put("enum", Arrays.asList("text", "regex"));
+        properties.put("mode", modeProp);
+
+        Map<String, Object> ignoreCaseProp = new HashMap<>();
+        ignoreCaseProp.put("type", "boolean");
+        ignoreCaseProp.put("description", "是否忽略大小写（默认true）");
+        properties.put("ignore_case", ignoreCaseProp);
+
+        Map<String, Object> extensionsProp = new HashMap<>();
+        extensionsProp.put("type", "array");
+        extensionsProp.put("description", "文件后缀名列表（如 ['.java', '.c', '.h']），为空时使用配置默认值");
+        properties.put("file_extensions", extensionsProp);
+
+        Map<String, Object> maxResultsProp = new HashMap<>();
+        maxResultsProp.put("type", Arrays.asList("integer", "string"));
+        maxResultsProp.put("description", "最大返回结果数（默认使用配置search.max.results，若无配置则为50）");
+        properties.put("max_results", maxResultsProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("search_path", "pattern"));
+
+        server.addTool("dlqq_search_text_in_dir",
+            "在指定目录下的所有文本文件中搜索指定内容。支持正则表达式或部分匹配，支持忽略大小写，" +
+            "返回匹配的文件路径、行号、行内容以及3行上下文。" +
+            "可通过 file_extensions 指定文件类型，为空时使用 settings.properties 中的默认配置。" +
+            "搜索受 search.max.files、search.max.file.size、search.max.results 配置限制。",
+            inputSchema,
+            arguments -> {
+                String searchPath = (String) arguments.get("search_path");
+                String pattern = (String) arguments.get("pattern");
+                String mode = (String) arguments.getOrDefault("mode", "text");
+                Boolean ignoreCase = (Boolean) arguments.getOrDefault("ignore_case", true);
+                @SuppressWarnings("unchecked")
+                List<String> fileExtensions = (List<String>) arguments.get("file_extensions");
+
+                // 从配置读取默认最大结果数
+                int defaultMaxResults = getSearchConfigInt("search.max.results", 50);
+                Integer maxResults = parseInteger(arguments.get("max_results"), defaultMaxResults);
+
+                if (searchPath == null || searchPath.trim().isEmpty()) {
+                    return errorResult("搜索路径不能为空");
+                }
+                if (pattern == null || pattern.trim().isEmpty()) {
+                    return errorResult("搜索模式不能为空");
+                }
+
+                try {
+                    // 读取配置
+                    int maxFiles = getSearchConfigInt("search.max.files", 1000);
+                    long maxFileSize = getSearchConfigLong("search.max.file.size", 10 * 1024 * 1024); // 默认10MB
+                    String defaultExtensions = getSearchConfigString("search.text.extensions", 
+                        ".java,.c,.cpp,.h,.hpp,.cs,.py,.js,.ts,.html,.css,.json,.xml,.yaml,.yml,.md,.txt,.sh,.bat,.properties,.gradle,.ini");
+
+                    // 如果未指定扩展名，使用默认配置
+                    if (fileExtensions == null || fileExtensions.isEmpty()) {
+                        fileExtensions = Arrays.asList(defaultExtensions.split(","));
+                    }
+
+                    boolean useRegex = "regex".equalsIgnoreCase(mode);
+
+                    List<FileTools.TextSearchResult> results = FileTools.searchTextInFiles(
+                        searchPath, pattern, useRegex, ignoreCase, 
+                        fileExtensions, maxFiles, maxFileSize
+                    );
+
+                    String formatted = FileTools.formatSearchResults(results, maxResults);
+                    return textResult(formatted);
+
+                } catch (IOException e) {
+                    return errorResult("搜索失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 17c. dlqq_search_text_in_file - 在单个文本文件中搜索内容
+     */
+    private void registerSearchTextInFileTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "文件路径");
+        properties.put("file_path", pathProp);
+
+        Map<String, Object> patternProp = new HashMap<>();
+        patternProp.put("type", "string");
+        patternProp.put("description", "搜索文本模式");
+        properties.put("pattern", patternProp);
+
+        Map<String, Object> modeProp = new HashMap<>();
+        modeProp.put("type", "string");
+        modeProp.put("description", "模式：'text'（部分匹配）或 'regex'（正则表达式）");
+        modeProp.put("enum", Arrays.asList("text", "regex"));
+        properties.put("mode", modeProp);
+
+        Map<String, Object> ignoreCaseProp = new HashMap<>();
+        ignoreCaseProp.put("type", "boolean");
+        ignoreCaseProp.put("description", "是否忽略大小写（默认true）");
+        properties.put("ignore_case", ignoreCaseProp);
+
+        Map<String, Object> maxResultsProp = new HashMap<>();
+        maxResultsProp.put("type", Arrays.asList("integer", "string"));
+        maxResultsProp.put("description", "最大返回结果数（默认使用配置search.max.results，若无配置则为50，-1表示无限制）");
+        properties.put("max_results", maxResultsProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("file_path", "pattern"));
+
+        server.addTool("dlqq_search_text_in_file",
+            "在单个文本文件中搜索指定内容。支持正则表达式或部分匹配，支持忽略大小写，" +
+            "返回匹配的行号、行内容以及3行上下文。" +
+            "可通过 max_results 参数限制返回结果数，或使用 search.max.results 配置设置默认值。",
+            inputSchema,
+            arguments -> {
+                String filePath = (String) arguments.get("file_path");
+                String pattern = (String) arguments.get("pattern");
+                String mode = (String) arguments.getOrDefault("mode", "text");
+                Boolean ignoreCase = (Boolean) arguments.getOrDefault("ignore_case", true);
+
+                // 从配置读取默认最大结果数
+                int defaultMaxResults = getSearchConfigInt("search.max.results", 50);
+                Integer maxResults = parseInteger(arguments.get("max_results"), defaultMaxResults);
+
+                if (filePath == null || filePath.trim().isEmpty()) {
+                    return errorResult("文件路径不能为空");
+                }
+                if (pattern == null || pattern.trim().isEmpty()) {
+                    return errorResult("搜索模式不能为空");
+                }
+
+                try {
+                    boolean useRegex = "regex".equalsIgnoreCase(mode);
+
+                    List<FileTools.TextSearchResult> results = FileTools.searchTextInSingleFile(
+                        filePath, pattern, useRegex, ignoreCase
+                    );
+
+                    // 限制结果数量
+                    List<FileTools.TextSearchResult> limitedResults = maxResults > 0 && results.size() > maxResults
+                        ? results.subList(0, maxResults)
+                        : results;
+
+                    String formatted = FileTools.formatSearchResults(limitedResults, -1);
+                    return textResult(formatted);
+
+                } catch (IOException e) {
+                    return errorResult("搜索失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
     // ==================== 对话框工具 ====================
 
     /**
@@ -2502,6 +2657,46 @@ public class AITools {
             return (String) value;
         }
         return value.toString();
+    }
+
+    // ==================== 搜索配置读取方法 ====================
+
+    /**
+     * 获取搜索配置值（字符串）
+     */
+    private String getSearchConfigString(String key, String defaultValue) {
+        String value = McpTools.getSearchConfig(key);
+        return (value != null && !value.isEmpty()) ? value : defaultValue;
+    }
+
+    /**
+     * 获取搜索配置值（整数）
+     */
+    private int getSearchConfigInt(String key, int defaultValue) {
+        String value = McpTools.getSearchConfig(key);
+        if (value == null || value.isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * 获取搜索配置值（长整数）
+     */
+    private long getSearchConfigLong(String key, long defaultValue) {
+        String value = McpTools.getSearchConfig(key);
+        if (value == null || value.isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     // ==================== BLE库管理工具 ====================
@@ -3548,110 +3743,23 @@ public class AITools {
             "检查Windows电脑的蓝牙适配器是否已开启",
             inputSchema,
             arguments -> {
-                StringBuilder result = new StringBuilder();
-                result.append("=== 蓝牙状态检查 ===\n\n");
-
-                try {
-                    // 方法1: 检查蓝牙设备状态
-                    result.append("[1/3] 检查蓝牙设备状态...\n");
-                    ProcessBuilder checkPb = new ProcessBuilder(
-                        "powershell.exe",
-                        "-Command",
-                        "Get-PnpDevice -Class Bluetooth | Select-Object Name, Status, InstanceId | Format-Table -AutoSize"
-                    );
-                    checkPb.redirectErrorStream(true);
-                    Process checkProcess = checkPb.start();
-
-                    StringBuilder checkOutput = new StringBuilder();
-                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                            new java.io.InputStreamReader(checkProcess.getInputStream(), "UTF-8"))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            checkOutput.append(line).append("\n");
-                        }
-                    }
-                    checkProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-                    result.append(checkOutput.toString()).append("\n");
-
-                    // 方法2: 检查蓝牙服务状态
-                    result.append("[2/3] 检查蓝牙服务状态...\n");
-                    ProcessBuilder pb2 = new ProcessBuilder(
-                        "powershell.exe",
-                        "-Command",
-                        "$service = Get-Service -Name bthserv -ErrorAction SilentlyContinue; " +
-                        "if ($service) { " +
-                        "    Write-Host ('蓝牙服务状态: ' + $service.Status) " +
-                        "} else { " +
-                        "    Write-Host '未找到蓝牙服务' " +
-                        "}"
-                    );
-                    pb2.redirectErrorStream(true);
-                    Process process2 = pb2.start();
-
-                    StringBuilder output2 = new StringBuilder();
-                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                            new java.io.InputStreamReader(process2.getInputStream(), "UTF-8"))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            output2.append(line).append("\n");
-                        }
-                    }
-                    process2.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-                    result.append(output2.toString()).append("\n");
-
-                    // 方法3: 检查蓝牙网络适配器
-                    result.append("[3/3] 检查蓝牙网络适配器...\n");
-                    ProcessBuilder pb3 = new ProcessBuilder(
-                        "powershell.exe",
-                        "-Command",
-                        "$adapter = Get-NetAdapter | Where-Object {$_.InterfaceDescription -like '*Bluetooth*'}; " +
-                        "if ($adapter) { " +
-                        "    Write-Host ('蓝牙适配器: ' + $adapter.Name + ' - 状态: ' + $adapter.Status) " +
-                        "} else { " +
-                        "    Write-Host '未找到蓝牙网络适配器' " +
-                        "}"
-                    );
-                    pb3.redirectErrorStream(true);
-                    Process process3 = pb3.start();
-
-                    StringBuilder output3 = new StringBuilder();
-                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                            new java.io.InputStreamReader(process3.getInputStream(), "UTF-8"))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            output3.append(line).append("\n");
-                        }
-                    }
-                    process3.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-                    result.append(output3.toString()).append("\n");
-
-                    result.append("\n=== 检查完成 ===\n");
-                    result.append("如需开启蓝牙，请手动操作:\n");
-                    result.append("1. 点击任务栏右下角的通知图标 → 展开快速设置 → 点击蓝牙图标开启\n");
-                    result.append("2. 或按 Win+I → 蓝牙和设备 → 开启蓝牙开关\n");
-                    result.append("3. 部分电脑需要按 Fn+功能键 开启蓝牙硬件开关\n");
-
-                    return textResult(result.toString());
-                } catch (Exception e) {
-                    result.append("\n错误: ").append(e.getMessage()).append("\n");
-                    result.append(e.toString()).append("\n");
-                    return textResult(result.toString());
-                }
+                String result = BleTools.checkBluetoothOpen();
+                return textResult(result);
             }
         );
     }
 
-    // ==================== 数据管理工具 ====================
+    // ==================== MCP数据管理工具 ====================
 
     /**
-     * dlqq_clear_data - 清除.dlqq数据目录
+     * dlqq_clear_mcp_data - 清除MCP数据目录
      */
-    private void registerClearDataTool(McpServer server) {
+    private void registerClearMcpDataTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
-        server.addTool("dlqq_clear_data",
-            "清除.dlqq数据目录，删除整个.dlqq目录及其所有内容（包括日志、Python脚本等）。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。",
+        server.addTool("dlqq_clear_mcp_data",
+            "清除MCP数据目录（.dlqq），删除整个目录及其所有内容（包括日志、Python脚本等）。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。",
             inputSchema,
             arguments -> {
                 String result = McpTools.clearDlqqData();
@@ -3661,14 +3769,14 @@ public class AITools {
     }
 
     /**
-     * dlqq_clear_cache - 清除缓存日志文件
+     * dlqq_clear_mcp_cache - 清除MCP缓存日志文件
      */
-    private void registerClearCacheTool(McpServer server) {
+    private void registerClearMcpCacheTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
-        server.addTool("dlqq_clear_cache",
-            "清除.dlqq/log目录下的日志缓存文件，保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。",
+        server.addTool("dlqq_clear_mcp_cache",
+            "清除MCP日志缓存文件（.dlqq/log目录），保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。",
             inputSchema,
             arguments -> {
                 String result = McpTools.clearCache();
@@ -3865,275 +3973,84 @@ public class AITools {
         );
     }
 
-    // ==================== 设置脚本路径工具 ====================
+    // ==================== MCP数据管理工具 ====================
 
-    private void registerSetBuildScriptTool(McpServer server) {
+    /**
+     * 获取MCP配置属性
+     */
+    private void registerGetMcpPropertiesTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "构建脚本路径，例如：util/build/build.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
 
-        server.addTool("dlqq_set_build_script",
-            "设置构建项目脚本的路径。将路径保存到settings.properties中的script.build配置项。",
+        Map<String, Object> keyProp = new HashMap<>();
+        keyProp.put("type", "string");
+        keyProp.put("description", "属性键名（可选）。如果指定，只返回该属性的值；如果不指定，返回所有属性列表");
+        properties.put("key", keyProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_get_mcp_properties",
+            "获取MCP配置属性。可以获取所有属性列表，或指定属性键获取单个属性值。配置存储在 .dlqq/settings/settings.properties 文件中。",
             inputSchema,
             arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setBuildScript(scriptPath);
-                return textResult(result);
+                String key = (String) arguments.get("key");
+
+                if (key != null && !key.isEmpty()) {
+                    // 获取单个属性
+                    String value = McpTools.getConfigFromSettings(key);
+                    if (value == null) {
+                        return textResult("属性 '" + key + "' 不存在");
+                    }
+                    return textResult(key + " = " + value);
+                } else {
+                    // 获取所有属性
+                    Map<String, String> props = McpTools.getAllProperties();
+                    String formatted = McpTools.formatProperties(props);
+                    return textResult(formatted);
+                }
             }
         );
     }
 
-    private void registerSetRebuildScriptTool(McpServer server) {
+    /**
+     * 设置MCP配置属性
+     */
+    private void registerSetMcpPropertiesTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "重建脚本路径，例如：util/build/rebuild.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
 
-        server.addTool("dlqq_set_rebuild_script",
-            "设置重建项目脚本的路径。将路径保存到settings.properties中的script.rebuild配置项。",
+        Map<String, Object> keyProp = new HashMap<>();
+        keyProp.put("type", "string");
+        keyProp.put("description", "属性键名，例如：response.max.size、search.max.files、script.build");
+        properties.put("key", keyProp);
+
+        Map<String, Object> valueProp = new HashMap<>();
+        valueProp.put("type", "string");
+        valueProp.put("description", "属性值");
+        properties.put("value", valueProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_set_mcp_properties",
+            "设置MCP配置属性。至少指定 key 和 value 其中一个参数。配置保存到 .dlqq/settings/settings.properties 文件中。常用属性包括：response.max.size（响应大小限制）、search.max.files（最大搜索文件数）、search.max.file.size（最大文件大小）、search.text.extensions（文本文件后缀）、script.build（构建脚本路径）等。",
             inputSchema,
             arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setRebuildScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
+                String key = (String) arguments.get("key");
+                String value = (String) arguments.get("value");
 
-    private void registerSetChipEraseScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "芯片擦除脚本路径，例如：util/flash/erase.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+                if ((key == null || key.isEmpty()) && (value == null || value.isEmpty())) {
+                    return errorResult("至少指定一个参数：key 或 value");
+                }
 
-        server.addTool("dlqq_set_chip_erase_script",
-            "设置芯片擦除脚本的路径。将路径保存到settings.properties中的script.chip.erase配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setChipEraseScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
+                // 如果只指定了key，显示该属性的当前值
+                if (key != null && !key.isEmpty() && (value == null || value.isEmpty())) {
+                    String currentValue = McpTools.getConfigFromSettings(key);
+                    if (currentValue == null) {
+                        return textResult("属性 '" + key + "' 不存在");
+                    }
+                    return textResult(key + " = " + currentValue + "\n\n使用 dlqq_set_mcp_properties 并指定 value 参数来修改该属性");
+                }
 
-    private void registerSetChipDownloadScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "芯片下载脚本路径，例如：util/flash/download.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
-
-        server.addTool("dlqq_set_chip_download_script",
-            "设置芯片下载脚本的路径。将路径保存到settings.properties中的script.chip.download配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setChipDownloadScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
-
-    // ==================== 组合脚本设置工具 ====================
-
-    private void registerSetEraseDownloadScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "擦除下载组合脚本路径，例如：util/flash/erase_download.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
-
-        server.addTool("dlqq_set_erase_download_script",
-            "设置擦除并下载组合脚本的路径。将路径保存到settings.properties中的script.erase.download配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setEraseDownloadScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
-
-    private void registerSetBuildEraseDownloadScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "构建擦除下载组合脚本路径，例如：util/build/build_erase_download.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
-
-        server.addTool("dlqq_set_build_erase_download_script",
-            "设置构建、擦除并下载组合脚本的路径。将路径保存到settings.properties中的script.build.erase.download配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setBuildEraseDownloadScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
-
-    private void registerSetRebuildEraseDownloadScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "重建擦除下载组合脚本路径，例如：util/build/rebuild_erase_download.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
-
-        server.addTool("dlqq_set_rebuild_erase_download_script",
-            "设置重建、擦除并下载组合脚本的路径。将路径保存到settings.properties中的script.rebuild.erase.download配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setRebuildEraseDownloadScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
-
-    // ==================== 运行调试设置工具 ====================
-
-    private void registerSetRunScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "运行项目脚本路径，例如：util/run/run.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
-
-        server.addTool("dlqq_set_run_script",
-            "设置运行项目脚本的路径。将路径保存到settings.properties中的script.run配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setRunScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
-
-    private void registerSetDebugScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "调试项目脚本路径，例如：util/run/debug.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
-
-        server.addTool("dlqq_set_debug_script",
-            "设置调试项目脚本的路径。将路径保存到settings.properties中的script.debug配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setDebugScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
-
-    private void registerSetBuildRunScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "构建运行组合脚本路径，例如：util/build/build_run.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
-
-        server.addTool("dlqq_set_build_run_script",
-            "设置构建并运行组合脚本的路径。将路径保存到settings.properties中的script.build.run配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setBuildRunScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
-
-    private void registerSetBuildDebugScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "构建调试组合脚本路径，例如：util/build/build_debug.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
-
-        server.addTool("dlqq_set_build_debug_script",
-            "设置构建并调试组合脚本的路径。将路径保存到settings.properties中的script.build.debug配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setBuildDebugScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
-
-    private void registerSetRebuildRunScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "重建运行组合脚本路径，例如：util/build/rebuild_run.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
-
-        server.addTool("dlqq_set_rebuild_run_script",
-            "设置重建并运行组合脚本的路径。将路径保存到settings.properties中的script.rebuild.run配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setRebuildRunScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
-
-    private void registerSetRebuildDebugScriptTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> scriptPathProp = new HashMap<>();
-        scriptPathProp.put("type", "string");
-        scriptPathProp.put("description", "重建调试组合脚本路径，例如：util/build/rebuild_debug.bat");
-        properties.put("script_path", scriptPathProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
-
-        server.addTool("dlqq_set_rebuild_debug_script",
-            "设置重建并调试组合脚本的路径。将路径保存到settings.properties中的script.rebuild.debug配置项。",
-            inputSchema,
-            arguments -> {
-                String scriptPath = (String) arguments.get("script_path");
-                String result = McpTools.setRebuildDebugScript(scriptPath);
-                return textResult(result);
-            }
-        );
-    }
-
-    // ==================== 响应大小限制工具 ====================
-
-    private void registerSetResponseMaxSizeTool(McpServer server) {
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> maxSizeProp = new HashMap<>();
-        maxSizeProp.put("type", "string");
-        maxSizeProp.put("description", "最大回复文本大小（字节），建议范围：1024-102400，默认32768");
-        properties.put("max_size", maxSizeProp);
-        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("max_size"));
-
-        server.addTool("dlqq_set_response_max_size",
-            "设置最大回复文本大小限制（字节）。较大的值允许返回更多内容，但可能影响性能。建议范围：1024-102400。设置保存到settings.properties中的response.max.size配置项。",
-            inputSchema,
-            arguments -> {
-                String maxSize = (String) arguments.get("max_size");
-                String result = McpTools.setResponseMaxSize(maxSize);
+                // 设置属性
+                String result = McpTools.setProperty(key, value);
                 return textResult(result);
             }
         );

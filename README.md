@@ -15,7 +15,7 @@
 
 ## 工具列表
 
-本MCP服务器提供97个核心工具：
+本MCP服务器提供90个核心工具：
 
 ### 文件操作工具 (1-14)
 
@@ -56,14 +56,16 @@
 | `dlqq_read_bin_file` | 读取二进制文件，返回十六进制文本 |
 | `dlqq_write_bin_file` | 将十六进制文本写入为二进制文件 |
 
-### 搜索工具 (25-26)
+### 搜索工具 (25-28)
 
 | 工具名称 | 描述 |
 |---------|------|
 | `dlqq_search_file` | 搜索文件，支持部分匹配和正则表达式 |
 | `dlqq_search_dir` | 搜索文件夹，支持部分匹配和正则表达式 |
+| `dlqq_search_text_in_dir` | 在目录下所有文件中搜索文本内容，支持正则表达式 |
+| `dlqq_search_text_in_file` | 在单个文件中搜索文本内容，支持正则表达式 |
 
-### 对话框工具 (27-29)
+### 对话框工具 (29-31)
 
 | 工具名称 | 描述 |
 |---------|------|
@@ -71,7 +73,7 @@
 | `dlqq_dialog_check` | 确认对话框，用户选择是/否（独立窗口） |
 | `dlqq_dialog_file_path` | 文件选择对话框（独立窗口） |
 
-### 串口工具 (30-46)
+### 串口工具 (32-48)
 
 | 工具名称 | 描述 |
 |---------|------|
@@ -93,7 +95,7 @@
 | `dlqq_exit_uart` | 退出串口工具（关闭窗口及进程） |
 | `dlqq_rerun_uart` | 重新启动串口工具（先关闭再启动，用于刷新窗口） |
 
-### BLE库管理工具 (47-50)
+### BLE库管理工具 (49-52)
 
 | 工具名称 | 描述 |
 |---------|------|
@@ -102,7 +104,7 @@
 | `dlqq_ble_lib_update` | 检查并更新Python BLE库到最新版本 |
 | `dlqq_ble_release_script` | 释放BLE Python脚本到项目目录 |
 
-### BLE蓝牙工具 (51-69)
+### BLE蓝牙工具 (53-72)
 
 | 工具名称 | 描述 |
 |---------|------|
@@ -124,27 +126,24 @@
 | `dlqq_ble_set_buffer_size` | 设置BLE数据缓冲区大小 |
 | `dlqq_ble_switch_text_hex` | 切换日志显示格式（文本/HEX） |
 | `dlqq_exit_ble` | 退出BLE工具（关闭窗口及进程） |
+| `dlqq_check_bluetooth_open` | 检查Windows电脑的蓝牙适配器是否已开启 |
 | `dlqq_rerun_ble` | 重新启动BLE工具（先关闭再启动，用于刷新窗口） |
 
-### 系统信息工具 (70-71)
+### MCP数据管理工具 (73-77)
 
 | 工具名称 | 描述 |
 |---------|------|
 | `dlqq_get_mcp_version` | 获取MCP服务器版本信息、JAR文件修改时间和构建信息 |
-| `dlqq_check_bluetooth_open` | 检查Windows电脑的蓝牙适配器是否已开启 |
+| `dlqq_clear_mcp_data` | 清除MCP数据目录（.dlqq），包括日志、Python脚本等 |
+| `dlqq_clear_mcp_cache` | 清除MCP日志缓存文件（.dlqq/log），保留目录结构 |
+| `dlqq_get_mcp_properties` | 获取MCP配置属性列表或指定属性的值 |
+| `dlqq_set_mcp_properties` | 设置MCP配置属性（支持脚本路径、响应大小、搜索配置等） |
 
-### 数据管理工具 (72-73)
-
-| 工具名称 | 描述 |
-|---------|------|
-| `dlqq_clear_data` | 清除.dlqq数据目录（包括日志、Python脚本等），即使部分文件被占用也会返回成功 |
-| `dlqq_clear_cache` | 清除日志缓存文件（仅删除.dlqq/log下的日志），即使部分文件被占用也会返回成功 |
-
-### 项目脚本工具 (74-100)
+### 项目脚本工具 (78-90)
 
 脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本，用于自动化项目构建、芯片操作等流程。
 
-**脚本配置说明**：首次使用前需通过 `dlqq_set_*_script` 工具设置脚本路径，或手动编辑 `.dlqq/settings/settings.properties` 文件。
+**脚本配置说明**：首次使用前需通过 `dlqq_set_mcp_properties` 工具设置脚本路径，或手动编辑 `.dlqq/settings/settings.properties` 文件。
 
 #### 执行类工具
 
@@ -163,25 +162,6 @@
 | `dlqq_build_debug_project` | 构建并调试（执行 script.build.debug 配置的脚本） |
 | `dlqq_rebuild_run_project` | 重建并运行（执行 script.rebuild.run 配置的脚本） |
 | `dlqq_rebuild_debug_project` | 重建并调试（执行 script.rebuild.debug 配置的脚本） |
-
-#### 设置类工具
-
-| 工具名称 | 描述 |
-|---------|------|
-| `dlqq_set_build_script` | 设置构建脚本路径（script.build） |
-| `dlqq_set_rebuild_script` | 设置重建脚本路径（script.rebuild） |
-| `dlqq_set_chip_erase_script` | 设置芯片擦除脚本路径（script.chip.erase） |
-| `dlqq_set_chip_download_script` | 设置芯片下载脚本路径（script.chip.download） |
-| `dlqq_set_erase_download_script` | 设置擦除下载脚本路径（script.erase.download） |
-| `dlqq_set_build_erase_download_script` | 设置构建擦除下载脚本路径（script.build.erase.download） |
-| `dlqq_set_rebuild_erase_download_script` | 设置重建擦除下载脚本路径（script.rebuild.erase.download） |
-| `dlqq_set_run_script` | 设置运行脚本路径（script.run） |
-| `dlqq_set_debug_script` | 设置调试脚本路径（script.debug） |
-| `dlqq_set_build_run_script` | 设置构建运行脚本路径（script.build.run） |
-| `dlqq_set_build_debug_script` | 设置构建调试脚本路径（script.build.debug） |
-| `dlqq_set_rebuild_run_script` | 设置重建运行脚本路径（script.rebuild.run） |
-| `dlqq_set_rebuild_debug_script` | 设置重建调试脚本路径（script.rebuild.debug） |
-| `dlqq_set_response_max_size` | 设置最大回复文本大小（response.max.size，默认32KB） |
 
 ## 参数类型说明
 
@@ -685,7 +665,71 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **返回**：匹配的文件夹路径列表
 
-### 23. dlqq_dialog_text
+### 23. dlqq_search_text_in_dir
+
+在指定目录下的所有文件中搜索文本内容，支持普通文本匹配和正则表达式。
+
+**参数**：
+- `search_path` (string, 必需): 搜索目录路径
+- `pattern` (string, 必需): 搜索模式
+- `use_regex` (boolean, 可选): 是否使用正则表达式，默认 false
+- `ignore_case` (boolean, 可选): 是否忽略大小写，默认 true
+- `file_extensions` (string, 可选): 文件扩展名过滤，如 "java,txt,md"，留空表示所有文本文件
+
+**示例**：
+```json
+// 搜索包含 "TODO" 的文本文件
+{
+  "search_path": "src",
+  "pattern": "TODO",
+  "use_regex": false,
+  "ignore_case": true
+}
+
+// 使用正则搜索函数定义
+{
+  "search_path": "src",
+  "pattern": "public void.*\\(",
+  "use_regex": true,
+  "ignore_case": false,
+  "file_extensions": "java"
+}
+```
+
+**返回**：搜索结果列表，每项包含文件路径、行号、匹配内容等信息
+
+### 24. dlqq_search_text_in_file
+
+在单个文件中搜索文本内容，支持普通文本匹配和正则表达式。
+
+**参数**：
+- `file_path` (string, 必需): 文件路径
+- `pattern` (string, 必需): 搜索模式
+- `use_regex` (boolean, 可选): 是否使用正则表达式，默认 false
+- `ignore_case` (boolean, 可选): 是否忽略大小写，默认 true
+
+**示例**：
+```json
+// 在单个文件中搜索文本
+{
+  "file_path": "src/main.java",
+  "pattern": "public class",
+  "use_regex": false,
+  "ignore_case": true
+}
+
+// 使用正则搜索特定模式
+{
+  "file_path": "config.properties",
+  "pattern": "^\\w+=",
+  "use_regex": true,
+  "ignore_case": false
+}
+```
+
+**返回**：搜索结果列表，每项包含行号、匹配内容等信息
+
+### 25. dlqq_dialog_text
 
 向用户展示文本输入对话框，等待用户输入。
 
@@ -703,7 +747,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **返回**：用户输入的文本内容
 
-### 24. dlqq_dialog_check
+### 30. dlqq_dialog_check
 
 向用户展示确认对话框，用户选择是/否。
 
@@ -721,7 +765,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **返回**："是" 或 "否"
 
-### 25. dlqq_dialog_file_path
+### 27. dlqq_dialog_file_path
 
 向用户展示文件选择对话框。
 
@@ -739,7 +783,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **返回**：选中的文件路径
 
-### 26. dlqq_run_uart
+### 28. dlqq_run_uart
 
 启动CH340串口工具，打开图形界面。
 
@@ -755,7 +799,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：启动后窗口保持运行，AI返回对话后用户可与UI交互。后续使用 `dlqq_uart_open_com` 等工具时需要指定相同的端口号。
 
-### 27. dlqq_uart_get_com
+### 29. dlqq_uart_get_com
 
 获取系统中所有可用的串口通道列表。
 
@@ -771,7 +815,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **返回**：可用串口列表，自动标记CH340设备
 
-### 28. dlqq_uart_refresh_com
+### 30. dlqq_uart_refresh_com
 
 刷新可用串口列表。获取系统中当前可用的所有串口设备。
 
@@ -785,7 +829,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 29. dlqq_uart_open_com
+### 31. dlqq_uart_open_com
 
 打开指定串口通道，开始捕获数据。
 
@@ -803,7 +847,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 30. dlqq_uart_close_com
+### 32. dlqq_uart_close_com
 
 关闭当前打开的串口通道。
 
@@ -817,7 +861,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 31. dlqq_uart_reopen_com
+### 33. dlqq_uart_reopen_com
 
 重新打开串口，用于更改波特率。
 
@@ -834,7 +878,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 32. dlqq_uart_send_text
+### 34. dlqq_uart_send_text
 
 发送文本数据到串口。
 
@@ -850,7 +894,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 33. dlqq_uart_send_hex
+### 35. dlqq_uart_send_hex
 
 发送16进制数据到串口。
 
@@ -866,7 +910,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 34. dlqq_uart_get_log
+### 36. dlqq_uart_get_log
 
 获取串口缓冲区日志数据，支持3种读取模式。返回格式取决于当前显示格式设置（文本/HEX）。
 
@@ -908,7 +952,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：如需固定格式，请使用 `dlqq_uart_get_log_text`（强制文本）或 `dlqq_uart_get_log_hex`（强制HEX）。
 
-### 35. dlqq_uart_get_log_text
+### 37. dlqq_uart_get_log_text
 
 获取串口缓冲区日志数据（强制文本格式）。支持3种读取模式。
 
@@ -950,7 +994,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：无论当前显示格式设置如何，始终返回文本格式。
 
-### 36. dlqq_uart_get_log_hex
+### 38. dlqq_uart_get_log_hex
 
 获取串口缓冲区日志数据（强制HEX格式）。支持3种读取模式。
 
@@ -992,7 +1036,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：无论当前显示格式设置如何，始终返回HEX格式。
 
-### 37. dlqq_uart_clear_text
+### 39. dlqq_uart_clear_text
 
 清除串口数据缓冲区。
 
@@ -1006,7 +1050,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 38. dlqq_uart_get_line_count
+### 40. dlqq_uart_get_line_count
 
 获取当前缓冲区行数。
 
@@ -1022,7 +1066,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **返回**：当前缓冲区中的日志行数
 
-### 39. dlqq_uart_set_text_size
+### 41. dlqq_uart_set_text_size
 
 设置串口数据缓冲区大小。
 
@@ -1040,7 +1084,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：默认5MB，超出后旧数据会被自动丢弃。
 
-### 40. dlqq_uart_switch_text_hex
+### 42. dlqq_uart_switch_text_hex
 
 切换日志显示格式（文本/HEX）。
 
@@ -1065,7 +1109,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：切换后，UI日志显示和 `dlqq_uart_get_log` 返回的数据格式都会相应改变。
 
-### 41. dlqq_exit_uart
+### 43. dlqq_exit_uart
 
 完全退出串口工具，关闭窗口及进程，释放所有资源。
 
@@ -1079,7 +1123,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 42. dlqq_run_ble
+### 44. dlqq_run_ble
 
 启动BLE蓝牙工具，打开图形界面。
 
@@ -1095,7 +1139,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：启动后窗口保持运行，AI返回对话后用户可与UI交互。后续使用 `dlqq_ble_scan` 等工具时需要指定相同的端口号。
 
-### 43. dlqq_ble_scan
+### 45. dlqq_ble_scan
 
 扫描周围的BLE蓝牙设备。
 
@@ -1113,7 +1157,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：扫描完成后使用 `dlqq_ble_get_devices` 查看结果。
 
-### 44. dlqq_ble_get_devices
+### 46. dlqq_ble_get_devices
 
 获取扫描到的BLE设备列表。
 
@@ -1127,7 +1171,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 45. dlqq_ble_connect
+### 47. dlqq_ble_connect
 
 连接指定的BLE设备。
 
@@ -1143,7 +1187,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 46. dlqq_ble_disconnect
+### 48. dlqq_ble_disconnect
 
 断开当前连接的BLE设备。
 
@@ -1157,7 +1201,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 47. dlqq_ble_discover
+### 49. dlqq_ble_discover
 
 发现已连接BLE设备的服务和特征。
 
@@ -1173,7 +1217,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：必须先连接设备。返回服务和特征列表，包含UUID和属性信息。
 
-### 48. dlqq_ble_read
+### 50. dlqq_ble_read
 
 读取BLE设备的特征值。
 
@@ -1191,7 +1235,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 49. dlqq_ble_write_text
+### 51. dlqq_ble_write_text
 
 向BLE设备写入文本数据。
 
@@ -1211,7 +1255,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 50. dlqq_ble_write_hex
+### 52. dlqq_ble_write_hex
 
 向BLE设备写入16进制数据。
 
@@ -1231,7 +1275,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 51. dlqq_ble_subscribe
+### 53. dlqq_ble_subscribe
 
 订阅或取消订阅BLE设备的特征通知。
 
@@ -1251,7 +1295,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 52. dlqq_ble_get_log
+### 54. dlqq_ble_get_log
 
 获取BLE缓冲区日志数据，支持3种读取模式。返回格式取决于当前显示格式设置（文本/HEX）。
 
@@ -1271,7 +1315,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 53. dlqq_ble_get_log_text
+### 55. dlqq_ble_get_log_text
 
 获取BLE日志数据（强制文本格式）。支持3种模式（同 dlqq_ble_get_log）。
 
@@ -1284,7 +1328,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 54. dlqq_ble_get_log_hex
+### 56. dlqq_ble_get_log_hex
 
 获取BLE日志数据（强制HEX格式）。支持3种模式（同 dlqq_ble_get_log）。
 
@@ -1297,7 +1341,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 55. dlqq_ble_clear
+### 57. dlqq_ble_clear
 
 清除BLE数据缓冲区。
 
@@ -1311,7 +1355,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 56. dlqq_ble_set_buffer_size
+### 58. dlqq_ble_set_buffer_size
 
 设置BLE数据缓冲区大小。
 
@@ -1327,7 +1371,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 57. dlqq_ble_switch_text_hex
+### 59. dlqq_ble_switch_text_hex
 
 切换BLE日志显示格式（文本/HEX）。
 
@@ -1343,7 +1387,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 58. dlqq_exit_ble
+### 70. dlqq_exit_ble
 
 完全退出BLE工具，关闭窗口及进程，释放所有资源。
 
@@ -1357,9 +1401,49 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-### 59. dlqq_clear_data
+### 71. dlqq_rerun_ble
 
-清除.dlqq数据目录，删除整个.dlqq目录及其所有内容（包括日志、Python脚本等）。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。
+重新启动BLE工具。先关闭指定端口号的BLE工具（如果正在运行），然后重新启动。用于刷新BLE工具窗口或解决连接问题。
+
+**参数**：
+- `port` (string, 必需): BLE工具的端口号（例如："8090"、"8091"等）
+
+**示例**：
+```json
+{
+  "port": 8090
+}
+```
+
+### 72. dlqq_check_bluetooth_open
+
+检查Windows电脑的蓝牙适配器是否已开启。
+
+**参数**：无
+
+**示例**：
+```json
+{}
+```
+
+**返回**：蓝牙设备状态、蓝牙服务状态、蓝牙网络适配器状态的详细检查结果
+
+### 73. dlqq_get_mcp_version
+
+获取MCP服务器版本信息、JAR文件修改时间和构建信息。
+
+**参数**：无
+
+**示例**：
+```json
+{}
+```
+
+**返回**：版本号、构建时间、JAR文件路径等信息
+
+### 74. dlqq_clear_mcp_data
+
+清除MCP数据目录（.dlqq），删除整个目录及其所有内容（包括日志、Python脚本等）。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。
 
 **参数**：无
 
@@ -1375,9 +1459,9 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **注意**：部分文件（尤其是当前正在写入的日志文件）可能因被MCP服务器占用而无法删除，这是正常现象。工具会返回成功结果，并列出已删除的文件和被占用的文件。被占用的文件将在MCP服务器重启后可以被清除。
 
-### 60. dlqq_clear_cache
+### 75. dlqq_clear_mcp_cache
 
-清除.dlqq/log目录下的日志缓存文件，保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。
+清除MCP日志缓存文件（.dlqq/log目录），保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。
 
 **参数**：无
 
@@ -1388,7 +1472,75 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：此操作仅删除日志文件，保留 .dlqq/log/ 目录结构。
 
-**注意**：部分日志文件可能因被MCP服务器占用而无法删除，这是正常现象。工具会返回成功结果，并列出已删除的文件和被占用的文件。被占用的文件将在MCP服务器重启后可以被清除。
+**注意**：部分日志文件可能因被MCP服务器占用而无法无法删除，这是正常现象。工具会返回成功结果，并列出已删除的文件和被占用的文件。被占用的文件将在MCP服务器重启后可以被清除。
+
+### 76. dlqq_get_mcp_properties
+
+获取MCP配置属性列表或指定属性的值。配置存储在 `.dlqq/settings/settings.properties` 文件中。
+
+**参数**：
+- `key` (string, 可选): 属性键名。如果指定，只返回该属性的值；如果不指定，返回所有属性列表
+
+**示例**：
+```json
+// 获取所有属性列表
+{}
+
+// 获取单个属性
+{ "key": "response.max.size" }
+```
+
+**返回**：格式化的属性列表，按类别分组显示（响应大小限制、搜索配置、脚本配置、其他配置）
+
+### 77. dlqq_set_mcp_properties
+
+设置MCP配置属性。配置保存到 `.dlqq/settings/settings.properties` 文件中。
+
+**参数**：
+- `key` (string, 可选): 属性键名，例如：response.max.size、search.max.files、script.build
+- `value` (string, 可选): 属性值
+
+**说明**：至少指定 key 和 value 其中一个参数。如果只指定 key，则显示该属性的当前值。
+
+**常用配置项**：
+- `response.max.size` - 最大回复文本大小（字节），默认32768
+- `search.max.files` - 最大搜索文件数，默认1000
+- `search.max.file.size` - 最大文件大小（字节），默认10MB
+- `search.max.results` - 最大搜索结果数，默认50
+- `search.text.extensions` - 默认文本文件后缀列表
+- `script.build` - 构建脚本路径
+- `script.rebuild` - 重建脚本路径
+- `script.chip.erase` - 芯片擦除脚本路径
+- `script.chip.download` - 芯片下载脚本路径
+- `script.erase.download` - 擦除下载组合脚本路径
+- `script.build.erase.download` - 构建擦除下载组合脚本路径
+- `script.rebuild.erase.download` - 重建擦除下载组合脚本路径
+- `script.run` - 运行项目脚本路径
+- `script.debug` - 调试项目脚本路径
+- `script.build.run` - 构建运行组合脚本路径
+- `script.build.debug` - 构建调试组合脚本路径
+- `script.rebuild.run` - 重建运行组合脚本路径
+- `script.rebuild.debug` - 重建调试组合脚本路径
+
+**示例**：
+```json
+// 设置最大回复文本大小为64KB
+{ "key": "response.max.size", "value": "65536" }
+
+// 设置搜索最大文件数为500
+{ "key": "search.max.files", "value": "500" }
+
+// 设置构建脚本路径
+{ "key": "script.build", "value": "util/build/build.bat" }
+
+// 设置默认文本文件后缀
+{ "key": "search.text.extensions", "value": ".java,.c,.cpp,.h,.py" }
+
+// 查询当前属性的值（不设置）
+{ "key": "response.max.size" }
+```
+
+**返回**：设置结果消息，包含属性键、旧值（如有）和新值
 
 ## 使用示例
 
