@@ -15,7 +15,7 @@
 
 ## 工具列表
 
-本MCP服务器提供90个核心工具：
+本MCP服务器提供94个核心工具：
 
 ### 文件操作工具 (1-14)
 
@@ -129,17 +129,26 @@
 | `dlqq_check_bluetooth_open` | 检查Windows电脑的蓝牙适配器是否已开启 |
 | `dlqq_rerun_ble` | 重新启动BLE工具（先关闭再启动，用于刷新窗口） |
 
-### MCP数据管理工具 (73-77)
+### MCP数据管理工具 (73-78)
 
 | 工具名称 | 描述 |
 |---------|------|
 | `dlqq_get_mcp_version` | 获取MCP服务器版本信息、JAR文件修改时间和构建信息 |
 | `dlqq_clear_mcp_data` | 清除MCP数据目录（.dlqq），包括日志、Python脚本等 |
-| `dlqq_clear_mcp_cache` | 清除MCP日志缓存文件（.dlqq/log），保留目录结构 |
+| `dlqq_clear_mcp_cache` | 清除MCP缓存目录（.dlqq/cache），删除所有缓存文件和子目录 |
+| `dlqq_clear_mcp_log` | 清除MCP日志文件（.dlqq/log），保留目录结构 |
 | `dlqq_get_mcp_properties` | 获取MCP配置属性列表或指定属性的值 |
 | `dlqq_set_mcp_properties` | 设置MCP配置属性（支持脚本路径、响应大小、搜索配置等） |
+| `dlqq_reset_mcp_properties` | 重置MCP配置属性为默认值（可重置单个或所有配置） |
 
-### 项目脚本工具 (78-90)
+### Office文件工具 (79-80)
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_read_office_file` | 读取Office文件（PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX）并转换为Markdown |
+| `dlqq_convert_office_file` | 将Office文件从一种格式转换为另一种格式（支持 MD/TXT/DOCX/XLSX/PPTX） |
+
+### 项目脚本工具 (81-94)
 
 脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本，用于自动化项目构建、芯片操作等流程。
 
@@ -1461,7 +1470,22 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 ### 75. dlqq_clear_mcp_cache
 
-清除MCP日志缓存文件（.dlqq/log目录），保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。
+清除MCP缓存目录（.dlqq/cache），删除缓存的所有文件和子目录。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。
+
+**参数**：无
+
+**示例**：
+```json
+{}
+```
+
+**说明**：此操作删除 .dlqq/cache/ 目录下的所有内容，包括：
+- Office文件转换后的Markdown文件
+- 其他缓存数据
+
+### 76. dlqq_clear_mcp_log
+
+清除MCP日志文件（.dlqq/log目录），保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。
 
 **参数**：无
 
@@ -1472,9 +1496,9 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **说明**：此操作仅删除日志文件，保留 .dlqq/log/ 目录结构。
 
-**注意**：部分日志文件可能因被MCP服务器占用而无法无法删除，这是正常现象。工具会返回成功结果，并列出已删除的文件和被占用的文件。被占用的文件将在MCP服务器重启后可以被清除。
+**注意**：部分日志文件可能因被MCP服务器占用而无法删除，这是正常现象。工具会返回成功结果，并列出已删除的文件和被占用的文件。被占用的文件将在MCP服务器重启后可以被清除。
 
-### 76. dlqq_get_mcp_properties
+### 77. dlqq_get_mcp_properties
 
 获取MCP配置属性列表或指定属性的值。配置存储在 `.dlqq/settings/settings.properties` 文件中。
 
@@ -1542,6 +1566,53 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 **返回**：设置结果消息，包含属性键、旧值（如有）和新值
 
+### 80. dlqq_reset_mcp_properties
+
+重置MCP配置属性为默认值。
+
+**参数**：
+- `key` (string, 可选): 要重置的属性键名。如果为空，则重置所有配置为默认值
+
+**示例**：
+```json
+// 重置单个属性为默认值
+{ "key": "response.max.size" }
+
+// 重置所有配置为默认值
+{}
+```
+
+**说明**：重置后会将配置恢复为系统默认值。
+
+### 81. dlqq_read_office_file
+
+读取Office文件（PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX）并转换为Markdown格式。
+
+**参数**：
+- `file_path` (string, 必需): Office文件路径
+
+**示例**：
+```json
+// 读取PDF文件
+{ "file_path": "document.pdf" }
+
+// 读取Word文档
+{ "file_path": "report.docx" }
+
+// 读取Excel表格
+{ "file_path": "data.xlsx" }
+
+// 读取PPT演示文稿
+{ "file_path": "presentation.pptx" }
+```
+
+**返回**：转换成功后的Markdown文件路径，保存在 .dlqq/cache 目录
+
+**说明**：
+- 支持的格式：PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX
+- 转换后的Markdown文件包含文件信息头和原始内容
+- 转换后的文件需要使用 dlqq_read_file 工具读取内容
+
 ## 使用示例
 
 在支持MCP的AI客户端中，可以直接请求AI使用这些工具：
@@ -1607,6 +1678,32 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 - "断开BLE连接"
 - "退出BLE工具"
 
+### MCP数据管理示例
+
+- "获取MCP版本信息"
+- "清除MCP数据目录"
+- "清除MCP缓存目录"
+- "清除MCP日志文件"
+- "获取所有MCP配置属性"
+- "设置 response.max.size 为 65536"
+- "重置 search.max.files 为默认值"
+- "重置所有MCP配置为默认值"
+
+### Office文件读取示例
+
+- "读取 document.pdf 文件"
+- "读取 report.docx 并转换为Markdown"
+- "读取 data.xlsx 表格文件"
+- "读取 presentation.pptx 演示文稿"
+
+### Office文件格式转换示例
+
+- "将 document.pdf 转换为 docx 格式"
+- "把 report.docx 转换为 txt 纯文本"
+- "将 data.xlsx 转换为 md 格式"
+- "把 notes.md 转换为 docx 文档"
+- "将 presentation.pptx 转换为 md 大纲"
+
 ## 技术栈
 
 - **Java 17+**（必需，runtime目录提供安装包）
@@ -1616,6 +1713,8 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 - 依赖：
   - jSerialComm（UART串口通信）
   - Python bleak库（BLE蓝牙通信）
+  - Apache POI（Office文件处理：DOC/DOCX/XLS/XLSX/PPT/PPTX）
+  - Apache PDFBox（PDF文件处理）
 
 ## 项目结构
 
@@ -1633,7 +1732,9 @@ src/main/java/com/donglouqiaoque/aitools/
 │   │   ├── FileTools.java         # 文件操作工具
 │   │   ├── DialogTools.java       # GUI对话框工具
 │   │   ├── UartTools.java         # 串口工具
-│   │   └── BleTools.java          # BLE蓝牙工具
+│   │   ├── BleTools.java          # BLE蓝牙工具
+│   │   ├── McpTools.java          # MCP数据管理工具
+│   │   └── OfficeTools.java       # Office文件读取工具
 │   └── transport/
 │       ├── McpTransport.java      # 传输层接口
 │       └── StdioTransport.java    # stdio传输实现

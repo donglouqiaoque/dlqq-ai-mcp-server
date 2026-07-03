@@ -101,6 +101,19 @@ use_debug=false
 - `dlqq_clear_data`：删除整个 .dlqq 目录及其所有内容。即使部分文件被占用（如日志文件正在被MCP服务器写入），也会返回成功结果，并告知哪些文件被占用。这是正常现象，被占用的文件将在MCP服务器重启后可以被清除。
 - `dlqq_clear_cache`：仅清除 .dlqq/log 目录下的日志文件，保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。
 
+### Office文件工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_read_office_file` | 读取Office文件（PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX）并转换为Markdown |
+| `dlqq_convert_office_file` | 将Office文件从一种格式转换为另一种格式（支持 MD/TXT/DOCX/XLSX/PPTX） |
+
+**说明**：
+- 支持的源格式：PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX、MD、TXT
+- 支持的目标格式：DOCX、XLSX、PPTX、MD、TXT（PDF暂不支持写入）
+- 转换后的文件默认保存到 `.dlqq/cache` 目录
+- 未指定输出路径时自动生成带时间戳的文件名
+
 ### 项目脚本工具
 
 脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本。首次使用前需通过 `dlqq_set_*_script` 工具设置脚本路径。

@@ -2328,41 +2328,77 @@ public class FileTools {
     }
 
     /**
-     * 在单个文件中搜索文本
+     * 在单个文件中搜索文本 - 使用流式读取，支持大文件
      */
     private static void searchInFile(Path file, Pattern regex, String searchPattern,
                                      boolean useRegex, boolean ignoreCase,
                                      List<TextSearchResult> results) throws IOException {
-        List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+        // 使用流式读取，避免大文件导致内存溢出
+        List<String> contextBuffer = new ArrayList<>(); // 保存前后3行上下文
+        int lineNumber = 0;
 
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i);
-            boolean matched;
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lineNumber++;
 
-            if (useRegex) {
-                matched = regex.matcher(line).find();
-            } else {
-                String checkLine = ignoreCase ? line.toLowerCase() : line;
-                matched = checkLine.contains(searchPattern);
-            }
-
-            if (matched) {
-                // 获取上下文（前后3行）
-                List<String> context = new ArrayList<>();
-                int startLine = Math.max(0, i - 3);
-                int endLine = Math.min(lines.size() - 1, i + 3);
-
-                for (int j = startLine; j <= endLine; j++) {
-                    String prefix = (j == i) ? ">>> " : "    ";
-                    context.add(prefix + String.format("%4d", j + 1) + " | " + lines.get(j));
+                boolean matched;
+                if (useRegex) {
+                    matched = regex.matcher(line).find();
+                } else {
+                    String checkLine = ignoreCase ? line.toLowerCase() : line;
+                    matched = checkLine.contains(searchPattern);
                 }
 
-                results.add(new TextSearchResult(
-                    file.toString(),
-                    i + 1,
-                    line,
-                    context
-                ));
+                if (matched) {
+                    // 构建上下文：需要前3行，当前行，后3行
+                    List<String> context = new ArrayList<>();
+
+                    // 添加前3行（从contextBuffer中）
+                    int startIdx = Math.max(0, contextBuffer.size() - 3);
+                    for (int i = startIdx; i < contextBuffer.size(); i++) {
+                        String[] parts = contextBuffer.get(i).split("\n", 2);
+                        int ctxLineNum = Integer.parseInt(parts[0]);
+                        context.add("    " + String.format("%4d", ctxLineNum) + " | " + parts[1]);
+                    }
+
+                    // 添加当前行（标记为匹配行）
+                    context.add(">>> " + String.format("%4d", lineNumber) + " | " + line);
+
+                    // 读取后3行
+                    int linesAfter = 0;
+                    StringBuilder afterBuffer = new StringBuilder();
+                    String afterLine;
+                    while (linesAfter < 3 && (afterLine = reader.readLine()) != null) {
+                        lineNumber++;
+                        linesAfter++;
+                        context.add("    " + String.format("%4d", lineNumber) + " | " + afterLine);
+                        afterBuffer.append(lineNumber).append("\n").append(afterLine).append("\n");
+                    }
+
+                    results.add(new TextSearchResult(
+                        file.toString(),
+                        lineNumber - linesAfter, // 当前匹配行的行号
+                        line,
+                        context
+                    ));
+
+                    // 将后读取的行添加到contextBuffer
+                    if (afterBuffer.length() > 0) {
+                        String[] afterLines = afterBuffer.toString().split("\n");
+                        for (int i = 0; i < afterLines.length - 1; i += 2) {
+                            if (i + 1 < afterLines.length) {
+                                contextBuffer.add(afterLines[i] + "\n" + afterLines[i + 1]);
+                            }
+                        }
+                    }
+                }
+
+                // 维护contextBuffer（只保留最近3行）
+                contextBuffer.add(lineNumber + "\n" + line);
+                if (contextBuffer.size() > 3) {
+                    contextBuffer.remove(0);
+                }
             }
         }
     }

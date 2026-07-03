@@ -280,76 +280,6 @@ public class McpTools {
     }
 
     /**
-     * 清除缓存日志文件
-     * 只删除.dlqq/log目录下的日志文件，保留目录结构
-     * @return 删除结果描述（始终返回成功，即使部分文件被占用）
-     */
-    public static String clearCache() {
-        Path logPath = Paths.get(".dlqq/log");
-
-        if (!Files.exists(logPath)) {
-            return "日志目录不存在，无需清除";
-        }
-
-        if (!Files.isDirectory(logPath)) {
-            return "✗ 清除失败：日志路径不是目录";
-        }
-
-        int deletedCount = 0;
-        java.util.List<String> busyFiles = new java.util.ArrayList<>();
-
-        // 遍历log目录下的所有子目录
-        try (Stream<Path> subDirs = Files.list(logPath)) {
-            for (Path subDir : subDirs.toList()) {
-                if (Files.isDirectory(subDir)) {
-                    // 遍历子目录中的日志文件
-                    try (Stream<Path> files = Files.list(subDir)) {
-                        for (Path file : files.toList()) {
-                            if (Files.isRegularFile(file)) {
-                                try {
-                                    Files.delete(file);
-                                    deletedCount++;
-                                } catch (IOException e) {
-                                    busyFiles.add(subDir.getFileName() + "/" + file.getFileName());
-                                }
-                            }
-                        }
-                    } catch (IOException e) {
-                        // 忽略读取子目录失败
-                    }
-                }
-            }
-        } catch (IOException e) {
-            return "✗ 清除失败：无法读取日志目录 - " + e.getMessage();
-        }
-
-        // 构建返回结果
-        StringBuilder result = new StringBuilder();
-        result.append("✓ 日志缓存清除完成\n");
-        result.append("===================\n\n");
-
-        if (deletedCount > 0) {
-            result.append("已删除的日志文件：").append(deletedCount).append("个\n\n");
-        }
-
-        if (!busyFiles.isEmpty()) {
-            result.append("以下日志文件当前被占用，无法删除（").append(busyFiles.size()).append("个）：\n");
-            for (String file : busyFiles) {
-                result.append("  ○ ").append(file).append("\n");
-            }
-            result.append("\n");
-            result.append("注意：部分文件无法删除是正常现象，因为这些日志文件正在被MCP服务器使用。\n");
-            result.append("已删除的日志文件不会受到影响，被占用的文件将在MCP服务器重启后可以被清除。\n");
-        } else if (deletedCount == 0) {
-            result.append("没有找到需要清除的日志文件。\n");
-        } else {
-            result.append("所有日志文件已成功删除。\n");
-        }
-
-        return result.toString();
-    }
-
-    /**
      * 递归删除目录并收集结果
      */
     private static void deleteDirectoryRecursiveCollect(Path path, String relativePath,
@@ -1517,5 +1447,276 @@ public class McpTools {
         }
 
         return sb.toString();
+    }
+
+    // ==================== 缓存目录工具 ====================
+
+    /**
+     * 获取缓存目录路径
+     * @return 缓存目录Path
+     */
+    public static Path getCacheDir() {
+        return Paths.get(".dlqq/cache");
+    }
+
+    /**
+     * 确保缓存目录存在
+     * @return 缓存目录Path
+     */
+    public static Path ensureCacheDir() throws IOException {
+        Path cacheDir = getCacheDir();
+        if (!Files.exists(cacheDir)) {
+            Files.createDirectories(cacheDir);
+        }
+        return cacheDir;
+    }
+
+    /**
+     * 清除缓存目录
+     * 删除.dlqq/cache目录下的所有文件和子目录
+     * @return 清除结果描述
+     */
+    public static String clearCache() {
+        Path cachePath = getCacheDir();
+
+        if (!Files.exists(cachePath)) {
+            return "✓ 缓存目录不存在，无需清除";
+        }
+
+        if (!Files.isDirectory(cachePath)) {
+            return "✗ 清除失败：缓存路径不是目录";
+        }
+
+        int deletedCount = 0;
+        int dirCount = 0;
+        java.util.List<String> busyFiles = new java.util.ArrayList<>();
+
+        // 遍历cache目录下的所有文件和子目录
+        try (Stream<Path> entries = Files.list(cachePath)) {
+            for (Path entry : entries.toList()) {
+                if (Files.isDirectory(entry)) {
+                    // 递归删除子目录
+                    deleteDirectoryRecursive(entry);
+                    dirCount++;
+                } else {
+                    try {
+                        Files.delete(entry);
+                        deletedCount++;
+                    } catch (IOException e) {
+                        busyFiles.add(entry.getFileName().toString());
+                    }
+                }
+            }
+        } catch (IOException e) {
+            return "✗ 清除失败：无法读取缓存目录 - " + e.getMessage();
+        }
+
+        // 构建返回结果
+        StringBuilder result = new StringBuilder();
+        result.append("✓ 缓存清除完成\n");
+        result.append("===================\n\n");
+
+        if (deletedCount > 0) {
+            result.append("已删除的文件：").append(deletedCount).append("个\n");
+        }
+        if (dirCount > 0) {
+            result.append("已删除的目录：").append(dirCount).append("个\n");
+        }
+
+        if (!busyFiles.isEmpty()) {
+            result.append("\n以下文件当前被占用，无法删除（").append(busyFiles.size()).append("个）：\n");
+            for (String file : busyFiles) {
+                result.append("  ○ ").append(file).append("\n");
+            }
+        }
+
+        if (deletedCount == 0 && dirCount == 0 && busyFiles.isEmpty()) {
+            result.append("缓存目录为空，无需清除。\n");
+        } else {
+            result.append("\n缓存目录已清理。\n");
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * 递归删除目录
+     */
+    private static void deleteDirectoryRecursive(Path path) throws IOException {
+        if (Files.isDirectory(path)) {
+            try (Stream<Path> entries = Files.list(path)) {
+                for (Path entry : entries.toList()) {
+                    deleteDirectoryRecursive(entry);
+                }
+            }
+        }
+        Files.delete(path);
+    }
+
+    // ==================== MCP日志清理工具 ====================
+
+    /**
+     * 清除MCP日志文件
+     * 只删除.dlqq/log目录下的日志文件，保留目录结构
+     * @return 删除结果描述
+     */
+    public static String clearLog() {
+        Path logPath = Paths.get(".dlqq/log");
+
+        if (!Files.exists(logPath)) {
+            return "✓ 日志目录不存在，无需清除";
+        }
+
+        if (!Files.isDirectory(logPath)) {
+            return "✗ 清除失败：日志路径不是目录";
+        }
+
+        int deletedCount = 0;
+        java.util.List<String> busyFiles = new java.util.ArrayList<>();
+
+        // 遍历log目录下的所有子目录
+        try (Stream<Path> subDirs = Files.list(logPath)) {
+            for (Path subDir : subDirs.toList()) {
+                if (Files.isDirectory(subDir)) {
+                    // 遍历子目录中的日志文件
+                    try (Stream<Path> files = Files.list(subDir)) {
+                        for (Path file : files.toList()) {
+                            if (Files.isRegularFile(file)) {
+                                try {
+                                    Files.delete(file);
+                                    deletedCount++;
+                                } catch (IOException e) {
+                                    busyFiles.add(subDir.getFileName() + "/" + file.getFileName());
+                                }
+                            }
+                        }
+                    } catch (IOException e) {
+                        // 忽略读取子目录失败
+                    }
+                }
+            }
+        } catch (IOException e) {
+            return "✗ 清除失败：无法读取日志目录 - " + e.getMessage();
+        }
+
+        // 构建返回结果
+        StringBuilder result = new StringBuilder();
+        result.append("✓ MCP日志清除完成\n");
+        result.append("===================\n\n");
+
+        if (deletedCount > 0) {
+            result.append("已删除的日志文件：").append(deletedCount).append("个\n\n");
+        }
+
+        if (!busyFiles.isEmpty()) {
+            result.append("以下日志文件当前被占用，无法删除（").append(busyFiles.size()).append("个）：\n");
+            for (String file : busyFiles) {
+                result.append("  ○ ").append(file).append("\n");
+            }
+            result.append("\n");
+            result.append("注意：部分文件无法删除是正常现象，因为这些日志文件正在被MCP服务器使用。\n");
+            result.append("已删除的日志文件不会受到影响，被占用的文件将在MCP服务器重启后可以被清除。\n");
+        } else if (deletedCount == 0) {
+            result.append("没有找到需要清除的日志文件。\n");
+        } else {
+            result.append("所有日志文件已成功删除。\n");
+        }
+
+        return result.toString();
+    }
+
+    // ==================== 配置重置工具 ====================
+
+    /**
+     * 默认配置值
+     */
+    private static final java.util.Map<String, String> DEFAULT_PROPERTIES = new java.util.HashMap<>() {{
+        // 响应大小限制
+        put("response.max.size", "32768");
+
+        // 搜索配置
+        put("search.max.files", "1000");
+        put("search.max.file.size", String.valueOf(10 * 1024 * 1024)); // 10MB
+        put("search.max.results", "50");
+        put("search.text.extensions", ".java,.c,.cpp,.h,.hpp,.cs,.py,.js,.ts,.html,.css,.json,.xml,.yaml,.yml,.md,.txt,.sh,.bat,.properties,.gradle,.ini");
+
+        // 脚本配置（默认为空，需要用户自行设置）
+        put("script.build", "");
+        put("script.rebuild", "");
+        put("script.chip.erase", "");
+        put("script.chip.download", "");
+        put("script.erase.download", "");
+        put("script.build.erase.download", "");
+        put("script.rebuild.erase.download", "");
+        put("script.run", "");
+        put("script.debug", "");
+        put("script.build.run", "");
+        put("script.build.debug", "");
+        put("script.rebuild.run", "");
+        put("script.rebuild.debug", "");
+    }};
+
+    /**
+     * 重置配置属性为默认值
+     * @param key 属性键名，如果为null或空则重置所有配置
+     * @return 重置结果描述
+     */
+    public static String resetProperties(String key) {
+        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+
+        // 检查settings目录是否存在
+        Path settingsDir = settingsPath.getParent();
+        if (!Files.exists(settingsDir)) {
+            try {
+                Files.createDirectories(settingsDir);
+            } catch (IOException e) {
+                return "✗ 错误：无法创建settings目录: " + e.getMessage();
+            }
+        }
+
+        StringBuilder result = new StringBuilder();
+
+        if (key != null && !key.isEmpty()) {
+            // 重置单个属性
+            String defaultValue = DEFAULT_PROPERTIES.get(key);
+            if (defaultValue == null) {
+                return "✗ 错误：未知的配置项 '" + key + "'，无法重置";
+            }
+
+            // 设置默认值
+            String setResult = setProperty(key, defaultValue);
+
+            result.append("✓ 配置已重置为默认值\n");
+            result.append("===================\n\n");
+            result.append("键: ").append(key).append("\n");
+            result.append("默认值: ").append(defaultValue).append("\n");
+            result.append("\n").append(setResult);
+        } else {
+            // 重置所有配置
+            result.append("✓ 批量重置配置为默认值\n");
+            result.append("===================\n\n");
+
+            int successCount = 0;
+            int failCount = 0;
+
+            for (Map.Entry<String, String> entry : DEFAULT_PROPERTIES.entrySet()) {
+                String setResult = setProperty(entry.getKey(), entry.getValue());
+                if (setResult.startsWith("✓")) {
+                    successCount++;
+                    result.append("✓ ").append(entry.getKey()).append(" = ").append(entry.getValue()).append("\n");
+                } else {
+                    failCount++;
+                    result.append("✗ ").append(entry.getKey()).append(": ").append(setResult).append("\n");
+                }
+            }
+
+            result.append("\n");
+            result.append("成功: ").append(successCount).append("个\n");
+            if (failCount > 0) {
+                result.append("失败: ").append(failCount).append("个\n");
+            }
+        }
+
+        return result.toString();
     }
 }

@@ -110,6 +110,14 @@ public class AITools {
         // ========== MCP数据管理工具 ==========
         registerClearMcpDataTool(server);           // dlqq_clear_mcp_data
         registerClearMcpCacheTool(server);          // dlqq_clear_mcp_cache
+        registerClearMcpLogTool(server);            // dlqq_clear_mcp_log
+        registerResetMcpPropertiesTool(server);       // dlqq_reset_mcp_properties
+        registerGetMcpPropertiesTool(server);       // dlqq_get_mcp_properties
+        registerSetMcpPropertiesTool(server);       // dlqq_set_mcp_properties
+
+        // ========== Office文件工具 ==========
+        registerReadOfficeFileTool(server);         // dlqq_read_office_file
+        registerConvertOfficeFileTool(server);      // dlqq_convert_office_file
 
         // ========== 项目构建和芯片操作工具 ==========
         registerBuildProjectTool(server);           // dlqq_build_project
@@ -129,10 +137,6 @@ public class AITools {
         registerBuildDebugProjectTool(server);      // dlqq_build_debug_project
         registerRebuildRunProjectTool(server);      // dlqq_rebuild_run_project
         registerRebuildDebugProjectTool(server);    // dlqq_rebuild_debug_project
-
-        // ========== MCP数据管理工具 ==========
-        registerGetMcpPropertiesTool(server);       // dlqq_get_mcp_properties
-        registerSetMcpPropertiesTool(server);       // dlqq_set_mcp_properties
     }
 
     // ==================== 文件操作工具 ====================
@@ -3769,14 +3773,14 @@ public class AITools {
     }
 
     /**
-     * dlqq_clear_mcp_cache - 清除MCP缓存日志文件
+     * dlqq_clear_mcp_cache - 清除MCP缓存目录
      */
     private void registerClearMcpCacheTool(McpServer server) {
         Map<String, Object> properties = new HashMap<>();
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_clear_mcp_cache",
-            "清除MCP日志缓存文件（.dlqq/log目录），保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。",
+            "清除MCP缓存目录（.dlqq/cache），删除缓存的所有文件和子目录。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。",
             inputSchema,
             arguments -> {
                 String result = McpTools.clearCache();
@@ -4052,6 +4056,149 @@ public class AITools {
                 // 设置属性
                 String result = McpTools.setProperty(key, value);
                 return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_clear_mcp_log - 清除MCP日志文件
+     */
+    private void registerClearMcpLogTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_clear_mcp_log",
+            "清除MCP日志文件（.dlqq/log目录），保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.clearLog();
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_reset_mcp_properties - 重置MCP配置为默认值
+     */
+    private void registerResetMcpPropertiesTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> keyProp = new HashMap<>();
+        keyProp.put("type", "string");
+        keyProp.put("description", "要重置的属性键名（可选）。如果为空，则重置所有配置为默认值");
+        properties.put("key", keyProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_reset_mcp_properties",
+            "重置MCP配置属性为默认值。可以重置单个属性或所有属性。配置保存到 .dlqq/settings/settings.properties 文件中。",
+            inputSchema,
+            arguments -> {
+                String key = (String) arguments.get("key");
+                String result = McpTools.resetProperties(key);
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_read_office_file - 读取Office文件并转换为Markdown
+     */
+    private void registerReadOfficeFileTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "Office文件路径（支持PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX）");
+        properties.put("file_path", pathProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("file_path"));
+
+        server.addTool("dlqq_read_office_file",
+            "读取Office文件（PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX）并转换为Markdown格式。转换后的文件保存在 .dlqq/cache 目录，返回Markdown文件路径。",
+            inputSchema,
+            arguments -> {
+                String filePath = (String) arguments.get("file_path");
+
+                if (filePath == null || filePath.trim().isEmpty()) {
+                    return errorResult("文件路径不能为空");
+                }
+
+                try {
+                    Map<String, Object> result = OfficeTools.readOfficeFile(filePath);
+
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("✓ Office文件转换成功\n");
+                    sb.append("===================\n\n");
+                    sb.append("原始文件: ").append(result.get("originalPath")).append("\n");
+                    sb.append("标题: ").append(result.get("title")).append("\n\n");
+                    sb.append("Markdown文件: ").append(result.get("markdownPath")).append("\n");
+                    sb.append("文件大小: ").append(result.get("size")).append(" 字节\n\n");
+                    sb.append("提示: 请使用 dlqq_read_file 工具读取上述Markdown文件内容。");
+
+                    return textResult(sb.toString());
+                } catch (IOException e) {
+                    return errorResult("文件转换失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * dlqq_convert_office_file - 将Office文件从一种格式转换为另一种格式
+     */
+    private void registerConvertOfficeFileTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> sourceProp = new HashMap<>();
+        sourceProp.put("type", "string");
+        sourceProp.put("description", "源文件路径（支持PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX、MD、TXT）");
+        properties.put("source_path", sourceProp);
+
+        Map<String, Object> formatProp = new HashMap<>();
+        formatProp.put("type", "string");
+        formatProp.put("description", "目标格式（docx/xlsx/pptx/md/txt，pdf暂不支持）");
+        properties.put("target_format", formatProp);
+
+        Map<String, Object> outputProp = new HashMap<>();
+        outputProp.put("type", "string");
+        outputProp.put("description", "输出路径（可选，默认保存到.dlqq/cache目录）");
+        properties.put("output_path", outputProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("source_path", "target_format"));
+
+        server.addTool("dlqq_convert_office_file",
+            "将Office文件从一种格式转换为另一种格式。支持: PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX/MD/TXT → DOCX/XLSX/PPTX/MD/TXT。输出路径可选，默认为.dlqq/cache目录。",
+            inputSchema,
+            arguments -> {
+                String sourcePath = (String) arguments.get("source_path");
+                String targetFormat = (String) arguments.get("target_format");
+                String outputPath = (String) arguments.get("output_path");
+
+                if (sourcePath == null || sourcePath.trim().isEmpty()) {
+                    return errorResult("源文件路径不能为空");
+                }
+
+                if (targetFormat == null || targetFormat.trim().isEmpty()) {
+                    return errorResult("目标格式不能为空");
+                }
+
+                try {
+                    Map<String, Object> result = OfficeTools.convertOfficeFile(sourcePath, targetFormat, outputPath);
+
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("✓ Office文件格式转换成功\n");
+                    sb.append("===================\n\n");
+                    sb.append("源文件: ").append(result.get("sourcePath")).append("\n");
+                    sb.append("源格式: ").append(result.get("sourceFormat")).append("\n");
+                    sb.append("目标格式: ").append(result.get("targetFormat")).append("\n\n");
+                    sb.append("输出文件: ").append(result.get("outputPath")).append("\n");
+                    sb.append("文件大小: ").append(result.get("size")).append(" 字节\n");
+
+                    return textResult(sb.toString());
+                } catch (IOException e) {
+                    return errorResult("文件格式转换失败: " + e.getMessage());
+                }
             }
         );
     }
