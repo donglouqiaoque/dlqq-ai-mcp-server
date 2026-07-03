@@ -49,7 +49,7 @@ public class MCPServerMain {
                     writer.write("# MCP Server Settings\n");
                     writer.write("# ==================\n\n");
                     writer.write("# Response size limits (bytes)\n");
-                    writer.write("response.max.size=32768\n\n");
+                    writer.write("response.max.size=25804\n\n");
                     writer.write("# Project build scripts\n");
                     writer.write("# Scripts for build/rebuild/erase/download/run/debug operations\n");
                     writer.write("# 脚本路径为空表示未配置，执行时会提示需要先设置\n");

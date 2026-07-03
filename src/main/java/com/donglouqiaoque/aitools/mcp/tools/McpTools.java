@@ -344,9 +344,13 @@ public class McpTools {
         return null;
     }
 
+    // 最大返回内容限制（API限制 258048 字节）
+    public static final int MAX_RESPONSE_SIZE = 258048; // 约252KB，API上限
+    public static final int DEFAULT_RESPONSE_SIZE = 25804; // 默认1/10 API上限（约25KB）
+
     /**
      * 获取最大回复文本大小配置
-     * @return 最大字节数，默认8192
+     * @return 最大字节数，默认25804（约25KB，API上限的1/10）
      */
     public static int getResponseMaxSize() {
         String value = getConfigFromSettings("response.max.size");
@@ -354,13 +358,14 @@ public class McpTools {
             try {
                 int size = Integer.parseInt(value);
                 if (size > 0) {
-                    return size;
+                    // 限制不能超过API上限
+                    return Math.min(size, MAX_RESPONSE_SIZE);
                 }
             } catch (NumberFormatException e) {
                 // 使用默认值
             }
         }
-        return 32768; // 默认32KB
+        return DEFAULT_RESPONSE_SIZE; // 默认258KB（API上限）
     }
 
     // ==================== 脚本执行工具 ====================
@@ -572,7 +577,7 @@ public class McpTools {
                 writer.write("# MCP Server Settings\n");
                 writer.write("# ==================\n\n");
                 writer.write("# Response size limits (bytes)\n");
-                writer.write("response.max.size=32768\n\n");
+                writer.write("response.max.size=25804\n\n");
                 writer.write("# Project build scripts\n");
                 writer.write("# Scripts for build/rebuild/erase/download operations\n");
             } else {
@@ -746,7 +751,7 @@ public class McpTools {
                 writer.write("# MCP Server Settings\n");
                 writer.write("# ==================\n\n");
                 writer.write("# Response size limits (bytes)\n");
-                writer.write("response.max.size=32768\n\n");
+                writer.write("response.max.size=25804\n\n");
                 writer.write("# Project build scripts\n");
                 writer.write("# Scripts for build/rebuild/erase/download operations\n");
             } else {
@@ -1632,7 +1637,7 @@ public class McpTools {
      */
     private static final java.util.Map<String, String> DEFAULT_PROPERTIES = new java.util.HashMap<>() {{
         // 响应大小限制
-        put("response.max.size", "32768");
+        put("response.max.size", "25804");
 
         // 搜索配置
         put("search.max.files", "1000");

@@ -373,7 +373,7 @@ public class FileTools {
                 reportBuilder.append(String.format("%s ... (%d 行已省略，共 %d 行) ...\n",
                     prefix.isEmpty() ? " " : prefix, skippedLines, lines.length));
                 reportBuilder.append(String.format("\n【提示】当前返回内容大小限制为 %d 字节，内容已截断。\n", maxSize));
-                reportBuilder.append("如需查看完整内容，可使用 dlqq_set_response_max_size 工具增大限制。\n");
+                reportBuilder.append("如需查看完整内容，可使用 dlqq_set_mcp_properties 工具设置 response.max.size 增大限制（最大258048字节）。\n");
             }
             reportBuilder.append(tailBuilder);
         }

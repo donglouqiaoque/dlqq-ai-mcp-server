@@ -4034,7 +4034,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_set_mcp_properties",
-            "设置MCP配置属性。至少指定 key 和 value 其中一个参数。配置保存到 .dlqq/settings/settings.properties 文件中。常用属性包括：response.max.size（响应大小限制）、search.max.files（最大搜索文件数）、search.max.file.size（最大文件大小）、search.text.extensions（文本文件后缀）、script.build（构建脚本路径）等。",
+            "设置MCP配置属性。至少指定 key 和 value 其中一个参数。配置保存到 .dlqq/settings/settings.properties 文件中。常用属性包括：response.max.size（响应大小限制，默认25804字节约25KB，最大258048）、search.max.files（最大搜索文件数）、search.max.file.size（最大文件大小）、search.text.extensions（文本文件后缀）、script.build（构建脚本路径）等。",
             inputSchema,
             arguments -> {
                 String key = (String) arguments.get("key");
@@ -4054,6 +4054,20 @@ public class AITools {
                 }
 
                 // 设置属性
+                // 对 response.max.size 进行验证，不能超过API上限
+                if ("response.max.size".equals(key)) {
+                    try {
+                        int size = Integer.parseInt(value);
+                        if (size > McpTools.MAX_RESPONSE_SIZE) {
+                            return errorResult(String.format("response.max.size 不能超过 %d (API上限)", McpTools.MAX_RESPONSE_SIZE));
+                        }
+                        if (size < 1) {
+                            return errorResult("response.max.size 必须大于0");
+                        }
+                    } catch (NumberFormatException e) {
+                        return errorResult("response.max.size 必须是有效的整数");
+                    }
+                }
                 String result = McpTools.setProperty(key, value);
                 return textResult(result);
             }

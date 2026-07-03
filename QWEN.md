@@ -153,9 +153,9 @@ use_debug=false
 | `dlqq_set_build_debug_script` | 设置构建调试脚本路径 |
 | `dlqq_set_rebuild_run_script` | 设置重建运行脚本路径 |
 | `dlqq_set_rebuild_debug_script` | 设置重建调试脚本路径 |
-| `dlqq_set_response_max_size` | 设置最大回复文本大小（默认32KB） |
+| `dlqq_set_mcp_properties` | 设置MCP配置属性（含response.max.size，默认25804字节，最大258048） |
 
 **说明**：
 - 所有脚本路径默认空，首次执行会提示需要先使用 `dlqq_set_*_script` 工具设置
 - 脚本配置保存在 `.dlqq/settings/settings.properties` 文件中
-- `response.max.size` 控制文件操作返回内容的最大字节数（默认32768）
+- `response.max.size` 控制文件操作返回内容的最大字节数（默认25804约25KB，最大258048约252KB）

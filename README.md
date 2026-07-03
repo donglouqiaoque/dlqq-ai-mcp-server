@@ -1527,7 +1527,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 **说明**：至少指定 key 和 value 其中一个参数。如果只指定 key，则显示该属性的当前值。
 
 **常用配置项**：
-- `response.max.size` - 最大回复文本大小（字节），默认32768
+- `response.max.size` - 最大回复文本大小（字节），默认25804（约25KB），最大258048（API上限）
 - `search.max.files` - 最大搜索文件数，默认1000
 - `search.max.file.size` - 最大文件大小（字节），默认10MB
 - `search.max.results` - 最大搜索结果数，默认50
