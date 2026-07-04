@@ -96,6 +96,20 @@
             <artifactId>pdfbox</artifactId>
             <version>3.0.1</version>
         </dependency>
+
+        <!-- Zip4j - ZIP压缩/解压，支持密码 -->
+        <dependency>
+            <groupId>net.lingala.zip4j</groupId>
+            <artifactId>zip4j</artifactId>
+            <version>2.11.5</version>
+        </dependency>
+
+        <!-- Apache Commons Compress - 支持多种压缩格式 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.25.0</version>
+        </dependency>
     </dependencies>
 
     <build>

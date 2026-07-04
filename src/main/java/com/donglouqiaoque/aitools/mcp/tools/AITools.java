@@ -119,6 +119,10 @@ public class AITools {
         registerReadOfficeFileTool(server);         // dlqq_read_office_file
         registerConvertOfficeFileTool(server);      // dlqq_convert_office_file
 
+        // ========== 压缩/解压工具 ==========
+        registerZipTool(server);                    // dlqq_zip
+        registerUnzipTool(server);                  // dlqq_unzip
+
         // ========== 项目构建和芯片操作工具 ==========
         registerBuildProjectTool(server);           // dlqq_build_project
         registerRebuildProjectTool(server);         // dlqq_rebuild_project
@@ -4215,5 +4219,161 @@ public class AITools {
                 }
             }
         );
+    }
+
+    // ==================== 压缩/解压工具 ====================
+
+    /**
+     * dlqq_zip - 压缩文件或目录
+     */
+    private void registerZipTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> sourcesProp = new HashMap<>();
+        sourcesProp.put("type", "array");
+        sourcesProp.put("description", "源文件/目录路径列表，支持多个文件或目录");
+        properties.put("source_paths", sourcesProp);
+
+        Map<String, Object> outputProp = new HashMap<>();
+        outputProp.put("type", "string");
+        outputProp.put("description", "输出压缩文件路径（可选，默认在源目录生成）");
+        properties.put("output_path", outputProp);
+
+        Map<String, Object> formatProp = new HashMap<>();
+        formatProp.put("type", "string");
+        formatProp.put("description", "压缩格式（可选，默认zip，目前仅支持zip）");
+        formatProp.put("enum", Arrays.asList("zip"));
+        properties.put("format", formatProp);
+
+        Map<String, Object> passwordProp = new HashMap<>();
+        passwordProp.put("type", "string");
+        passwordProp.put("description", "压缩密码（可选，为空表示不加密）");
+        properties.put("password", passwordProp);
+
+        Map<String, Object> levelProp = new HashMap<>();
+        levelProp.put("type", Arrays.asList("integer", "string"));
+        levelProp.put("description", "压缩级别（1-9，默认5，1最快压缩率最低，9最慢压缩率最高）");
+        properties.put("compression_level", levelProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("source_paths"));
+
+        server.addTool("dlqq_zip",
+            "压缩文件或目录为ZIP格式。支持多文件/目录压缩、密码保护、压缩级别设置。"
+            + "支持的格式：zip。可设置1-9级压缩级别，数值越大压缩率越高但速度越慢。"
+            + "默认输出到源文件所在目录。",
+            inputSchema,
+            arguments -> {
+                @SuppressWarnings("unchecked")
+                List<String> sourcePaths = (List<String>) arguments.get("source_paths");
+                String outputPath = (String) arguments.get("output_path");
+                String format = (String) arguments.get("format");
+                String password = (String) arguments.get("password");
+                Integer compressionLevel = parseInteger(arguments.get("compression_level"), 5);
+
+                if (sourcePaths == null || sourcePaths.isEmpty()) {
+                    return errorResult("源文件路径不能为空");
+                }
+
+                try {
+                    Map<String, Object> result = ZipTools.zipFiles(sourcePaths, outputPath, format, password, compressionLevel);
+
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("✓ 压缩成功\n");
+                    sb.append("===================\n\n");
+                    sb.append("输出文件: ").append(result.get("outputPath")).append("\n");
+                    sb.append("格式: ").append(result.get("format")).append("\n");
+                    sb.append("原始大小: ").append(formatFileSize((Long) result.get("originalSize"))).append("\n");
+                    sb.append("压缩后大小: ").append(formatFileSize((Long) result.get("compressedSize"))).append("\n");
+                    sb.append("压缩率: ").append(result.get("compressionRatio")).append("\n");
+                    sb.append("文件数: ").append(result.get("fileCount")).append("\n");
+                    sb.append("密码保护: ").append(((Boolean) result.get("passwordProtected")) ? "是" : "否").append("\n");
+
+                    return textResult(sb.toString());
+                } catch (IOException e) {
+                    return errorResult("压缩失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * dlqq_unzip - 解压ZIP文件
+     */
+    private void registerUnzipTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> zipPathProp = new HashMap<>();
+        zipPathProp.put("type", "string");
+        zipPathProp.put("description", "ZIP文件路径");
+        properties.put("zip_path", zipPathProp);
+
+        Map<String, Object> outputDirProp = new HashMap<>();
+        outputDirProp.put("type", "string");
+        outputDirProp.put("description", "解压输出目录（可选，默认为ZIP文件所在目录下的同名文件夹）");
+        properties.put("output_dir", outputDirProp);
+
+        Map<String, Object> passwordProp = new HashMap<>();
+        passwordProp.put("type", "string");
+        passwordProp.put("description", "解压密码（可选，如果ZIP有密码则需要提供）");
+        properties.put("password", passwordProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("zip_path"));
+
+        server.addTool("dlqq_unzip",
+            "解压ZIP文件。支持密码保护的ZIP文件解压。"
+            + "默认解压到ZIP文件所在目录下的同名文件夹中。"
+            + "可以查看ZIP文件内容后再决定是否需要解压。",
+            inputSchema,
+            arguments -> {
+                String zipPath = (String) arguments.get("zip_path");
+                String outputDir = (String) arguments.get("output_dir");
+                String password = (String) arguments.get("password");
+
+                if (zipPath == null || zipPath.trim().isEmpty()) {
+                    return errorResult("ZIP文件路径不能为空");
+                }
+
+                try {
+                    Map<String, Object> result = ZipTools.unzipFile(zipPath, outputDir, password);
+
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("✓ 解压成功\n");
+                    sb.append("===================\n\n");
+                    sb.append("ZIP文件: ").append(result.get("zipPath")).append("\n");
+                    sb.append("输出目录: ").append(result.get("outputDir")).append("\n");
+                    sb.append("文件数: ").append(result.get("fileCount")).append("\n");
+                    sb.append("解压后大小: ").append(formatFileSize((Long) result.get("extractedSize"))).append("\n\n");
+
+                    @SuppressWarnings("unchecked")
+                    List<String> files = (List<String>) result.get("files");
+                    sb.append("文件列表（前20个）:\n");
+                    for (String file : files) {
+                        sb.append("  - ").append(file).append("\n");
+                    }
+                    if ((Boolean) result.get("hasMoreFiles")) {
+                        sb.append("  ... 还有更多文件\n");
+                    }
+
+                    return textResult(sb.toString());
+                } catch (IOException e) {
+                    return errorResult("解压失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 格式化文件大小显示
+     */
+    private String formatFileSize(long size) {
+        if (size < 1024) {
+            return size + " B";
+        } else if (size < 1024 * 1024) {
+            return String.format("%.2f KB", size / 1024.0);
+        } else if (size < 1024 * 1024 * 1024) {
+            return String.format("%.2f MB", size / (1024.0 * 1024.0));
+        } else {
+            return String.format("%.2f GB", size / (1024.0 * 1024.0 * 1024.0));
+        }
     }
 }
