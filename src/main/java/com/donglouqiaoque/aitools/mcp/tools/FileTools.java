@@ -2,6 +2,8 @@ package com.donglouqiaoque.aitools.mcp.tools;
 
 import com.donglouqiaoque.aitools.utils.FileUtils;
 
+import javax.swing.*;
+import java.awt.Component;
 import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
@@ -11,6 +13,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -100,6 +104,180 @@ public class FileTools {
     private static void resetFileModified(String filePath) {
         String normalizedPath = FileUtils.normalizePath(filePath);
         fileModifiedFlag.remove(normalizedPath);
+    }
+
+    /**
+     * 获取当前工作目录（项目目录）
+     */
+    private static String getWorkingDirectory() {
+        return FileUtils.normalizePath(System.getProperty("user.dir"));
+    }
+
+    /**
+     * 检查文件是否在项目目录内
+     * @param filePath 文件路径
+     * @return true 表示在项目目录内，false 表示在项目目录外
+     */
+    private static boolean isInsideProject(String filePath) {
+        String normalizedFilePath = FileUtils.normalizePath(filePath);
+        String workingDir = getWorkingDirectory();
+        // 添加路径分隔符确保准确匹配
+        String fileWithSep = normalizedFilePath + File.separator;
+        String dirWithSep = workingDir + File.separator;
+        return fileWithSep.startsWith(dirWithSep) || normalizedFilePath.equals(workingDir);
+    }
+
+    /**
+     * 显示跨目录写入确认对话框
+     * @param filePath 要操作的文件路径
+     * @param operation 操作描述（如"写入"、"修改"、"删除"等）
+     * @return true 表示用户确认，false 表示用户取消
+     */
+    private static boolean showOutsideProjectConfirmDialog(String filePath, String operation) {
+        String workingDir = getWorkingDirectory();
+        String normalizedPath = FileUtils.normalizePath(filePath);
+
+        // 创建一个 CountDownLatch 来同步 GUI 线程和调用线程
+        CountDownLatch latch = new CountDownLatch(1);
+        final boolean[] result = {false};
+
+        // 在 Swing 事件调度线程中显示对话框
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // 使用自定义样式的确认对话框
+                String title = "跨目录操作确认 - " + operation;
+                String message = "检测到您即将在【项目目录外】执行 " + operation + " 操作！\n\n"
+                    + "操作目标:\n" + normalizedPath + "\n\n"
+                    + "当前项目目录:\n" + workingDir + "\n\n"
+                    + "注意：此操作可能会修改系统文件或其他项目文件。\n"
+                    + "请确认您是否真的要继续执行此操作?";
+
+                // 创建自定义的选项数组
+                String[] options = {"确认执行", "取消操作"};
+
+                // 显示确认对话框
+                int choice = JOptionPane.showOptionDialog(
+                    null,                                   // 父组件
+                    message,                                // 消息内容
+                    title,                                  // 标题
+                    JOptionPane.YES_NO_OPTION,             // 选项类型
+                    JOptionPane.WARNING_MESSAGE,           // 消息类型
+                    null,                                   // 图标
+                    options,                                // 自定义选项
+                    options[1]                             // 默认选中"取消"
+                );
+
+                result[0] = (choice == JOptionPane.YES_OPTION);
+            } catch (Exception e) {
+                // 对话框显示失败，安全起见返回 false
+                System.err.println("显示确认对话框失败: " + e.getMessage());
+                result[0] = false;
+            } finally {
+                latch.countDown();
+            }
+        });
+
+        // 等待用户选择，最多等待 5 分钟
+        try {
+            boolean completed = latch.await(5, TimeUnit.MINUTES);
+            if (!completed) {
+                System.err.println("等待用户确认超时，取消操作");
+                return false;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+
+        return result[0];
+    }
+
+    /**
+     * 检查并确认跨目录写入操作
+     * @param filePath 文件路径
+     * @param operation 操作描述
+     * @return 操作结果字符串，null 表示允许执行
+     */
+    private static String checkCrossDirectoryWrite(String filePath, String operation) {
+        if (!isInsideProject(filePath)) {
+            boolean confirmed = showOutsideProjectConfirmDialog(filePath, operation);
+            if (!confirmed) {
+                return "【操作已取消】用户拒绝了在【项目目录外】执行 " + operation + " 操作\n"
+                    + "目标路径: " + filePath + "\n"
+                    + "项目路径: " + getWorkingDirectory();
+            }
+        }
+        return null; // 允许执行
+    }
+
+    /**
+     * 检查目录操作（会影响目录外文件）
+     * 对于移动、复制、删除目录等操作，如果源或目标在项目外，需要确认
+     * @param sourcePath 源路径（可为null）
+     * @param targetPath 目标路径
+     * @param operation 操作描述
+     * @return 操作结果字符串，null 表示允许执行
+     */
+    private static String checkCrossDirectoryOperation(String sourcePath, String targetPath, String operation) {
+        boolean sourceOutside = sourcePath != null && !isInsideProject(sourcePath);
+        boolean targetOutside = !isInsideProject(targetPath);
+
+        if (sourceOutside || targetOutside) {
+            StringBuilder message = new StringBuilder("检测到您即将在【项目目录外】执行 " + operation + " 操作！\n\n");
+            if (sourceOutside) {
+                message.append("源路径 (项目外):\n").append(FileUtils.normalizePath(sourcePath)).append("\n\n");
+            } else if (sourcePath != null) {
+                message.append("源路径:\n").append(FileUtils.normalizePath(sourcePath)).append("\n\n");
+            }
+            if (targetOutside) {
+                message.append("目标路径 (项目外):\n").append(FileUtils.normalizePath(targetPath)).append("\n\n");
+            } else {
+                message.append("目标路径:\n").append(FileUtils.normalizePath(targetPath)).append("\n\n");
+            }
+            message.append("当前项目目录:\n").append(getWorkingDirectory()).append("\n\n");
+            message.append("注意：此操作可能会影响系统文件或其他项目文件。\n");
+            message.append("请确认您是否真的要继续执行此操作?");
+
+            CountDownLatch latch = new CountDownLatch(1);
+            final boolean[] result = {false};
+
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    String[] options = {"确认执行", "取消操作"};
+                    int choice = JOptionPane.showOptionDialog(
+                        null,
+                        message.toString(),
+                        "跨目录操作确认 - " + operation,
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE,
+                        null,
+                        options,
+                        options[1]
+                    );
+                    result[0] = (choice == JOptionPane.YES_OPTION);
+                } catch (Exception e) {
+                    System.err.println("显示确认对话框失败: " + e.getMessage());
+                    result[0] = false;
+                } finally {
+                    latch.countDown();
+                }
+            });
+
+            try {
+                boolean completed = latch.await(5, TimeUnit.MINUTES);
+                if (!completed) {
+                    return "【操作已取消】等待用户确认超时";
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return "【操作已取消】等待被中断";
+            }
+
+            if (!result[0]) {
+                return "【操作已取消】用户拒绝了在【项目目录外】执行 " + operation + " 操作";
+            }
+        }
+        return null; // 允许执行
     }
 
     /**
@@ -392,6 +570,13 @@ public class FileTools {
      */
     public static String createFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "创建文件");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
         Path path = Paths.get(filePath);
 
         // 解析字符集，默认为 UTF-8
@@ -460,6 +645,13 @@ public class FileTools {
      */
     public static String overwriteFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "覆盖文件");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
         Path path = Paths.get(filePath);
 
         // 解析字符集，默认为 UTF-8
@@ -551,6 +743,13 @@ public class FileTools {
      */
     public static String appendFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "追加文件");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
         Path path = Paths.get(filePath);
 
         // 检查内容是否为空，拒绝追加空内容
@@ -644,6 +843,13 @@ public class FileTools {
      */
     public static String clearFile(String filePath, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "清空文件");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
         Path path = Paths.get(filePath);
 
         // 解析字符集，默认为 UTF-8
@@ -703,6 +909,13 @@ public class FileTools {
      */
     public static boolean deleteFile(String filePath) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "删除文件");
+        if (checkResult != null) {
+            throw new IOException(checkResult);
+        }
+
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -733,6 +946,13 @@ public class FileTools {
     public static void copyFile(String sourcePath, String targetPath) throws IOException {
         sourcePath = FileUtils.normalizePath(sourcePath);
         targetPath = FileUtils.normalizePath(targetPath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryOperation(sourcePath, targetPath, "复制文件");
+        if (checkResult != null) {
+            throw new IOException(checkResult);
+        }
+
         Path source = Paths.get(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源文件不存在: " + sourcePath);
@@ -761,6 +981,13 @@ public class FileTools {
     public static void moveFile(String sourcePath, String targetPath) throws IOException {
         sourcePath = FileUtils.normalizePath(sourcePath);
         targetPath = FileUtils.normalizePath(targetPath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryOperation(sourcePath, targetPath, "移动文件");
+        if (checkResult != null) {
+            throw new IOException(checkResult);
+        }
+
         Path source = Paths.get(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源文件不存在: " + sourcePath);
@@ -788,6 +1015,13 @@ public class FileTools {
      */
     public static void renameFile(String sourcePath, String newName) throws IOException {
         sourcePath = FileUtils.normalizePath(sourcePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(sourcePath, "重命名文件");
+        if (checkResult != null) {
+            throw new IOException(checkResult);
+        }
+
         Path source = Paths.get(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源文件不存在: " + sourcePath);
@@ -816,6 +1050,13 @@ public class FileTools {
      */
     public static void renameDirectory(String sourcePath, String newName) throws IOException {
         sourcePath = FileUtils.normalizePath(sourcePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(sourcePath, "重命名目录");
+        if (checkResult != null) {
+            throw new IOException(checkResult);
+        }
+
         Path source = Paths.get(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源文件夹不存在: " + sourcePath);
@@ -847,6 +1088,13 @@ public class FileTools {
      */
     public static String removeLinesInFile(String filePath, int startLine, int endLine, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "删除行");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -993,6 +1241,13 @@ public class FileTools {
      */
     public static String replaceLinesInFile(String filePath, int startLine, int endLine, String newContent, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "替换行");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -1179,6 +1434,13 @@ public class FileTools {
      */
     public static String insertTextInFile(String filePath, int lineNum, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "插入文本");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -1309,6 +1571,13 @@ public class FileTools {
      */
     public static String replaceTextInFile(String filePath, String searchText, String replaceText, boolean useRegex, String charset, Integer startLine, Integer endLine) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "替换文本");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -1592,6 +1861,13 @@ public class FileTools {
      */
     public static void createDirectory(String dirPath) throws IOException {
         dirPath = FileUtils.normalizePath(dirPath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(dirPath, "创建目录");
+        if (checkResult != null) {
+            throw new IOException(checkResult);
+        }
+
         Path path = Paths.get(dirPath);
         if (Files.exists(path)) {
             if (!Files.isDirectory(path)) {
@@ -1610,6 +1886,13 @@ public class FileTools {
      */
     public static void createDirectories(String dirPath) throws IOException {
         dirPath = FileUtils.normalizePath(dirPath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(dirPath, "创建多级目录");
+        if (checkResult != null) {
+            throw new IOException(checkResult);
+        }
+
         Path path = Paths.get(dirPath);
         if (Files.exists(path)) {
             if (!Files.isDirectory(path)) {
@@ -1629,6 +1912,13 @@ public class FileTools {
      */
     public static boolean deleteDirectory(String dirPath) throws IOException {
         dirPath = FileUtils.normalizePath(dirPath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(dirPath, "删除目录");
+        if (checkResult != null) {
+            throw new IOException(checkResult);
+        }
+
         Path path = Paths.get(dirPath);
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + dirPath);
@@ -1698,6 +1988,13 @@ public class FileTools {
     public static void copyDirectory(String sourcePath, String targetPath) throws IOException {
         sourcePath = FileUtils.normalizePath(sourcePath);
         targetPath = FileUtils.normalizePath(targetPath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryOperation(sourcePath, targetPath, "复制目录");
+        if (checkResult != null) {
+            throw new IOException(checkResult);
+        }
+
         Path source = Paths.get(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源目录不存在: " + sourcePath);
@@ -1742,6 +2039,13 @@ public class FileTools {
     public static void moveDirectory(String sourcePath, String targetPath) throws IOException {
         sourcePath = FileUtils.normalizePath(sourcePath);
         targetPath = FileUtils.normalizePath(targetPath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryOperation(sourcePath, targetPath, "移动目录");
+        if (checkResult != null) {
+            throw new IOException(checkResult);
+        }
+
         Path source = Paths.get(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源目录不存在: " + sourcePath);
@@ -2433,6 +2737,252 @@ public class FileTools {
         }
 
         return sb.toString();
+    }
+
+    /**
+     * 在目录下所有文本文件中替换文本
+     *
+     * @param dirPath     目录路径
+     * @param searchText  搜索文本
+     * @param replaceText 替换文本
+     * @param useRegex    是否使用正则表达式
+     * @param charset     字符集（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）
+     * @param fileExtensions 文件扩展名列表（如 ["java", "txt"]），为空则使用默认文本文件类型
+     * @param maxFiles    最大处理文件数（默认100）
+     * @return 替换结果报告
+     * @throws IOException 操作异常
+     */
+    public static String replaceTextInDir(String dirPath, String searchText, String replaceText,
+                                           boolean useRegex, String charset, List<String> fileExtensions,
+                                           Integer maxFiles) throws IOException {
+        dirPath = FileUtils.normalizePath(dirPath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(dirPath, "目录批量替换");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
+        Path path = Paths.get(dirPath);
+
+        if (!Files.exists(path)) {
+            throw new IOException("目录不存在: " + dirPath);
+        }
+        if (!Files.isDirectory(path)) {
+            throw new IOException("路径不是目录: " + dirPath);
+        }
+
+        // 参数校验
+        if (searchText == null || searchText.isEmpty()) {
+            throw new IOException("搜索文本不能为空");
+        }
+        if (replaceText == null) {
+            replaceText = "";
+        }
+
+        // 默认文本文件扩展名
+        List<String> defaultExtensions = Arrays.asList(
+            "java", "txt", "md", "xml", "json", "properties", "yml", "yaml",
+            "html", "htm", "js", "css", "py", "c", "cpp", "h", "hpp",
+            "bat", "cmd", "sh", "ini", "conf", "cfg"
+        );
+
+        List<String> extensions = (fileExtensions != null && !fileExtensions.isEmpty())
+            ? fileExtensions.stream().map(String::toLowerCase).collect(Collectors.toList())
+            : defaultExtensions;
+
+        int max = (maxFiles != null && maxFiles > 0) ? maxFiles : 100;
+
+        // 查找所有匹配的文件
+        List<Path> matchedFiles = new ArrayList<>();
+        try (var stream = Files.walk(path)) {
+            matchedFiles = stream
+                .filter(Files::isRegularFile)
+                .filter(p -> {
+                    String fileName = p.getFileName().toString().toLowerCase();
+                    int dotIndex = fileName.lastIndexOf('.');
+                    if (dotIndex > 0) {
+                        String ext = fileName.substring(dotIndex + 1);
+                        return extensions.contains(ext);
+                    }
+                    return false;
+                })
+                .limit(max + 1) // 多取一个用于判断是否超过限制
+                .collect(Collectors.toList());
+        }
+
+        boolean limitExceeded = matchedFiles.size() > max;
+        if (limitExceeded) {
+            matchedFiles = matchedFiles.subList(0, max);
+        }
+
+        if (matchedFiles.isEmpty()) {
+            return "【未找到】目录下没有匹配的文件类型: " + String.join(", ", extensions);
+        }
+
+        // 逐个文件执行替换
+        StringBuilder report = new StringBuilder();
+        report.append("========================================\n");
+        report.append("目录文本替换报告\n");
+        report.append("========================================\n\n");
+        report.append("目录: ").append(dirPath).append("\n");
+        report.append("搜索文本: ").append(searchText).append("\n");
+        report.append("替换文本: ").append(replaceText.isEmpty() ? "(空/删除)" : replaceText).append("\n");
+        report.append("模式: ").append(useRegex ? "正则表达式" : "普通文本").append("\n");
+        report.append("字符集: ").append(charset != null ? charset : "UTF-8").append("\n");
+        report.append("文件类型: ").append(String.join(", ", extensions)).append("\n");
+        report.append("扫描文件数: ").append(matchedFiles.size()).append(limitExceeded ? " (已达到最大限制 " + max + ")" : "").append("\n\n");
+
+        int totalFilesWithMatches = 0;
+        int totalReplacements = 0;
+        List<String> modifiedFiles = new ArrayList<>();
+        List<String> skippedFiles = new ArrayList<>();
+
+        for (int i = 0; i < matchedFiles.size(); i++) {
+            Path file = matchedFiles.get(i);
+            String filePath = file.toString();
+
+            report.append("[").append(i + 1).append("/").append(matchedFiles.size()).append("] ");
+            report.append(file.getFileName()).append(" ... ");
+
+            try {
+                // 调用单文件替换（不检查读取记录，因为目录替换是批量操作）
+                String result = replaceTextInFileInternal(filePath, searchText, replaceText, useRegex, charset);
+
+                if (result.contains("替换成功")) {
+                    totalFilesWithMatches++;
+                    modifiedFiles.add(filePath);
+                    // 提取替换次数
+                    int count = extractReplaceCount(result);
+                    totalReplacements += count;
+                    report.append("✓ 替换 ").append(count).append(" 处\n");
+                } else if (result.contains("未找到")) {
+                    report.append("- 无匹配\n");
+                } else {
+                    skippedFiles.add(filePath + ": " + result);
+                    report.append("✗ 跳过 (").append(result.replace("\n", " ")).append(")\n");
+                }
+            } catch (Exception e) {
+                skippedFiles.add(filePath + ": " + e.getMessage());
+                report.append("✗ 错误 (").append(e.getMessage()).append(")\n");
+            }
+        }
+
+        report.append("\n========================================\n");
+        report.append("替换汇总\n");
+        report.append("========================================\n");
+        report.append("处理文件数: ").append(matchedFiles.size()).append("\n");
+        report.append("成功替换文件数: ").append(totalFilesWithMatches).append("\n");
+        report.append("总替换次数: ").append(totalReplacements).append("\n");
+        report.append("跳过/失败文件数: ").append(skippedFiles.size()).append("\n");
+
+        if (!modifiedFiles.isEmpty()) {
+            report.append("\n已修改的文件:\n");
+            for (String fp : modifiedFiles) {
+                report.append("  ✓ ").append(fp).append("\n");
+            }
+        }
+
+        if (!skippedFiles.isEmpty()) {
+            report.append("\n跳过的文件:\n");
+            for (String msg : skippedFiles.subList(0, Math.min(skippedFiles.size(), 10))) {
+                report.append("  ✗ ").append(msg).append("\n");
+            }
+            if (skippedFiles.size() > 10) {
+                report.append("  ... 还有 ").append(skippedFiles.size() - 10).append(" 个\n");
+            }
+        }
+
+        return report.toString();
+    }
+
+    /**
+     * 内部替换方法（不检查读取记录，用于目录批量替换）
+     */
+    private static String replaceTextInFileInternal(String filePath, String searchText, String replaceText,
+                                                     boolean useRegex, String charset) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
+        Path path = Paths.get(filePath);
+
+        if (!Files.exists(path)) {
+            throw new IOException("文件不存在: " + filePath);
+        }
+
+        Charset cs = StandardCharsets.UTF_8;
+        if (charset != null && !charset.trim().isEmpty()) {
+            try {
+                cs = Charset.forName(charset.trim());
+            } catch (Exception e) {
+                throw new IOException("不支持的字符集: " + charset);
+            }
+        }
+
+        String content = Files.readString(path, cs);
+        String newContent;
+        int replaceCount = 0;
+
+        if (useRegex) {
+            try {
+                Pattern pattern = Pattern.compile(searchText);
+                Matcher matcher = pattern.matcher(content);
+
+                if (!matcher.find()) {
+                    return "【未替换】未找到匹配";
+                }
+
+                matcher.reset();
+                StringBuffer sb = new StringBuffer(content.length());
+                while (matcher.find()) {
+                    replaceCount++;
+                    matcher.appendReplacement(sb, Matcher.quoteReplacement(replaceText));
+                }
+                matcher.appendTail(sb);
+                newContent = sb.toString();
+            } catch (PatternSyntaxException e) {
+                throw new IOException("正则表达式语法错误: " + e.getMessage());
+            }
+        } else {
+            if (!content.contains(searchText)) {
+                return "【未替换】未找到文本";
+            }
+
+            int index = 0;
+            while ((index = content.indexOf(searchText, index)) != -1) {
+                replaceCount++;
+                index += searchText.length();
+            }
+
+            newContent = content.replace(searchText, replaceText);
+        }
+
+        if (replaceCount > 0) {
+            if (newContent == null || newContent.isEmpty()) {
+                return "【拒绝修改】替换后的内容为空";
+            }
+            Files.writeString(path, newContent, cs);
+            markFileModified(filePath);
+            return "【替换成功】共替换 " + replaceCount + " 处";
+        }
+
+        return "【未替换】";
+    }
+
+    /**
+     * 从替换结果中提取替换次数
+     */
+    private static int extractReplaceCount(String result) {
+        try {
+            if (result.contains("共替换")) {
+                int start = result.indexOf("共替换") + 3;
+                int end = result.indexOf(" 处");
+                if (end > start) {
+                    return Integer.parseInt(result.substring(start, end).trim());
+                }
+            }
+        } catch (Exception e) {
+            // 解析失败返回1
+        }
+        return 1;
     }
 
     /**

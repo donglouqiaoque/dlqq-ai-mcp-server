@@ -27,6 +27,7 @@ public class AITools {
         registerInsertTextTool(server);           // dlqq_insert_text_in_file
         registerReplaceTextTool(server);          // dlqq_replace_text_in_file
         registerRemoveTextInFileTool(server);   // dlqq_remove_text_in_file
+        registerReplaceTextInDirTool(server);   // dlqq_replace_text_in_dir
         registerDeleteFileTool(server);           // dlqq_delete_file
         registerCopyFileTool(server);             // dlqq_copy_file
         registerMoveFileTool(server);             // dlqq_move_file
@@ -729,6 +730,99 @@ public class AITools {
                             "{\"file_path\": \"" + filePath + "\", \"start_line\": 1, \"end_line\": -1}");
                     }
                     if (report.startsWith("【未替换】")) {
+                        return errorResult(report);
+                    }
+                    return textResult(report);
+                } catch (IOException e) {
+                    return errorResult("操作失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 5.6 dlqq_replace_text_in_dir - 在目录下批量替换文本
+     */
+    private void registerReplaceTextInDirTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> dirProp = new HashMap<>();
+        dirProp.put("type", "string");
+        dirProp.put("description", "目录路径，将在该目录及其子目录中查找文本文件进行替换");
+        properties.put("dir_path", dirProp);
+
+        Map<String, Object> searchProp = new HashMap<>();
+        searchProp.put("type", "string");
+        searchProp.put("description", "要搜索的文本或正则表达式");
+        properties.put("search_text", searchProp);
+
+        Map<String, Object> replaceProp = new HashMap<>();
+        replaceProp.put("type", "string");
+        replaceProp.put("description", "替换后的文本（为空则删除匹配内容）");
+        properties.put("replace_text", replaceProp);
+
+        Map<String, Object> modeProp = new HashMap<>();
+        modeProp.put("type", "string");
+        modeProp.put("description", "模式：'text'（普通文本）或 'regex'（正则表达式）");
+        modeProp.put("enum", Arrays.asList("text", "regex"));
+        properties.put("mode", modeProp);
+
+        Map<String, Object> charsetProp = new HashMap<>();
+        charsetProp.put("type", "string");
+        charsetProp.put("description", "字符集编码（如 UTF-8、GBK、ISO-8859-1 等，默认为 UTF-8）");
+        properties.put("charset", charsetProp);
+
+        Map<String, Object> fileExtProp = new HashMap<>();
+        fileExtProp.put("type", "array");
+        fileExtProp.put("description", "文件扩展名列表（如 [\"java\", \"txt\", \"md\"]），为空则使用默认文本文件类型");
+        properties.put("file_extensions", fileExtProp);
+
+        Map<String, Object> maxFilesProp = new HashMap<>();
+        maxFilesProp.put("type", "integer");
+        maxFilesProp.put("description", "最大处理文件数（默认100，防止处理过多文件）");
+        properties.put("max_files", maxFilesProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("dir_path", "search_text", "replace_text"));
+
+        server.addTool("dlqq_replace_text_in_dir",
+            "在指定目录及其子目录下的所有文本文件中批量替换指定文本。支持普通文本模式和正则表达式模式。" +
+            "支持指定文件类型过滤，支持设置最大处理文件数限制。返回详细的替换报告，包含每个文件的替换结果汇总。",
+            inputSchema,
+            arguments -> {
+                String dirPath = (String) arguments.get("dir_path");
+                String searchText = (String) arguments.get("search_text");
+                String replaceText = (String) arguments.get("replace_text");
+                String mode = (String) arguments.getOrDefault("mode", "text");
+                String charset = (String) arguments.get("charset");
+                Object fileExtensionsObj = arguments.get("file_extensions");
+                Integer maxFiles = (Integer) arguments.get("max_files");
+
+                if (dirPath == null || dirPath.trim().isEmpty()) {
+                    return errorResult("目录路径不能为空");
+                }
+                if (searchText == null || searchText.isEmpty()) {
+                    return errorResult("搜索文本不能为空");
+                }
+                if (replaceText == null) {
+                    replaceText = "";
+                }
+
+                // 处理文件扩展名列表
+                List<String> fileExtensions = null;
+                if (fileExtensionsObj instanceof List) {
+                    fileExtensions = new ArrayList<>();
+                    for (Object ext : (List<?>) fileExtensionsObj) {
+                        if (ext instanceof String) {
+                            fileExtensions.add((String) ext);
+                        }
+                    }
+                }
+
+                try {
+                    boolean useRegex = "regex".equalsIgnoreCase(mode);
+                    String report = FileTools.replaceTextInDir(dirPath, searchText, replaceText, useRegex, charset, fileExtensions, maxFiles);
+                    // 检查是否被取消
+                    if (report.startsWith("【操作已取消】")) {
                         return errorResult(report);
                     }
                     return textResult(report);
@@ -4130,26 +4224,49 @@ public class AITools {
         pathProp.put("description", "Office文件路径（支持PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX）");
         properties.put("file_path", pathProp);
 
+        Map<String, Object> startPageProp = new HashMap<>();
+        startPageProp.put("type", "integer");
+        startPageProp.put("description", "起始页码/段落/Sheet/幻灯片索引（可选，从1开始。PDF:页码；Word:段落；Excel:Sheet；PPT:幻灯片）");
+        properties.put("start_page", startPageProp);
+
+        Map<String, Object> endPageProp = new HashMap<>();
+        endPageProp.put("type", "integer");
+        endPageProp.put("description", "结束页码/段落/Sheet/幻灯片索引（可选，包含该页。不指定则处理到末尾，最大100页/段/Sheet/幻灯片）");
+        properties.put("end_page", endPageProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("file_path"));
 
         server.addTool("dlqq_read_office_file",
-            "读取Office文件（PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX）并转换为Markdown格式。转换后的文件保存在 .dlqq/cache 目录，返回Markdown文件路径。",
+            "读取Office文件（PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX）并转换为Markdown格式。支持分页/分段处理：PDF按页码、Word按段落、Excel按Sheet、PPT按幻灯片。转换后的文件保存在 .dlqq/cache 目录，返回Markdown文件路径。",
             inputSchema,
             arguments -> {
                 String filePath = (String) arguments.get("file_path");
+                Integer startPage = null;
+                Integer endPage = null;
+                
+                if (arguments.get("start_page") != null) {
+                    startPage = ((Number) arguments.get("start_page")).intValue();
+                }
+                if (arguments.get("end_page") != null) {
+                    endPage = ((Number) arguments.get("end_page")).intValue();
+                }
 
                 if (filePath == null || filePath.trim().isEmpty()) {
                     return errorResult("文件路径不能为空");
                 }
 
                 try {
-                    Map<String, Object> result = OfficeTools.readOfficeFile(filePath);
+                    Map<String, Object> result = OfficeTools.readOfficeFile(filePath, startPage, endPage);
 
                     StringBuilder sb = new StringBuilder();
                     sb.append("✓ Office文件转换成功\n");
                     sb.append("===================\n\n");
                     sb.append("原始文件: ").append(result.get("originalPath")).append("\n");
-                    sb.append("标题: ").append(result.get("title")).append("\n\n");
+                    sb.append("标题: ").append(result.get("title")).append("\n");
+                    if (startPage != null || endPage != null) {
+                        sb.append("处理范围: ").append(startPage != null ? startPage : "起始").append("-").append(endPage != null ? endPage : "末尾").append("\n");
+                    }
+                    sb.append("\n");
                     sb.append("Markdown文件: ").append(result.get("markdownPath")).append("\n");
                     sb.append("文件大小: ").append(result.get("size")).append(" 字节\n\n");
                     sb.append("提示: 请使用 dlqq_read_file 工具读取上述Markdown文件内容。");
@@ -4183,15 +4300,34 @@ public class AITools {
         outputProp.put("description", "输出路径（可选，默认保存到.dlqq/cache目录）");
         properties.put("output_path", outputProp);
 
+        Map<String, Object> startPageProp = new HashMap<>();
+        startPageProp.put("type", "integer");
+        startPageProp.put("description", "起始页码/段落/Sheet/幻灯片索引（可选，从1开始）");
+        properties.put("start_page", startPageProp);
+
+        Map<String, Object> endPageProp = new HashMap<>();
+        endPageProp.put("type", "integer");
+        endPageProp.put("description", "结束页码/段落/Sheet/幻灯片索引（可选，包含该页）");
+        properties.put("end_page", endPageProp);
+
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("source_path", "target_format"));
 
         server.addTool("dlqq_convert_office_file",
-            "将Office文件从一种格式转换为另一种格式。支持: PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX/MD/TXT → DOCX/XLSX/PPTX/MD/TXT。输出路径可选，默认为.dlqq/cache目录。",
+            "将Office文件从一种格式转换为另一种格式。支持: PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX/MD/TXT → DOCX/XLSX/PPTX/MD/TXT。支持分页/分段处理。输出路径可选，默认为.dlqq/cache目录。",
             inputSchema,
             arguments -> {
                 String sourcePath = (String) arguments.get("source_path");
                 String targetFormat = (String) arguments.get("target_format");
                 String outputPath = (String) arguments.get("output_path");
+                Integer startPage = null;
+                Integer endPage = null;
+                
+                if (arguments.get("start_page") != null) {
+                    startPage = ((Number) arguments.get("start_page")).intValue();
+                }
+                if (arguments.get("end_page") != null) {
+                    endPage = ((Number) arguments.get("end_page")).intValue();
+                }
 
                 if (sourcePath == null || sourcePath.trim().isEmpty()) {
                     return errorResult("源文件路径不能为空");
@@ -4202,15 +4338,18 @@ public class AITools {
                 }
 
                 try {
-                    Map<String, Object> result = OfficeTools.convertOfficeFile(sourcePath, targetFormat, outputPath);
+                    Map<String, Object> result = OfficeTools.convertOfficeFile(sourcePath, targetFormat, outputPath, startPage, endPage);
 
                     StringBuilder sb = new StringBuilder();
                     sb.append("✓ Office文件格式转换成功\n");
                     sb.append("===================\n\n");
                     sb.append("源文件: ").append(result.get("sourcePath")).append("\n");
                     sb.append("源格式: ").append(result.get("sourceFormat")).append("\n");
-                    sb.append("目标格式: ").append(result.get("targetFormat")).append("\n\n");
-                    sb.append("输出文件: ").append(result.get("outputPath")).append("\n");
+                    sb.append("目标格式: ").append(result.get("targetFormat")).append("\n");
+                    if (startPage != null || endPage != null) {
+                        sb.append("处理范围: ").append(startPage != null ? startPage : "起始").append("-").append(endPage != null ? endPage : "末尾").append("\n");
+                    }
+                    sb.append("\n输出文件: ").append(result.get("outputPath")).append("\n");
                     sb.append("文件大小: ").append(result.get("size")).append(" 字节\n");
 
                     return textResult(sb.toString());

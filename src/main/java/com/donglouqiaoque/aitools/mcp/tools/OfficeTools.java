@@ -1,6 +1,8 @@
 package com.donglouqiaoque.aitools.mcp.tools;
 
 import com.donglouqiaoque.aitools.utils.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.Loader;
@@ -25,12 +27,18 @@ import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.*;
 
 /**
  * Office文件处理工具
  * 支持PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX等格式的读取和转换为Markdown
  */
 public class OfficeTools {
+    private static final Logger logger = LoggerFactory.getLogger(OfficeTools.class);
+    
+    // PDF处理限制：最大页数和超时时间
+    private static final int MAX_PDF_PAGES = 100;
+    private static final int PDF_TIMEOUT_SECONDS = 90;
 
     /**
      * 读取Office文件并转换为Markdown
@@ -38,6 +46,17 @@ public class OfficeTools {
      * @return 包含Markdown文件路径的结果
      */
     public static Map<String, Object> readOfficeFile(String filePath) throws IOException {
+        return readOfficeFile(filePath, null, null);
+    }
+
+    /**
+     * 读取Office文件并转换为Markdown（支持PDF页码范围）
+     * @param filePath 文件路径
+     * @param startPage 起始页码（仅PDF有效，可选，从1开始）
+     * @param endPage 结束页码（仅PDF有效，可选，包含该页）
+     * @return 包含Markdown文件路径的结果
+     */
+    public static Map<String, Object> readOfficeFile(String filePath, Integer startPage, Integer endPage) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
         Path path = Paths.get(filePath);
 
@@ -71,21 +90,21 @@ public class OfficeTools {
 
         switch (ext) {
             case "pdf":
-                markdown.append(readPdfFile(path));
+                markdown.append(readPdfFile(path, startPage, endPage));
                 break;
             case "doc":
-                markdown.append(readDocFile(path));
+                markdown.append(readDocFile(path, startPage, endPage));
                 break;
             case "docx":
-                markdown.append(readDocxFile(path));
+                markdown.append(readDocxFile(path, startPage, endPage));
                 break;
             case "xls":
             case "xlsx":
-                markdown.append(readExcelFile(path, ext));
+                markdown.append(readExcelFile(path, ext, startPage, endPage));
                 break;
             case "ppt":
             case "pptx":
-                markdown.append(readPptFile(path, ext));
+                markdown.append(readPptFile(path, ext, startPage, endPage));
                 break;
             default:
                 throw new IOException("不支持的文件格式: " + ext + "。支持的格式: pdf, doc, docx, xls, xlsx, ppt, pptx");
@@ -113,30 +132,142 @@ public class OfficeTools {
     }
 
     /**
-     * 读取PDF文件
+     * 读取PDF文件（带超时保护，支持页码范围）
      */
-    private static String readPdfFile(Path path) throws IOException {
+    private static String readPdfFile(Path path, Integer startPage, Integer endPage) throws IOException {
+        logger.info("开始读取PDF文件: {}, 页码范围: {}-{}", path, 
+            startPage != null ? startPage : "默认", 
+            endPage != null ? endPage : "默认");
+        
+        // 使用线程池和Future实现超时控制
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<String> future = executor.submit(() -> extractPdfText(path, startPage, endPage));
+        
+        try {
+            String result = future.get(PDF_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            logger.info("PDF文件读取完成: {}", path);
+            return result;
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            logger.error("PDF处理超时（超过{}秒）: {}", PDF_TIMEOUT_SECONDS, path);
+            throw new IOException("PDF 处理超时（超过" + PDF_TIMEOUT_SECONDS + "秒），该文件可能包含复杂图形或表格。建议：1) 使用其他工具查看；2) 转换为图片后再读取；3) 提取纯文本版本。");
+        } catch (InterruptedException e) {
+            future.cancel(true);
+            logger.error("PDF处理被中断: {}", path, e);
+            throw new IOException("PDF 处理被中断: " + e.getMessage());
+        } catch (ExecutionException e) {
+            logger.error("PDF处理异常: {}", path, e.getCause());
+            throw new IOException("PDF 处理失败: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+    
+    /**
+     * 实际提取PDF文本（在独立线程中执行）
+     */
+    private static String extractPdfText(Path path, Integer startPage, Integer endPage) throws IOException {
         StringBuilder sb = new StringBuilder();
 
         try (PDDocument document = Loader.loadPDF(path.toFile())) {
             PDFTextStripper stripper = new PDFTextStripper();
-            stripper.setSortByPosition(true);
+            // 移除 setSortByPosition(true) - 这是导致性能问题的关键！
+            // stripper.setSortByPosition(true);
 
             int pageCount = document.getNumberOfPages();
+            logger.info("PDF总页数: {}", pageCount);
+            
+            // 计算实际处理范围
+            int actualStartPage = (startPage != null && startPage > 0) ? startPage : 1;
+            int actualEndPage = (endPage != null && endPage > 0) ? Math.min(endPage, pageCount) : pageCount;
+            
+            // 应用最大页数限制
+            if (actualEndPage - actualStartPage + 1 > MAX_PDF_PAGES) {
+                logger.warn("请求页数范围过大({}-{})，限制为{}页", actualStartPage, actualEndPage, MAX_PDF_PAGES);
+                actualEndPage = actualStartPage + MAX_PDF_PAGES - 1;
+            }
+            
+            // 确保范围有效
+            actualStartPage = Math.max(1, Math.min(actualStartPage, pageCount));
+            actualEndPage = Math.max(actualStartPage, Math.min(actualEndPage, pageCount));
+            
+            int pagesToProcess = actualEndPage - actualStartPage + 1;
+            
             sb.append("## 文件信息\n\n");
             sb.append("- 格式: PDF\n");
-            sb.append("- 页数: ").append(pageCount).append("\n\n");
+            sb.append("- 总页数: ").append(pageCount).append("\n");
+            sb.append("- 处理页码: ").append(actualStartPage).append("-").append(actualEndPage);
+            if (startPage != null || endPage != null) {
+                sb.append("（用户指定范围）");
+            }
+            sb.append("\n\n");
 
-            for (int i = 1; i <= pageCount; i++) {
-                stripper.setStartPage(i);
-                stripper.setEndPage(i);
-                String pageText = stripper.getText(document);
-
+            // 设置提取范围
+            stripper.setStartPage(actualStartPage);
+            stripper.setEndPage(actualEndPage);
+            
+            logger.info("开始提取PDF文本（{}-{}页）...", actualStartPage, actualEndPage);
+            String allText = stripper.getText(document);
+            logger.info("PDF文本提取完成");
+            
+            // 按页分割并处理
+            String[] pages = allText.split("\f"); // PDF分页符
+            int currentPage = actualStartPage;
+            for (int i = 0; i < pages.length && currentPage <= actualEndPage; i++) {
+                String pageText = pages[i];
                 if (pageText != null && !pageText.trim().isEmpty()) {
-                    sb.append("## 第").append(i).append("页\n\n");
-                    // 处理文本，转换为Markdown格式
+                    sb.append("## 第").append(currentPage).append("页\n\n");
                     sb.append(processTextToMarkdown(pageText));
                     sb.append("\n\n");
+                }
+                currentPage++;
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * 读取DOC文件（旧格式，支持段落范围）
+     */
+    private static String readDocFile(Path path, Integer startPage, Integer endPage) throws IOException {
+        StringBuilder sb = new StringBuilder();
+
+        try (FileInputStream fis = new FileInputStream(path.toFile());
+             HWPFDocument document = new HWPFDocument(fis)) {
+
+            WordExtractor extractor = new WordExtractor(document);
+            String text = extractor.getText();
+            
+            // 按段落分割
+            String[] paragraphs = text.split("\r?\n");
+            int totalParagraphs = paragraphs.length;
+            
+            // 计算范围（Word按段落索引，startPage/endPage转为段落索引）
+            int startIdx = (startPage != null && startPage > 0) ? (startPage - 1) : 0;
+            int endIdx = (endPage != null && endPage > 0) ? Math.min(endPage - 1, totalParagraphs - 1) : (totalParagraphs - 1);
+            
+            // 限制最大段落数
+            if (endIdx - startIdx + 1 > MAX_PDF_PAGES) {
+                logger.warn("DOC段落范围过大({}-{})，限制为{}段", startIdx + 1, endIdx + 1, MAX_PDF_PAGES);
+                endIdx = startIdx + MAX_PDF_PAGES - 1;
+            }
+            
+            startIdx = Math.max(0, Math.min(startIdx, totalParagraphs - 1));
+            endIdx = Math.max(startIdx, Math.min(endIdx, totalParagraphs - 1));
+
+            sb.append("## 文件信息\n\n");
+            sb.append("- 格式: Word (DOC)\n");
+            sb.append("- 总段落数: ").append(totalParagraphs).append("\n");
+            if (startPage != null || endPage != null) {
+                sb.append("- 处理段落: ").append(startIdx + 1).append("-").append(endIdx + 1).append("\n");
+            }
+            sb.append("\n## 内容\n\n");
+            
+            // 只输出指定范围的段落
+            for (int i = startIdx; i <= endIdx && i < totalParagraphs; i++) {
+                if (paragraphs[i] != null && !paragraphs[i].trim().isEmpty()) {
+                    sb.append(processTextToMarkdown(paragraphs[i])).append("\n\n");
                 }
             }
         }
@@ -145,43 +276,41 @@ public class OfficeTools {
     }
 
     /**
-     * 读取DOC文件（旧格式）
+     * 读取DOCX文件（支持段落范围）
      */
-    private static String readDocFile(Path path) throws IOException {
-        StringBuilder sb = new StringBuilder();
-
-        try (FileInputStream fis = new FileInputStream(path.toFile());
-             HWPFDocument document = new HWPFDocument(fis)) {
-
-            WordExtractor extractor = new WordExtractor(document);
-            String text = extractor.getText();
-
-            sb.append("## 文件信息\n\n");
-            sb.append("- 格式: Word (DOC)\n\n");
-            sb.append("## 内容\n\n");
-            sb.append(processTextToMarkdown(text));
-        }
-
-        return sb.toString();
-    }
-
-    /**
-     * 读取DOCX文件
-     */
-    private static String readDocxFile(Path path) throws IOException {
+    private static String readDocxFile(Path path, Integer startPage, Integer endPage) throws IOException {
         StringBuilder sb = new StringBuilder();
 
         try (FileInputStream fis = new FileInputStream(path.toFile());
              XWPFDocument document = new XWPFDocument(fis)) {
 
+            List<XWPFParagraph> paragraphs = document.getParagraphs();
+            int totalParagraphs = paragraphs.size();
+            
+            // 计算范围（按段落索引）
+            int startIdx = (startPage != null && startPage > 0) ? (startPage - 1) : 0;
+            int endIdx = (endPage != null && endPage > 0) ? Math.min(endPage - 1, totalParagraphs - 1) : (totalParagraphs - 1);
+            
+            // 限制最大段落数
+            if (endIdx - startIdx + 1 > MAX_PDF_PAGES) {
+                logger.warn("DOCX段落范围过大({}-{})，限制为{}段", startIdx + 1, endIdx + 1, MAX_PDF_PAGES);
+                endIdx = startIdx + MAX_PDF_PAGES - 1;
+            }
+            
+            startIdx = Math.max(0, Math.min(startIdx, totalParagraphs - 1));
+            endIdx = Math.max(startIdx, Math.min(endIdx, totalParagraphs - 1));
+
             sb.append("## 文件信息\n\n");
             sb.append("- 格式: Word (DOCX)\n");
-            sb.append("- 段落数: ").append(document.getParagraphs().size()).append("\n\n");
-            sb.append("## 内容\n\n");
+            sb.append("- 总段落数: ").append(totalParagraphs).append("\n");
+            if (startPage != null || endPage != null) {
+                sb.append("- 处理段落: ").append(startIdx + 1).append("-").append(endIdx + 1).append("\n");
+            }
+            sb.append("\n## 内容\n\n");
 
-            // 读取所有段落
-            List<XWPFParagraph> paragraphs = document.getParagraphs();
-            for (XWPFParagraph para : paragraphs) {
+            // 只读取指定范围的段落
+            for (int i = startIdx; i <= endIdx && i < totalParagraphs; i++) {
+                XWPFParagraph para = paragraphs.get(i);
                 String text = para.getText();
                 if (text != null && !text.trim().isEmpty()) {
                     // 根据样式判断标题级别
@@ -204,9 +333,9 @@ public class OfficeTools {
     }
 
     /**
-     * 读取Excel文件
+     * 读取Excel文件（支持Sheet范围，start_page/end_page 对应 Sheet 索引）
      */
-    private static String readExcelFile(Path path, String ext) throws IOException {
+    private static String readExcelFile(Path path, String ext, Integer startPage, Integer endPage) throws IOException {
         StringBuilder sb = new StringBuilder();
         Workbook workbook = null;
 
@@ -218,16 +347,34 @@ public class OfficeTools {
             }
 
             int sheetCount = workbook.getNumberOfSheets();
+            
+            // 计算Sheet范围（startPage/endPage作为Sheet索引，1-based）
+            int startSheet = (startPage != null && startPage > 0) ? (startPage - 1) : 0;
+            int endSheet = (endPage != null && endPage > 0) ? Math.min(endPage - 1, sheetCount - 1) : (sheetCount - 1);
+            
+            // 限制最大Sheet数
+            if (endSheet - startSheet + 1 > MAX_PDF_PAGES) {
+                logger.warn("Excel Sheet范围过大({}-{})，限制为{}个", startSheet + 1, endSheet + 1, MAX_PDF_PAGES);
+                endSheet = startSheet + MAX_PDF_PAGES - 1;
+            }
+            
+            startSheet = Math.max(0, Math.min(startSheet, sheetCount - 1));
+            endSheet = Math.max(startSheet, Math.min(endSheet, sheetCount - 1));
+
             sb.append("## 文件信息\n\n");
             sb.append("- 格式: Excel (").append(ext.toUpperCase()).append(")\n");
-            sb.append("- 工作表数: ").append(sheetCount).append("\n\n");
+            sb.append("- 总工作表数: ").append(sheetCount).append("\n");
+            if (startPage != null || endPage != null) {
+                sb.append("- 处理工作表: ").append(startSheet + 1).append("-").append(endSheet + 1).append("\n");
+            }
+            sb.append("\n");
 
-            // 遍历所有工作表
-            for (int i = 0; i < sheetCount; i++) {
+            // 遍历指定范围的工作表
+            for (int i = startSheet; i <= endSheet && i < sheetCount; i++) {
                 Sheet sheet = workbook.getSheetAt(i);
                 String sheetName = sheet.getSheetName();
 
-                sb.append("## 工作表: ").append(sheetName).append("\n\n");
+                sb.append("## 工作表 ").append(i + 1).append(": ").append(sheetName).append("\n\n");
 
                 // 转换为Markdown表格
                 sb.append(excelSheetToMarkdownTable(sheet));
@@ -318,9 +465,9 @@ public class OfficeTools {
     }
 
     /**
-     * 读取PPT文件
+     * 读取PPT文件（支持幻灯片范围）
      */
-    private static String readPptFile(Path path, String ext) throws IOException {
+    private static String readPptFile(Path path, String ext, Integer startPage, Integer endPage) throws IOException {
         StringBuilder sb = new StringBuilder();
 
         if ("pptx".equals(ext)) {
@@ -329,13 +476,32 @@ public class OfficeTools {
                  XMLSlideShow ppt = new XMLSlideShow(fis)) {
 
                 int slideCount = ppt.getSlides().size();
+                
+                // 计算幻灯片范围（1-based）
+                int startSlide = (startPage != null && startPage > 0) ? (startPage - 1) : 0;
+                int endSlide = (endPage != null && endPage > 0) ? Math.min(endPage - 1, slideCount - 1) : (slideCount - 1);
+                
+                // 限制最大幻灯片数
+                if (endSlide - startSlide + 1 > MAX_PDF_PAGES) {
+                    logger.warn("PPTX幻灯片范围过大({}-{})，限制为{}张", startSlide + 1, endSlide + 1, MAX_PDF_PAGES);
+                    endSlide = startSlide + MAX_PDF_PAGES - 1;
+                }
+                
+                startSlide = Math.max(0, Math.min(startSlide, slideCount - 1));
+                endSlide = Math.max(startSlide, Math.min(endSlide, slideCount - 1));
+
                 sb.append("## 文件信息\n\n");
                 sb.append("- 格式: PowerPoint (PPTX)\n");
-                sb.append("- 幻灯片数: ").append(slideCount).append("\n\n");
+                sb.append("- 总幻灯片数: ").append(slideCount).append("\n");
+                if (startPage != null || endPage != null) {
+                    sb.append("- 处理幻灯片: ").append(startSlide + 1).append("-").append(endSlide + 1).append("\n");
+                }
+                sb.append("\n");
 
-                int slideNum = 1;
-                for (XSLFSlide slide : ppt.getSlides()) {
-                    sb.append("## 幻灯片 ").append(slideNum++).append("\n\n");
+                List<XSLFSlide> slides = ppt.getSlides();
+                for (int i = startSlide; i <= endSlide && i < slideCount; i++) {
+                    XSLFSlide slide = slides.get(i);
+                    sb.append("## 幻灯片 ").append(i + 1).append("\n\n");
 
                     // 提取文本
                     StringBuilder slideText = new StringBuilder();
@@ -362,13 +528,32 @@ public class OfficeTools {
                  HSLFSlideShow ppt = new HSLFSlideShow(fis)) {
 
                 int slideCount = ppt.getSlides().size();
+                
+                // 计算幻灯片范围（1-based）
+                int startSlide = (startPage != null && startPage > 0) ? (startPage - 1) : 0;
+                int endSlide = (endPage != null && endPage > 0) ? Math.min(endPage - 1, slideCount - 1) : (slideCount - 1);
+                
+                // 限制最大幻灯片数
+                if (endSlide - startSlide + 1 > MAX_PDF_PAGES) {
+                    logger.warn("PPT幻灯片范围过大({}-{})，限制为{}张", startSlide + 1, endSlide + 1, MAX_PDF_PAGES);
+                    endSlide = startSlide + MAX_PDF_PAGES - 1;
+                }
+                
+                startSlide = Math.max(0, Math.min(startSlide, slideCount - 1));
+                endSlide = Math.max(startSlide, Math.min(endSlide, slideCount - 1));
+
                 sb.append("## 文件信息\n\n");
                 sb.append("- 格式: PowerPoint (PPT)\n");
-                sb.append("- 幻灯片数: ").append(slideCount).append("\n\n");
+                sb.append("- 总幻灯片数: ").append(slideCount).append("\n");
+                if (startPage != null || endPage != null) {
+                    sb.append("- 处理幻灯片: ").append(startSlide + 1).append("-").append(endSlide + 1).append("\n");
+                }
+                sb.append("\n");
 
-                int slideNum = 1;
-                for (HSLFSlide slide : ppt.getSlides()) {
-                    sb.append("## 幻灯片 ").append(slideNum++).append("\n\n");
+                List<HSLFSlide> slides = ppt.getSlides();
+                for (int i = startSlide; i <= endSlide && i < slideCount; i++) {
+                    HSLFSlide slide = slides.get(i);
+                    sb.append("## 幻灯片 ").append(i + 1).append("\n\n");
 
                     // 提取文本
                     StringBuilder slideText = new StringBuilder();
@@ -459,6 +644,19 @@ public class OfficeTools {
      * @return 包含输出文件路径的结果
      */
     public static Map<String, Object> convertOfficeFile(String sourcePath, String targetFormat, String outputPath) throws IOException {
+        return convertOfficeFile(sourcePath, targetFormat, outputPath, null, null);
+    }
+
+    /**
+     * 将Office文件从一种格式转换为另一种格式（支持分页/分段）
+     * @param sourcePath 源文件路径
+     * @param targetFormat 目标格式（docx/xlsx/pptx/pdf/md/txt）
+     * @param outputPath 输出路径（可选，默认为cache目录）
+     * @param startPage 起始页码/段落/Sheet/幻灯片（可选）
+     * @param endPage 结束页码/段落/Sheet/幻灯片（可选）
+     * @return 包含输出文件路径的结果
+     */
+    public static Map<String, Object> convertOfficeFile(String sourcePath, String targetFormat, String outputPath, Integer startPage, Integer endPage) throws IOException {
         sourcePath = FileUtils.normalizePath(sourcePath);
         Path source = Paths.get(sourcePath);
 
@@ -499,10 +697,14 @@ public class OfficeTools {
         if (outputPath != null && !outputPath.trim().isEmpty()) {
             output = Paths.get(FileUtils.normalizePath(outputPath));
         } else {
-            // 生成默认输出文件名
+            // 生成默认输出文件名（包含范围信息）
             String baseName = fileName.substring(0, lastDot > 0 ? lastDot : fileName.length());
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String outputFileName = baseName + "_converted_" + timestamp + "." + targetFormat;
+            String rangeSuffix = "";
+            if (startPage != null || endPage != null) {
+                rangeSuffix = "_p" + (startPage != null ? startPage : "") + "-" + (endPage != null ? endPage : "");
+            }
+            String outputFileName = baseName + "_converted" + rangeSuffix + "_" + timestamp + "." + targetFormat;
             Path cacheDir = McpTools.ensureCacheDir();
             output = cacheDir.resolve(outputFileName);
         }
@@ -515,23 +717,23 @@ public class OfficeTools {
             case "md":
             case "txt":
                 // 转换为纯文本/Markdown - 提取内容并保存
-                convertToText(source, sourceExt, output);
+                convertToText(source, sourceExt, output, startPage, endPage);
                 break;
             case "docx":
                 // 转换为Word文档
-                convertToDocx(source, sourceExt, output);
+                convertToDocx(source, sourceExt, output, startPage, endPage);
                 break;
             case "xlsx":
                 // 转换为Excel
-                convertToExcel(source, sourceExt, output);
+                convertToExcel(source, sourceExt, output, startPage, endPage);
                 break;
             case "pptx":
                 // 转换为PPT
-                convertToPptx(source, sourceExt, output);
+                convertToPptx(source, sourceExt, output, startPage, endPage);
                 break;
             case "pdf":
                 // 转换为PDF
-                convertToPdf(source, sourceExt, output);
+                convertToPdf(source, sourceExt, output, startPage, endPage);
                 break;
             default:
                 throw new IOException("暂不支持转换为格式: " + targetFormat);
@@ -547,32 +749,32 @@ public class OfficeTools {
     }
 
     /**
-     * 转换为纯文本/Markdown格式
+     * 转换为纯文本/Markdown格式（支持分页/分段）
      */
-    private static void convertToText(Path source, String sourceExt, Path output) throws IOException {
+    private static void convertToText(Path source, String sourceExt, Path output, Integer startPage, Integer endPage) throws IOException {
         StringBuilder content = new StringBuilder();
 
         switch (sourceExt) {
             case "pdf":
-                content.append(readPdfFile(source));
+                content.append(readPdfFile(source, startPage, endPage));
                 break;
             case "doc":
-                content.append(readDocFile(source));
+                content.append(readDocFile(source, startPage, endPage));
                 break;
             case "docx":
-                content.append(readDocxFile(source));
+                content.append(readDocxFile(source, startPage, endPage));
                 break;
             case "xls":
             case "xlsx":
-                content.append(readExcelFile(source, sourceExt));
+                content.append(readExcelFile(source, sourceExt, startPage, endPage));
                 break;
             case "ppt":
             case "pptx":
-                content.append(readPptFile(source, sourceExt));
+                content.append(readPptFile(source, sourceExt, startPage, endPage));
                 break;
             case "md":
             case "txt":
-                // 直接复制文本内容
+                // 直接复制文本内容（不支持分页）
                 content.append(Files.readString(source, StandardCharsets.UTF_8));
                 break;
             default:
@@ -596,18 +798,18 @@ public class OfficeTools {
     }
 
     /**
-     * 转换为DOCX格式
+     * 转换为DOCX格式（支持分页/分段）
      */
-    private static void convertToDocx(Path source, String sourceExt, Path output) throws IOException {
+    private static void convertToDocx(Path source, String sourceExt, Path output, Integer startPage, Integer endPage) throws IOException {
         // 提取源文件内容
         StringBuilder markdownContent = new StringBuilder();
 
         switch (sourceExt) {
             case "pdf":
-                markdownContent.append(readPdfFile(source));
+                markdownContent.append(readPdfFile(source, startPage, endPage));
                 break;
             case "doc":
-                markdownContent.append(readDocFile(source));
+                markdownContent.append(readDocFile(source, startPage, endPage));
                 break;
             case "md":
             case "txt":
@@ -646,9 +848,9 @@ public class OfficeTools {
     }
 
     /**
-     * 转换为XLSX格式
+     * 转换为XLSX格式（startPage/endPage 参数暂不使用，保留兼容性）
      */
-    private static void convertToExcel(Path source, String sourceExt, Path output) throws IOException {
+    private static void convertToExcel(Path source, String sourceExt, Path output, Integer startPage, Integer endPage) throws IOException {
         // 目前仅支持从CSV或文本表格转换
         if (!sourceExt.equals("md") && !sourceExt.equals("txt")) {
             throw new IOException("暂不支持从 " + sourceExt + " 转换为Excel，请先将源文件转换为Markdown表格格式");
@@ -687,9 +889,9 @@ public class OfficeTools {
     }
 
     /**
-     * 转换为PPTX格式
+     * 转换为PPTX格式（startPage/endPage 参数暂不使用，保留兼容性）
      */
-    private static void convertToPptx(Path source, String sourceExt, Path output) throws IOException {
+    private static void convertToPptx(Path source, String sourceExt, Path output, Integer startPage, Integer endPage) throws IOException {
         // 提取内容并按段落/标题分割成幻灯片
         StringBuilder content = new StringBuilder();
 
@@ -739,9 +941,9 @@ public class OfficeTools {
     }
 
     /**
-     * 转换为PDF格式
+     * 转换为PDF格式（startPage/endPage 参数暂不使用，保留兼容性）
      */
-    private static void convertToPdf(Path source, String sourceExt, Path output) throws IOException {
+    private static void convertToPdf(Path source, String sourceExt, Path output, Integer startPage, Integer endPage) throws IOException {
         // PDF转换需要更复杂的库支持，这里先提取文本并保存
         // 注意：Apache PDFBox不支持PDF写入，需要额外依赖如iText或OpenPDF
         throw new IOException("PDF格式转换暂不支持，请先转换为DOCX格式后使用外部工具转换为PDF");

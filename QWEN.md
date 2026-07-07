@@ -105,7 +105,7 @@ use_debug=false
 
 | 工具名称 | 描述 |
 |---------|------|
-| `dlqq_read_office_file` | 读取Office文件（PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX）并转换为Markdown |
+| `dlqq_read_office_file` | 读取Office文件（PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX）并转换为Markdown，支持分页/分段处理 |
 | `dlqq_convert_office_file` | 将Office文件从一种格式转换为另一种格式（支持 MD/TXT/DOCX/XLSX/PPTX） |
 
 **说明**：
@@ -113,6 +113,14 @@ use_debug=false
 - 支持的目标格式：DOCX、XLSX、PPTX、MD、TXT（PDF暂不支持写入）
 - 转换后的文件默认保存到 `.dlqq/cache` 目录
 - 未指定输出路径时自动生成带时间戳的文件名
+- **分页/分段参数** `start_page` / `end_page`（可选，适用于读取和转换工具）：
+  - PDF：按页码（从1开始）
+  - Word(DOC/DOCX)：按段落序号
+  - Excel(XLS/XLSX)：按Sheet索引（第几个工作表）
+  - PPT：按幻灯片页码
+  - 不指定则处理全部内容，最大限制100页/段/Sheet/幻灯片
+- **PDF特殊限制**：
+  - 处理超时：90秒（复杂图形/表格的PDF可能超时）
 
 ### 压缩/解压工具
 
