@@ -1,5 +1,6 @@
 package com.donglouqiaoque.aitools.mcp.tools;
 
+import com.donglouqiaoque.aitools.utils.AIRulesUtils;
 import com.donglouqiaoque.aitools.utils.FileUtils;
 
 import javax.swing.*;
@@ -32,6 +33,10 @@ public class FileTools {
     // 文件修改标记：记录文件是否被修改过
     // key: 文件绝对路径, value: 是否已修改
     private static final Map<String, Boolean> fileModifiedFlag = new ConcurrentHashMap<>();
+
+    // 目录搜索记录：记录目录搜索时使用的文件扩展名
+    // key: "目录路径|搜索模式|是否正则", value: 搜索时使用的文件扩展名列表
+    private static final Map<String, List<String>> dirSearchTracker = new ConcurrentHashMap<>();
 
     /**
      * 记录文件读取的行范围
@@ -293,6 +298,13 @@ public class FileTools {
      */
     public static String readFile(String filePath, int startLine, int endLine, int readLines, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 检查文件是否被读保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isReadProtected(filePath, insideProject)) {
+            throw new IOException("文件被读保护规则禁止读取（.aireadrules）: " + filePath);
+        }
+
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -571,6 +583,12 @@ public class FileTools {
     public static String createFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
 
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
+
         // 跨目录写入保护检查
         String checkResult = checkCrossDirectoryWrite(filePath, "创建文件");
         if (checkResult != null) {
@@ -645,6 +663,12 @@ public class FileTools {
      */
     public static String overwriteFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
 
         // 跨目录写入保护检查
         String checkResult = checkCrossDirectoryWrite(filePath, "覆盖文件");
@@ -743,6 +767,12 @@ public class FileTools {
      */
     public static String appendFile(String filePath, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
 
         // 跨目录写入保护检查
         String checkResult = checkCrossDirectoryWrite(filePath, "追加文件");
@@ -844,6 +874,12 @@ public class FileTools {
     public static String clearFile(String filePath, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
 
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
+
         // 跨目录写入保护检查
         String checkResult = checkCrossDirectoryWrite(filePath, "清空文件");
         if (checkResult != null) {
@@ -909,6 +945,12 @@ public class FileTools {
      */
     public static boolean deleteFile(String filePath) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
 
         // 跨目录写入保护检查
         String checkResult = checkCrossDirectoryWrite(filePath, "删除文件");
@@ -1089,6 +1131,12 @@ public class FileTools {
     public static String removeLinesInFile(String filePath, int startLine, int endLine, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
 
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
+
         // 跨目录写入保护检查
         String checkResult = checkCrossDirectoryWrite(filePath, "删除行");
         if (checkResult != null) {
@@ -1241,6 +1289,12 @@ public class FileTools {
      */
     public static String replaceLinesInFile(String filePath, int startLine, int endLine, String newContent, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
 
         // 跨目录写入保护检查
         String checkResult = checkCrossDirectoryWrite(filePath, "替换行");
@@ -1435,6 +1489,12 @@ public class FileTools {
     public static String insertTextInFile(String filePath, int lineNum, String content, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
 
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
+
         // 跨目录写入保护检查
         String checkResult = checkCrossDirectoryWrite(filePath, "插入文本");
         if (checkResult != null) {
@@ -1571,6 +1631,12 @@ public class FileTools {
      */
     public static String replaceTextInFile(String filePath, String searchText, String replaceText, boolean useRegex, String charset, Integer startLine, Integer endLine) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
+
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
 
         // 跨目录写入保护检查
         String checkResult = checkCrossDirectoryWrite(filePath, "替换文本");
@@ -2543,14 +2609,19 @@ public class FileTools {
             .map(ext -> ext.toLowerCase().startsWith(".") ? ext.toLowerCase() : "." + ext.toLowerCase())
             .collect(Collectors.toSet());
 
+        // 检查是否在项目内（用于.aiignore规则）
+        boolean insideProject = isInsideProject(searchPath);
+
         // 遍历文件
         final List<TextSearchResult> finalResults = results;
         final Pattern finalRegex = regex;
         final String finalSearchPattern = searchPattern;
+        final boolean finalInsideProject = insideProject;
 
         try (var paths = Files.walk(path)) {
             paths.filter(Files::isRegularFile)
                 .filter(p -> isTextFile(p, extensionSet))
+                .filter(p -> !AIRulesUtils.isIgnored(p.toString(), finalInsideProject)) // 过滤被忽略的文件
                 .filter(p -> {
                     try {
                         return maxFileSize <= 0 || Files.size(p) <= maxFileSize;
@@ -2568,7 +2639,66 @@ public class FileTools {
                 });
         }
 
+        // 记录搜索使用的文件扩展名，用于后续替换验证
+        recordDirSearch(searchPath, pattern, useRegex, textExtensions);
+
         return finalResults;
+    }
+
+    /**
+     * 记录目录搜索使用的文件扩展名
+     * @param dirPath 搜索目录
+     * @param pattern 搜索模式
+     * @param useRegex 是否使用正则
+     * @param extensions 文件扩展名列表
+     */
+    private static void recordDirSearch(String dirPath, String pattern, boolean useRegex, List<String> extensions) {
+        String key = FileUtils.normalizePath(dirPath) + "|" + pattern + "|" + useRegex;
+        // 保存扩展名（统一小写，不带点）
+        List<String> normalizedExts = extensions.stream()
+            .map(ext -> ext.toLowerCase().startsWith(".") ? ext.toLowerCase().substring(1) : ext.toLowerCase())
+            .collect(Collectors.toList());
+        dirSearchTracker.put(key, normalizedExts);
+    }
+
+    /**
+     * 检查替换时的文件扩展名是否在搜索记录的范围内
+     * @param dirPath 目录路径
+     * @param searchPattern 搜索模式
+     * @param useRegex 是否使用正则
+     * @param replaceExtensions 替换时的文件扩展名列表
+     * @return 如果允许替换返回null，否则返回错误信息
+     */
+    private static String checkReplaceExtensions(String dirPath, String searchPattern, boolean useRegex, List<String> replaceExtensions) {
+        String key = FileUtils.normalizePath(dirPath) + "|" + searchPattern + "|" + useRegex;
+        List<String> searchExts = dirSearchTracker.get(key);
+
+        if (searchExts == null || searchExts.isEmpty()) {
+            return "【错误】未找到对应的搜索记录。请先使用 dlqq_search_text_in_dir 进行搜索，然后再执行替换操作。";
+        }
+
+        // 标准化替换扩展名
+        List<String> normalizedReplaceExts = replaceExtensions.stream()
+            .map(ext -> ext.toLowerCase().startsWith(".") ? ext.toLowerCase().substring(1) : ext.toLowerCase())
+            .distinct()
+            .collect(Collectors.toList());
+
+        // 检查替换扩展名是否都是搜索扩展名的子集
+        List<String> invalidExts = new ArrayList<>();
+        for (String ext : normalizedReplaceExts) {
+            if (!searchExts.contains(ext)) {
+                invalidExts.add(ext);
+            }
+        }
+
+        if (!invalidExts.isEmpty()) {
+            return "【错误】替换时的文件类型超出了搜索时的范围。\n" +
+                   "搜索时允许的文件类型: " + String.join(", ", searchExts) + "\n" +
+                   "替换时尝试使用的文件类型: " + String.join(", ", normalizedReplaceExts) + "\n" +
+                   "不允许的文件类型: " + String.join(", ", invalidExts);
+        }
+
+        return null; // 验证通过
     }
 
     /**
@@ -2790,6 +2920,12 @@ public class FileTools {
         List<String> extensions = (fileExtensions != null && !fileExtensions.isEmpty())
             ? fileExtensions.stream().map(String::toLowerCase).collect(Collectors.toList())
             : defaultExtensions;
+
+        // 验证替换时的文件扩展名是否在搜索记录的范围内（搜索时使用相同的搜索文本和正则设置）
+        String extCheckResult = checkReplaceExtensions(dirPath, searchText, useRegex, extensions);
+        if (extCheckResult != null) {
+            return extCheckResult;
+        }
 
         int max = (maxFiles != null && maxFiles > 0) ? maxFiles : 100;
 
