@@ -15,7 +15,7 @@
 
 ## 工具列表
 
-本MCP服务器提供96个核心工具：
+本MCP服务器提供98个核心工具：
 
 ### 文件操作工具 (1-14)
 
@@ -161,7 +161,19 @@
 - 压缩级别：1（最快，压缩率最低）到 9（最慢，压缩率最高），默认 5
 - 多文件压缩：`source_paths` 参数支持多个文件/目录路径
 
-### 项目脚本工具 (83-96)
+### BOM控制工具 (83-84)
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_add_unicode_bom` | 为文件或目录下的文件添加UTF-8 BOM（Unicode字节顺序标记） |
+| `dlqq_remove_unicode_bom` | 从文件或目录下的文件移除UTF-8 BOM |
+
+**说明**：
+- 支持单文件或整个目录处理
+- 目录处理时遵循AI规则文件（`.aiignore`），跳过被忽略的文件
+- 文件读写操作保持BOM状态：原文件有BOM则保留，无BOM则不添加
+
+### 项目脚本工具 (85-98)
 
 脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本，用于自动化项目构建、芯片操作等流程。
 
@@ -1763,6 +1775,125 @@ src/main/java/com/donglouqiaoque/aitools/
 └── utils/
     └── FileUtils.java             # 文件工具类
 ```
+
+## AI规则文件
+
+MCP服务器支持三种AI规则文件，用于控制AI对项目文件的操作权限：
+
+### 规则文件类型
+
+| 文件名 | 作用 |
+|--------|------|
+| `.aiignore` | 指定AI应该忽略的文件/目录（不参与批量操作） |
+| `.aiwriterules` | 指定禁止AI修改的文件/目录（写保护） |
+| `.aireadrules` | 指定禁止AI读取的文件/目录（读保护） |
+
+### 规则语法（Gitignore风格）
+
+```
+# 注释行以#开头
+
+# 忽略所有.log文件
+*.log
+
+# 忽略特定目录
+build/
+target/
+
+# 忽略特定文件
+secret.key
+config.ini
+
+# 取反规则（不忽略特定文件）
+!important.log
+
+# 锚定到根目录（/开头）
+/config.txt
+
+# 匹配任意目录层级（**）
+**/*.tmp
+```
+
+### 规则生效范围
+
+1. **当前项目内**：AI严格遵守规则文件
+2. **非当前项目**：不遵守规则，通过JFrame弹窗由用户确认
+3. **单文件操作**：不需要遵守规则，仅批量操作需遵守
+
+### 示例 `.aiwriterules` 文件
+
+```
+# 禁止修改敏感配置文件
+config.properties
+settings.json
+
+# 禁止修改生成文件
+*.generated.java
+/build/
+
+# 但允许修改特定配置文件
+!app.config.xml
+```
+
+## BOM工具详细说明
+
+### 97. dlqq_add_unicode_bom
+
+为文件或目录下的文件添加UTF-8 BOM。
+
+**参数**：
+- `path` (string, 必需): 文件或目录路径
+- `is_directory` (boolean, 可选): 是否为目录，默认false
+- `file_extensions` (array, 可选): 目录模式下处理的文件扩展名列表，如 `["java", "txt", "md"]`
+
+**示例**：
+```json
+// 为单个文件添加BOM
+{
+  "path": "src/main.java",
+  "is_directory": false
+}
+
+// 为目录下所有.java和.txt文件添加BOM
+{
+  "path": "src",
+  "is_directory": true,
+  "file_extensions": ["java", "txt"]
+}
+```
+
+**说明**：
+- 已带BOM的文件不会被重复添加
+- 目录处理时遵循 `.aiignore` 规则，跳过被忽略的文件
+
+### 98. dlqq_remove_unicode_bom
+
+从文件或目录下的文件移除UTF-8 BOM。
+
+**参数**：
+- `path` (string, 必需): 文件或目录路径
+- `is_directory` (boolean, 可选): 是否为目录，默认false
+- `file_extensions` (array, 可选): 目录模式下处理的文件扩展名列表，如 `["java", "txt", "md"]`
+
+**示例**：
+```json
+// 从单个文件移除BOM
+{
+  "path": "src/main.java",
+  "is_directory": false
+}
+
+// 从目录下所有.java和.txt文件移除BOM
+{
+  "path": "src",
+  "is_directory": true,
+  "file_extensions": ["java", "txt"]
+}
+```
+
+**说明**：
+- 不带BOM的文件会被跳过
+- 目录处理时遵循 `.aiignore` 规则，跳过被忽略的文件
 
 ## 许可证
 

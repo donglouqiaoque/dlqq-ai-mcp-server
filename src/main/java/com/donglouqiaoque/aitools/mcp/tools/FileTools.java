@@ -34,6 +34,10 @@ public class FileTools {
     // key: 文件绝对路径, value: 是否已修改
     private static final Map<String, Boolean> fileModifiedFlag = new ConcurrentHashMap<>();
 
+    // 文件BOM标记：记录文件是否包含UTF-8 BOM
+    // key: 文件绝对路径, value: 是否包含BOM（\uFEFF）
+    private static final Map<String, Boolean> fileBomTracker = new ConcurrentHashMap<>();
+
     // 目录搜索记录：记录目录搜索时使用的文件扩展名
     // key: "目录路径|搜索模式|是否正则", value: 搜索时使用的文件扩展名列表
     private static final Map<String, List<String>> dirSearchTracker = new ConcurrentHashMap<>();
@@ -116,6 +120,57 @@ public class FileTools {
      */
     private static String getWorkingDirectory() {
         return FileUtils.normalizePath(System.getProperty("user.dir"));
+    }
+
+    /**
+     * 获取无BOM的字符集
+     * 确保使用标准字符集，避免某些JVM实现中的BOM问题
+     * @param charsetName 字符集名称（如 "UTF-8", "GBK", "ISO-8859-1"）
+     * @return 对应的Charset对象（不带BOM）
+     * @throws IOException 如果不支持的字符集
+     */
+    private static Charset getCharsetWithoutBOM(String charsetName) throws IOException {
+        if (charsetName == null || charsetName.trim().isEmpty()) {
+            return StandardCharsets.UTF_8;
+        }
+        String name = charsetName.trim().toUpperCase();
+        // 使用标准字符集，确保不带BOM
+        switch (name) {
+            case "UTF-8":
+            case "UTF8":
+                return StandardCharsets.UTF_8;
+            case "UTF-16":
+            case "UTF16":
+                return StandardCharsets.UTF_16; // 注意：UTF-16默认可能带BOM，但StandardCharsets.UTF_16LE/UTF_16BE不带
+            case "UTF-16LE":
+            case "UTF16LE":
+                return StandardCharsets.UTF_16LE;
+            case "UTF-16BE":
+            case "UTF16BE":
+                return StandardCharsets.UTF_16BE;
+            case "ISO-8859-1":
+            case "ISO8859-1":
+            case "LATIN1":
+                return StandardCharsets.ISO_8859_1;
+            case "US-ASCII":
+            case "ASCII":
+                return StandardCharsets.US_ASCII;
+            case "GBK":
+            case "GB2312":
+                // GBK 和 GB2312 需要通过 forName，但它们通常不带 BOM
+                try {
+                    return Charset.forName(charsetName.trim());
+                } catch (Exception e) {
+                    throw new IOException("不支持的字符集: " + charsetName + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+                }
+            default:
+                // 其他字符集尝试 forName
+                try {
+                    return Charset.forName(charsetName.trim());
+                } catch (Exception e) {
+                    throw new IOException("不支持的字符集: " + charsetName + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
+                }
+        }
     }
 
     /**
@@ -317,14 +372,14 @@ public class FileTools {
         Charset cs = StandardCharsets.UTF_8;
         if (charset != null && !charset.trim().isEmpty()) {
             try {
-                cs = Charset.forName(charset.trim());
+                cs = getCharsetWithoutBOM(charset);
             } catch (Exception e) {
                 throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
             }
         }
 
         // 使用 FileChannel 以共享模式读取文件，避免多进程竞争
-        List<String> lines = readAllLinesWithSharedLock(path, cs);
+        List<String> lines = readAllLinesWithSharedLock(path, cs, filePath);
         if (lines.isEmpty()) {
             return "";
         }
@@ -374,8 +429,25 @@ public class FileTools {
     /**
      * 使用共享读锁读取文件所有行，避免多进程并发访问时的文件竞争
      */
-    private static List<String> readAllLinesWithSharedLock(Path path, Charset charset) throws IOException {
+    private static List<String> readAllLinesWithSharedLock(Path path, Charset charset, String filePathForBomTracking) throws IOException {
         List<String> lines = new ArrayList<>();
+
+        // 首先检测文件是否有 BOM（读取前3个字节）
+        boolean hasBom = false;
+        if (filePathForBomTracking != null) {
+            try (InputStream bomIs = Files.newInputStream(path)) {
+                byte[] bomBuffer = new byte[3];
+                int read = bomIs.read(bomBuffer, 0, 3);
+                if (read >= 3) {
+                    // UTF-8 BOM: EF BB BF
+                    hasBom = (bomBuffer[0] & 0xFF) == 0xEF &&
+                             (bomBuffer[1] & 0xFF) == 0xBB &&
+                             (bomBuffer[2] & 0xFF) == 0xBF;
+                }
+            }
+            // 记录 BOM 状态
+            recordFileBom(filePathForBomTracking, hasBom);
+        }
 
         // 使用 FileChannel 以只读模式打开文件，允许其他进程同时读取
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ);
@@ -394,7 +466,14 @@ public class FileTools {
 
             try {
                 String line;
+                boolean isFirstLine = true;
                 while ((line = br.readLine()) != null) {
+                    // 检测并去除 BOM 字符（UTF-8 BOM 字符: \uFEFF）
+                    // 注意：Java Reader 在读取 UTF-8 带 BOM 文件时，会将 BOM 转换为 \uFEFF 字符
+                    if (isFirstLine && line.startsWith("\uFEFF")) {
+                        line = line.substring(1);
+                    }
+                    isFirstLine = false;
                     lines.add(line);
                 }
             } finally {
@@ -409,6 +488,79 @@ public class FileTools {
         }
 
         return lines;
+    }
+
+    /**
+     * 记录文件的 BOM 状态
+     */
+    private static void recordFileBom(String filePath, boolean hasBom) {
+        String normalizedPath = FileUtils.normalizePath(filePath);
+        fileBomTracker.put(normalizedPath, hasBom);
+    }
+
+    /**
+     * 检查文件是否有 BOM
+     */
+    private static boolean hasFileBom(String filePath) {
+        String normalizedPath = FileUtils.normalizePath(filePath);
+        return fileBomTracker.getOrDefault(normalizedPath, false);
+    }
+
+    /**
+     * 重置文件的 BOM 记录
+     */
+    private static void resetFileBom(String filePath) {
+        String normalizedPath = FileUtils.normalizePath(filePath);
+        fileBomTracker.remove(normalizedPath);
+    }
+
+    /**
+     * 写入文件内容，根据记录的BOM状态决定是否写入BOM
+     * @param path 文件路径
+     * @param content 文件内容
+     * @param charset 字符集
+     * @param filePathForBomCheck 用于检查BOM状态的文件路径（传入原始filePath）
+     * @throws IOException 写入异常
+     */
+    private static void writeFileWithBomControl(Path path, String content, Charset charset, String filePathForBomCheck) throws IOException {
+        // 检查是否需要写入 BOM
+        boolean shouldWriteBom = filePathForBomCheck != null && hasFileBom(filePathForBomCheck);
+
+        if (shouldWriteBom && charset.name().toUpperCase().contains("UTF")) {
+            // 需要写入 BOM（UTF-8 BOM: EF BB BF）
+            byte[] contentBytes = content.getBytes(charset);
+            byte[] bom = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+            byte[] result = new byte[bom.length + contentBytes.length];
+            System.arraycopy(bom, 0, result, 0, bom.length);
+            System.arraycopy(contentBytes, 0, result, bom.length, contentBytes.length);
+            Files.write(path, result);
+        } else {
+            // 不需要写入 BOM，使用标准方法
+            Files.writeString(path, content, charset);
+        }
+    }
+
+    /**
+     * 写入文件内容（追加模式），根据记录的BOM状态决定是否写入BOM
+     * 注意：追加模式只在文件开头写入BOM（当文件为空时）
+     */
+    private static void writeFileWithBomControlAppend(Path path, String content, Charset charset, String filePathForBomCheck) throws IOException {
+        boolean fileExists = Files.exists(path);
+        boolean isEmpty = !fileExists || Files.size(path) == 0;
+        boolean shouldWriteBom = isEmpty && filePathForBomCheck != null && hasFileBom(filePathForBomCheck);
+
+        if (shouldWriteBom && charset.name().toUpperCase().contains("UTF")) {
+            // 文件为空且需要 BOM
+            byte[] contentBytes = content.getBytes(charset);
+            byte[] bom = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+            byte[] result = new byte[bom.length + contentBytes.length];
+            System.arraycopy(bom, 0, result, 0, bom.length);
+            System.arraycopy(contentBytes, 0, result, bom.length, contentBytes.length);
+            Files.write(path, result, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } else {
+            // 标准追加模式
+            Files.writeString(path, content, charset, java.nio.file.StandardOpenOption.APPEND);
+        }
     }
 
     /**
@@ -445,14 +597,15 @@ public class FileTools {
     }
 
     /**
-     * 将行列表写回文件，保留文件原始的换行符结尾特性
+     * 将行列表写回文件，保留文件原始的换行符结尾特性和 BOM 状态
      * @param path 文件路径
      * @param lines 行列表
      * @param endsWithNewline 是否以换行符结尾
      * @param charset 字符集
+     * @param filePath 用于 BOM 检查的原始文件路径（可为 null）
      * @throws IOException 写入异常
      */
-    private static void writeLinesToFile(Path path, List<String> lines, boolean endsWithNewline, Charset charset) throws IOException {
+    private static void writeLinesToFile(Path path, List<String> lines, boolean endsWithNewline, Charset charset, String filePath) throws IOException {
         StringBuilder result = new StringBuilder();
         for (int i = 0; i < lines.size(); i++) {
             result.append(lines.get(i));
@@ -464,7 +617,16 @@ public class FileTools {
         if (endsWithNewline && !lines.isEmpty()) {
             result.append(System.lineSeparator());
         }
-        Files.writeString(path, result.toString(), charset);
+        // 根据原文件 BOM 状态写入
+        writeFileWithBomControl(path, result.toString(), charset, filePath);
+    }
+
+    /**
+     * 将行列表写回文件，保留文件原始的换行符结尾特性（兼容旧调用，不带 BOM 控制）
+     * @deprecated 请使用带 filePath 参数的版本以支持 BOM 控制
+     */
+    private static void writeLinesToFile(Path path, List<String> lines, boolean endsWithNewline, Charset charset) throws IOException {
+        writeLinesToFile(path, lines, endsWithNewline, charset, null);
     }
 
     // ========== ANSI 颜色代码 ==========
@@ -601,7 +763,7 @@ public class FileTools {
         Charset cs = StandardCharsets.UTF_8;
         if (charset != null && !charset.trim().isEmpty()) {
             try {
-                cs = Charset.forName(charset.trim());
+                cs = getCharsetWithoutBOM(charset);
             } catch (Exception e) {
                 throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
             }
@@ -621,12 +783,14 @@ public class FileTools {
         // 创建文件
         Files.createFile(path);
 
-        // 写入内容（支持空内容创建空文件）
+        // 写入内容（支持空内容创建空文件），新建文件不带 BOM
         int lineCount = 0;
         if (content != null && !content.isEmpty()) {
             Files.writeString(path, content, cs);
             lineCount = content.split("\r?\n", -1).length;
         }
+        // 新建文件默认不带 BOM，记录为无 BOM
+        recordFileBom(filePath, false);
 
         // 生成创建报告（带+/-差异）
         StringBuilder report = new StringBuilder();
@@ -682,7 +846,7 @@ public class FileTools {
         Charset cs = StandardCharsets.UTF_8;
         if (charset != null && !charset.trim().isEmpty()) {
             try {
-                cs = Charset.forName(charset.trim());
+                cs = getCharsetWithoutBOM(charset);
             } catch (Exception e) {
                 throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
             }
@@ -707,8 +871,8 @@ public class FileTools {
             oldLineCount = oldLines.size();
         }
 
-        // 直接写入内容（覆盖原有内容或创建新文件）
-        Files.writeString(path, content, cs);
+        // 直接写入内容（覆盖原有内容或创建新文件），根据记录的 BOM 状态决定是否写入 BOM
+        writeFileWithBomControl(path, content, cs, filePath);
 
         // 计算新文件行数
         int newLineCount = content.split("\r?\n", -1).length;
@@ -791,7 +955,7 @@ public class FileTools {
         Charset cs = StandardCharsets.UTF_8;
         if (charset != null && !charset.trim().isEmpty()) {
             try {
-                cs = Charset.forName(charset.trim());
+                cs = getCharsetWithoutBOM(charset);
             } catch (Exception e) {
                 throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
             }
@@ -812,10 +976,11 @@ public class FileTools {
         }
 
         // 如果文件不存在，创建新文件；否则追加内容
+        // 根据记录的 BOM 状态决定是否写入 BOM（仅在文件为空时）
         if (!Files.exists(path)) {
-            Files.writeString(path, content, cs);
+            writeFileWithBomControl(path, content, cs, filePath);
         } else {
-            Files.writeString(path, content, cs, java.nio.file.StandardOpenOption.APPEND);
+            writeFileWithBomControlAppend(path, content, cs, filePath);
         }
 
         // 生成追加报告
@@ -892,7 +1057,7 @@ public class FileTools {
         Charset cs = StandardCharsets.UTF_8;
         if (charset != null && !charset.trim().isEmpty()) {
             try {
-                cs = Charset.forName(charset.trim());
+                cs = getCharsetWithoutBOM(charset);
             } catch (Exception e) {
                 throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
             }
@@ -912,8 +1077,8 @@ public class FileTools {
             Files.createDirectories(parent);
         }
 
-        // 写入空内容，清空文件
-        Files.writeString(path, "", cs);
+        // 写入空内容，清空文件，保留原文件的 BOM 状态
+        writeFileWithBomControl(path, "", cs, filePath);
 
         // 生成清空报告（带+/-差异）
         StringBuilder report = new StringBuilder();
@@ -1152,7 +1317,7 @@ public class FileTools {
         Charset cs = StandardCharsets.UTF_8;
         if (charset != null && !charset.trim().isEmpty()) {
             try {
-                cs = Charset.forName(charset.trim());
+                cs = getCharsetWithoutBOM(charset);
             } catch (Exception e) {
                 throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
             }
@@ -1222,7 +1387,7 @@ public class FileTools {
 
         // 检测原文件是否以换行符结尾，保留这个特性
         boolean endsWithNewline = fileEndsWithNewline(path);
-        writeLinesToFile(path, newLines, endsWithNewline, cs);
+        writeLinesToFile(path, newLines, endsWithNewline, cs, filePath);
 
         // 标记文件已被修改
         markFileModified(filePath);
@@ -1311,7 +1476,7 @@ public class FileTools {
         Charset cs = StandardCharsets.UTF_8;
         if (charset != null && !charset.trim().isEmpty()) {
             try {
-                cs = Charset.forName(charset.trim());
+                cs = getCharsetWithoutBOM(charset);
             } catch (Exception e) {
                 throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
             }
@@ -1399,7 +1564,7 @@ public class FileTools {
 
         // 检测原文件是否以换行符结尾，保留这个特性
         boolean endsWithNewline = fileEndsWithNewline(path);
-        writeLinesToFile(path, resultLines, endsWithNewline, cs);
+        writeLinesToFile(path, resultLines, endsWithNewline, cs, filePath);
 
         // 标记文件已被修改
         markFileModified(filePath);
@@ -1510,7 +1675,7 @@ public class FileTools {
         Charset cs = StandardCharsets.UTF_8;
         if (charset != null && !charset.trim().isEmpty()) {
             try {
-                cs = Charset.forName(charset.trim());
+                cs = getCharsetWithoutBOM(charset);
             } catch (Exception e) {
                 throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
             }
@@ -1564,7 +1729,7 @@ public class FileTools {
 
         // 检测原文件是否以换行符结尾，保留这个特性
         boolean endsWithNewline = fileEndsWithNewline(path);
-        writeLinesToFile(path, lines, endsWithNewline, cs);
+        writeLinesToFile(path, lines, endsWithNewline, cs, filePath);
 
         // 标记文件已被修改
         markFileModified(filePath);
@@ -1653,7 +1818,7 @@ public class FileTools {
         Charset cs = StandardCharsets.UTF_8;
         if (charset != null && !charset.trim().isEmpty()) {
             try {
-                cs = Charset.forName(charset.trim());
+                cs = getCharsetWithoutBOM(charset);
             } catch (Exception e) {
                 throw new IOException("不支持的字符集: " + charset + "，请使用 UTF-8、GBK、ISO-8859-1 等标准字符集");
             }
@@ -1768,7 +1933,8 @@ public class FileTools {
             if (newContent == null || newContent.isEmpty()) {
                 return "【拒绝修改】替换后的内容为空。文本替换操作不能导致文件内容被完全删除。如需清空文件，请使用 dlqq_clear_file 工具。";
             }
-            Files.writeString(path, newContent, cs);
+            // 根据原文件 BOM 状态写入，保留 BOM
+            writeFileWithBomControl(path, newContent, cs, filePath);
             // 标记文件已被修改
             markFileModified(filePath);
         }
@@ -3047,7 +3213,7 @@ public class FileTools {
         Charset cs = StandardCharsets.UTF_8;
         if (charset != null && !charset.trim().isEmpty()) {
             try {
-                cs = Charset.forName(charset.trim());
+                cs = getCharsetWithoutBOM(charset);
             } catch (Exception e) {
                 throw new IOException("不支持的字符集: " + charset);
             }
@@ -3095,7 +3261,8 @@ public class FileTools {
             if (newContent == null || newContent.isEmpty()) {
                 return "【拒绝修改】替换后的内容为空";
             }
-            Files.writeString(path, newContent, cs);
+            // 根据原文件 BOM 状态写入，保留 BOM
+            writeFileWithBomControl(path, newContent, cs, filePath);
             markFileModified(filePath);
             return "【替换成功】共替换 " + replaceCount + " 处";
         }
@@ -3129,5 +3296,393 @@ public class FileTools {
             return s;
         }
         return s.substring(0, maxLength - 3) + "...";
+    }
+
+    /**
+     * 为文件添加 UTF-8 BOM
+     * 如果文件已有 BOM 则跳过，如果文件不存在则创建新文件（带 BOM）
+     * @param filePath 文件路径
+     * @return 操作结果报告
+     * @throws IOException 操作异常
+     */
+    public static String addUnicodeBom(String filePath) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
+        Path path = Paths.get(filePath);
+
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "添加BOM");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
+        // 确保父目录存在
+        Path parent = path.getParent();
+        if (parent != null && !Files.exists(parent)) {
+            Files.createDirectories(parent);
+        }
+
+        // UTF-8 BOM 字节序列
+        byte[] bom = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+
+        if (!Files.exists(path)) {
+            // 文件不存在，创建带 BOM 的空文件
+            Files.createFile(path);
+            Files.write(path, bom);
+            recordFileBom(filePath, true);
+            return "【成功】已创建新文件并添加 UTF-8 BOM: " + filePath;
+        }
+
+        // 检查文件是否已有 BOM
+        byte[] currentBom = null;
+        try (InputStream is = Files.newInputStream(path)) {
+            currentBom = new byte[3];
+            int read = is.read(currentBom, 0, 3);
+            if (read >= 3) {
+                boolean hasBom = (currentBom[0] & 0xFF) == 0xEF &&
+                                 (currentBom[1] & 0xFF) == 0xBB &&
+                                 (currentBom[2] & 0xFF) == 0xBF;
+                if (hasBom) {
+                    return "【跳过】文件已有 UTF-8 BOM: " + filePath;
+                }
+            }
+        }
+
+        // 读取原文件全部内容
+        byte[] content = Files.readAllBytes(path);
+
+        // 将 BOM 与原内容合并
+        byte[] newContent = new byte[bom.length + content.length];
+        System.arraycopy(bom, 0, newContent, 0, bom.length);
+        System.arraycopy(content, 0, newContent, bom.length, content.length);
+
+        // 写回文件
+        Files.write(path, newContent);
+
+        // 记录 BOM 状态
+        recordFileBom(filePath, true);
+
+        return "【成功】已为文件添加 UTF-8 BOM: " + filePath + "\n" +
+               "原文件大小: " + (newContent.length - bom.length) + " 字节\n" +
+               "新文件大小: " + newContent.length + " 字节 (+3 字节 BOM)";
+    }
+
+    /**
+     * 为目录下的所有文件添加 UTF-8 BOM
+     * 遵循 AI 规则（.aiignore/.aiwriterules/.aireadrules）
+     * @param dirPath 目录路径
+     * @param extensions 文件扩展名列表（如 ["java", "txt"]），为空则处理所有文件
+     * @return 操作结果报告
+     * @throws IOException 操作异常
+     */
+    public static String addUnicodeBomInDir(String dirPath, List<String> extensions) throws IOException {
+        dirPath = FileUtils.normalizePath(dirPath);
+        Path path = Paths.get(dirPath);
+
+        if (!Files.exists(path)) {
+            throw new IOException("目录不存在: " + dirPath);
+        }
+        if (!Files.isDirectory(path)) {
+            throw new IOException("路径不是目录: " + dirPath);
+        }
+
+        // 检查是否在项目内（用于 AI 规则）
+        boolean insideProject = isInsideProject(dirPath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(dirPath, "目录批量添加BOM");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
+        // 准备扩展名过滤器
+        final Set<String> extensionSetFinal;
+        if (extensions != null && !extensions.isEmpty()) {
+            extensionSetFinal = extensions.stream()
+                .map(ext -> ext.toLowerCase().startsWith(".") ? ext.toLowerCase() : "." + ext.toLowerCase())
+                .collect(Collectors.toSet());
+        } else {
+            extensionSetFinal = null;
+        }
+        final boolean insideProjectFinal = insideProject;
+
+        // 遍历目录
+        List<String> processedFiles = new ArrayList<>();
+        List<String> skippedFiles = new ArrayList<>();
+        List<String> errorFiles = new ArrayList<>();
+
+        try (var stream = Files.walk(path)) {
+            stream.filter(Files::isRegularFile)
+                .filter(p -> {
+                    // 应用 .aiignore 规则
+                    if (AIRulesUtils.isIgnored(p.toString(), insideProjectFinal)) {
+                        return false;
+                    }
+                    // 应用扩展名过滤
+                    if (extensionSetFinal != null) {
+                        String fileName = p.getFileName().toString().toLowerCase();
+                        int dotIndex = fileName.lastIndexOf('.');
+                        if (dotIndex > 0) {
+                            String ext = fileName.substring(dotIndex);
+                            return extensionSetFinal.contains(ext);
+                        }
+                        return false;
+                    }
+                    return true;
+                })
+                .forEach(p -> {
+                    String filePath = p.toString();
+                    try {
+                        // 检查写保护
+                        if (AIRulesUtils.isWriteProtected(filePath, insideProjectFinal)) {
+                            skippedFiles.add(filePath + " (写保护)");
+                            return;
+                        }
+                        String result = addUnicodeBom(filePath);
+                        if (result.contains("【成功】")) {
+                            processedFiles.add(filePath);
+                        } else if (result.contains("【跳过】")) {
+                            skippedFiles.add(filePath + " (已有BOM)");
+                        } else {
+                            errorFiles.add(filePath + " (" + result + ")");
+                        }
+                    } catch (Exception e) {
+                        errorFiles.add(filePath + " (" + e.getMessage() + ")");
+                    }
+                });
+        }
+
+        // 生成报告
+        StringBuilder report = new StringBuilder();
+        report.append("========================================\n");
+        report.append("目录添加 UTF-8 BOM 报告\n");
+        report.append("========================================\n\n");
+        report.append("目录: ").append(dirPath).append("\n");
+        if (extensions != null && !extensions.isEmpty()) {
+            report.append("文件类型: ").append(String.join(", ", extensions)).append("\n");
+        } else {
+            report.append("文件类型: 所有文件\n");
+        }
+        report.append("\n处理完成:\n");
+        report.append("  已添加 BOM: ").append(processedFiles.size()).append(" 个文件\n");
+        report.append("  已跳过: ").append(skippedFiles.size()).append(" 个文件\n");
+        report.append("  失败: ").append(errorFiles.size()).append(" 个文件\n\n");
+
+        if (!processedFiles.isEmpty()) {
+            report.append("--- 已添加 BOM 的文件 ---\n");
+            for (String fp : processedFiles) {
+                report.append("+ ").append(fp).append("\n");
+            }
+            report.append("\n");
+        }
+
+        if (!skippedFiles.isEmpty()) {
+            report.append("--- 跳过的文件 ---\n");
+            for (String fp : skippedFiles) {
+                report.append("~ ").append(fp).append("\n");
+            }
+            report.append("\n");
+        }
+
+        if (!errorFiles.isEmpty()) {
+            report.append("--- 失败的文件 ---\n");
+            for (String fp : errorFiles) {
+                report.append("- ").append(fp).append("\n");
+            }
+        }
+
+        return report.toString();
+    }
+
+    /**
+     * 移除文件的 UTF-8 BOM
+     * 如果文件没有 BOM 则跳过
+     * @param filePath 文件路径
+     * @return 操作结果报告
+     * @throws IOException 操作异常
+     */
+    public static String removeUnicodeBom(String filePath) throws IOException {
+        filePath = FileUtils.normalizePath(filePath);
+        Path path = Paths.get(filePath);
+
+        // 检查文件是否被写保护（只在项目内检查）
+        boolean insideProject = isInsideProject(filePath);
+        if (AIRulesUtils.isWriteProtected(filePath, insideProject)) {
+            throw new IOException("文件被写保护规则禁止修改（.aiwriterules）: " + filePath);
+        }
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(filePath, "移除BOM");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
+        if (!Files.exists(path)) {
+            throw new IOException("文件不存在: " + filePath);
+        }
+
+        // 检查文件是否有 BOM
+        byte[] currentBom = new byte[3];
+        try (InputStream is = Files.newInputStream(path)) {
+            int read = is.read(currentBom, 0, 3);
+            if (read < 3) {
+                return "【跳过】文件太小，不可能有 BOM: " + filePath;
+            }
+            boolean hasBom = (currentBom[0] & 0xFF) == 0xEF &&
+                             (currentBom[1] & 0xFF) == 0xBB &&
+                             (currentBom[2] & 0xFF) == 0xBF;
+            if (!hasBom) {
+                return "【跳过】文件没有 UTF-8 BOM: " + filePath;
+            }
+        }
+
+        // 读取原文件全部内容
+        byte[] content = Files.readAllBytes(path);
+
+        // 去除前3个字节（BOM）
+        byte[] newContent = new byte[content.length - 3];
+        System.arraycopy(content, 3, newContent, 0, newContent.length);
+
+        // 写回文件
+        Files.write(path, newContent);
+
+        // 更新 BOM 状态
+        recordFileBom(filePath, false);
+
+        return "【成功】已移除文件的 UTF-8 BOM: " + filePath + "\n" +
+               "原文件大小: " + content.length + " 字节\n" +
+               "新文件大小: " + newContent.length + " 字节 (-3 字节 BOM)";
+    }
+
+    /**
+     * 移除目录下所有文件的 UTF-8 BOM
+     * 遵循 AI 规则（.aiignore/.aiwriterules/.aireadrules）
+     * @param dirPath 目录路径
+     * @param extensions 文件扩展名列表（如 ["java", "txt"]），为空则处理所有文件
+     * @return 操作结果报告
+     * @throws IOException 操作异常
+     */
+    public static String removeUnicodeBomInDir(String dirPath, List<String> extensions) throws IOException {
+        dirPath = FileUtils.normalizePath(dirPath);
+        Path path = Paths.get(dirPath);
+
+        if (!Files.exists(path)) {
+            throw new IOException("目录不存在: " + dirPath);
+        }
+        if (!Files.isDirectory(path)) {
+            throw new IOException("路径不是目录: " + dirPath);
+        }
+
+        // 检查是否在项目内（用于 AI 规则）
+        boolean insideProject = isInsideProject(dirPath);
+
+        // 跨目录写入保护检查
+        String checkResult = checkCrossDirectoryWrite(dirPath, "目录批量移除BOM");
+        if (checkResult != null) {
+            return checkResult;
+        }
+
+        // 准备扩展名过滤器
+        final Set<String> extensionSetFinal;
+        if (extensions != null && !extensions.isEmpty()) {
+            extensionSetFinal = extensions.stream()
+                .map(ext -> ext.toLowerCase().startsWith(".") ? ext.toLowerCase() : "." + ext.toLowerCase())
+                .collect(Collectors.toSet());
+        } else {
+            extensionSetFinal = null;
+        }
+        final boolean insideProjectFinal = insideProject;
+
+        // 遍历目录
+        List<String> processedFiles = new ArrayList<>();
+        List<String> skippedFiles = new ArrayList<>();
+        List<String> errorFiles = new ArrayList<>();
+
+        try (var stream = Files.walk(path)) {
+            stream.filter(Files::isRegularFile)
+                .filter(p -> {
+                    // 应用 .aiignore 规则
+                    if (AIRulesUtils.isIgnored(p.toString(), insideProjectFinal)) {
+                        return false;
+                    }
+                    // 应用扩展名过滤
+                    if (extensionSetFinal != null) {
+                        String fileName = p.getFileName().toString().toLowerCase();
+                        int dotIndex = fileName.lastIndexOf('.');
+                        if (dotIndex > 0) {
+                            String ext = fileName.substring(dotIndex);
+                            return extensionSetFinal.contains(ext);
+                        }
+                        return false;
+                    }
+                    return true;
+                })
+                .forEach(p -> {
+                    String filePath = p.toString();
+                    try {
+                        // 检查写保护
+                        if (AIRulesUtils.isWriteProtected(filePath, insideProjectFinal)) {
+                            skippedFiles.add(filePath + " (写保护)");
+                            return;
+                        }
+                        String result = removeUnicodeBom(filePath);
+                        if (result.contains("【成功】")) {
+                            processedFiles.add(filePath);
+                        } else if (result.contains("【跳过】")) {
+                            skippedFiles.add(filePath + " (无BOM)");
+                        } else {
+                            errorFiles.add(filePath + " (" + result + ")");
+                        }
+                    } catch (Exception e) {
+                        errorFiles.add(filePath + " (" + e.getMessage() + ")");
+                    }
+                });
+        }
+
+        // 生成报告
+        StringBuilder report = new StringBuilder();
+        report.append("========================================\n");
+        report.append("目录移除 UTF-8 BOM 报告\n");
+        report.append("========================================\n\n");
+        report.append("目录: ").append(dirPath).append("\n");
+        if (extensions != null && !extensions.isEmpty()) {
+            report.append("文件类型: ").append(String.join(", ", extensions)).append("\n");
+        } else {
+            report.append("文件类型: 所有文件\n");
+        }
+        report.append("\n处理完成:\n");
+        report.append("  已移除 BOM: ").append(processedFiles.size()).append(" 个文件\n");
+        report.append("  已跳过: ").append(skippedFiles.size()).append(" 个文件\n");
+        report.append("  失败: ").append(errorFiles.size()).append(" 个文件\n\n");
+
+        if (!processedFiles.isEmpty()) {
+            report.append("--- 已移除 BOM 的文件 ---\n");
+            for (String fp : processedFiles) {
+                report.append("+ ").append(fp).append("\n");
+            }
+            report.append("\n");
+        }
+
+        if (!skippedFiles.isEmpty()) {
+            report.append("--- 跳过的文件 ---\n");
+            for (String fp : skippedFiles) {
+                report.append("~ ").append(fp).append("\n");
+            }
+            report.append("\n");
+        }
+
+        if (!errorFiles.isEmpty()) {
+            report.append("--- 失败的文件 ---\n");
+            for (String fp : errorFiles) {
+                report.append("- ").append(fp).append("\n");
+            }
+        }
+
+        return report.toString();
     }
 }

@@ -47,6 +47,10 @@ public class AITools {
         registerReadBinFileTool(server);          // dlqq_read_bin_file
         registerWriteBinFileTool(server);         // dlqq_write_bin_file
 
+        // ========== BOM 控制工具 (20-21) ==========
+        registerAddUnicodeBomTool(server);        // dlqq_add_unicode_bom
+        registerRemoveUnicodeBomTool(server);     // dlqq_remove_unicode_bom
+
         // ========== 搜索工具 (25-28) ==========
         registerSearchFileTool(server);           // dlqq_search_file
         registerSearchDirTool(server);            // dlqq_search_dir
@@ -4514,5 +4518,113 @@ public class AITools {
         } else {
             return String.format("%.2f GB", size / (1024.0 * 1024.0 * 1024.0));
         }
+    }
+
+    // ==================== BOM 控制工具 ====================
+
+    /**
+     * 注册 dlqq_add_unicode_bom - 为文件或目录添加 UTF-8 BOM
+     */
+    private void registerAddUnicodeBomTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "文件或目录路径（支持绝对路径和相对路径）");
+        properties.put("path", pathProp);
+
+        Map<String, Object> isDirProp = new HashMap<>();
+        isDirProp.put("type", "boolean");
+        isDirProp.put("description", "是否为目录模式（默认为false，表示处理单个文件）");
+        properties.put("is_directory", isDirProp);
+
+        Map<String, Object> extensionsProp = new HashMap<>();
+        extensionsProp.put("type", "array");
+        extensionsProp.put("description", "文件扩展名列表（如 [\"java\", \"txt\"]），仅在目录模式下有效，为空则处理所有文件");
+        properties.put("file_extensions", extensionsProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("path"));
+
+        server.addTool("dlqq_add_unicode_bom",
+            "为指定文件或目录添加 UTF-8 BOM（字节顺序标记）。如果文件已有 BOM 则跳过，如果文件不存在则创建带 BOM 的新文件。目录模式下会递归处理所有文件，遵循 AI 规则（.aiignore/.aiwriterules/.aireadrules）过滤文件。",
+            inputSchema,
+            arguments -> {
+                String path = (String) arguments.get("path");
+                Boolean isDirectory = (Boolean) arguments.get("is_directory");
+                @SuppressWarnings("unchecked")
+                List<String> extensions = (List<String>) arguments.get("file_extensions");
+
+                if (path == null || path.trim().isEmpty()) {
+                    return errorResult("路径不能为空");
+                }
+
+                try {
+                    if (isDirectory != null && isDirectory) {
+                        // 目录模式
+                        String result = FileTools.addUnicodeBomInDir(path, extensions);
+                        return textResult(result);
+                    } else {
+                        // 单文件模式
+                        String result = FileTools.addUnicodeBom(path);
+                        return textResult(result);
+                    }
+                } catch (Exception e) {
+                    return errorResult("添加 BOM 失败: " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * 注册 dlqq_remove_unicode_bom - 移除文件或目录的 UTF-8 BOM
+     */
+    private void registerRemoveUnicodeBomTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "文件或目录路径（支持绝对路径和相对路径）");
+        properties.put("path", pathProp);
+
+        Map<String, Object> isDirProp = new HashMap<>();
+        isDirProp.put("type", "boolean");
+        isDirProp.put("description", "是否为目录模式（默认为false，表示处理单个文件）");
+        properties.put("is_directory", isDirProp);
+
+        Map<String, Object> extensionsProp = new HashMap<>();
+        extensionsProp.put("type", "array");
+        extensionsProp.put("description", "文件扩展名列表（如 [\"java\", \"txt\"]），仅在目录模式下有效，为空则处理所有文件");
+        properties.put("file_extensions", extensionsProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("path"));
+
+        server.addTool("dlqq_remove_unicode_bom",
+            "移除指定文件或目录的 UTF-8 BOM（字节顺序标记）。如果文件没有 BOM 则跳过。目录模式下会递归处理所有文件，遵循 AI 规则（.aiignore/.aiwriterules/.aireadrules）过滤文件。",
+            inputSchema,
+            arguments -> {
+                String path = (String) arguments.get("path");
+                Boolean isDirectory = (Boolean) arguments.get("is_directory");
+                @SuppressWarnings("unchecked")
+                List<String> extensions = (List<String>) arguments.get("file_extensions");
+
+                if (path == null || path.trim().isEmpty()) {
+                    return errorResult("路径不能为空");
+                }
+
+                try {
+                    if (isDirectory != null && isDirectory) {
+                        // 目录模式
+                        String result = FileTools.removeUnicodeBomInDir(path, extensions);
+                        return textResult(result);
+                    } else {
+                        // 单文件模式
+                        String result = FileTools.removeUnicodeBom(path);
+                        return textResult(result);
+                    }
+                } catch (Exception e) {
+                    return errorResult("移除 BOM 失败: " + e.getMessage());
+                }
+            }
+        );
     }
 }
