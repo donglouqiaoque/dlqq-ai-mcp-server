@@ -128,6 +128,12 @@ public class AITools {
         registerZipTool(server);                    // dlqq_zip
         registerUnzipTool(server);                  // dlqq_unzip
 
+        // ========== 计算器工具 ==========
+        CalculatorTools.registerTools(server);      // dlqq_calculator_math, dlqq_calculator_programmer, dlqq_calculator_function
+
+        // ========== 命令执行工具 ==========
+        RunCommandTools.registerTools(server);      // dlqq_run_command
+
         // ========== 项目构建和芯片操作工具 ==========
         registerBuildProjectTool(server);           // dlqq_build_project
         registerRebuildProjectTool(server);         // dlqq_rebuild_project
