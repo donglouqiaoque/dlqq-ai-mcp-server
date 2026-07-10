@@ -212,6 +212,28 @@ MCP服务器支持三种AI规则文件，用于控制AI对项目文件的操作�
 - Windows 使用 `cmd /c`，Linux/Mac 使用 `sh -c`
 - 返回命令的输出内容和退出码
 
+### USB工具
+
+USB通信工具，支持HID和CDC设备的扫描、连接和数据收发。
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_run_usb` | 启动USB工具 |
+| `dlqq_usb_scan` | 扫描USB HID/CDC设备 |
+| `dlqq_usb_get_devices` | 获取已扫描的设备列表 |
+| `dlqq_usb_open` | 打开USB设备（通过VID/PID） |
+| `dlqq_usb_close` | 关闭USB设备 |
+| `dlqq_usb_send_text` | 发送文本数据 |
+| `dlqq_usb_send_hex` | 发送十六进制数据 |
+| `dlqq_usb_get_log` | 获取USB通信日志 |
+| `dlqq_exit_usb` | 退出USB工具 |
+
+**说明**：
+- 支持HID和CDC两种设备类型
+- 基于usb4java库实现跨平台USB通信
+- 使用VID/PID标识设备
+- 支持文本/HEX两种数据显示格式
+
 ### 项目脚本工具
 
 脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本。首次使用前需通过 `dlqq_set_*_script` 工具设置脚本路径。

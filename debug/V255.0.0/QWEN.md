@@ -1,1322 +1,281 @@
-# 鸫楼桥鹊 AI 工具 MCP 服务器
+## Qwen Added Memories
+- 当前项目为Java语言开发，Maven构建。
+- 该项目为适用于QWEN的MCP服务器。
+- **运行环境要求**：Java 17+ 和 Python 3.8+，runtime目录提供安装包
+- **MCP配置位置**：配置放在settings.json（而非mcp.json），发行固件包含示例settings.json供参考
+- 允许你执行脚本，但脚本必须都放在该目录下：工程目录\ai_res\doc\script
+- 工程打包的jar文件要放在该目录下：工程目录\release\版本号
+- 每次修改完代码，都要构建一遍jar包，替换当前release目录下的文件。
+- QWEN的MCP服务器配置教程网页链接：https://qwenlm.github.io/qwen-code-docs/zh/users/features/mcp/
+- 增减修改MCP服务器工具以后，README.md也要更新：工程目录\README.md
+- 增减修改MCP服务器工具以后，QWEN.md也要更新：工程目录\release/debug\V1.x.x/V255.x.x\QWEN.md
+- MCP服务器连接诊断日志：已在 StdioTransport、McpServer、MCPServerMain 中增加详细的连接诊断日志，帮助分析连接失败原因。日志文件位于 `./.dlqq/log/logger/` 和 `./.dlqq/log/stderr/` 目录下，按时间命名。
 
-一个功能丰富的 Java MCP 服务器，提供文件操作、目录管理、二进制文件处理、搜索、GUI对话框、串口通信、BLE蓝牙、Office文件处理、压缩解压和项目脚本执行等99个工具。
+## 运行环境要求
 
----
+### Java运行环境
+- **需要 Java 17 或更高版本**
+- 如果未安装Java，可在项目 `runtime/` 目录中找到Java 17安装包
 
-## 功能概览
+### Python运行环境（用于串口/BLE工具）
+- **需要 Python 3.8 或更高版本**
+- 如果未安装Python，可在项目 `runtime/` 目录中找到Python 3.13安装包（向下兼容3.8+）
 
-| 类别 | 工具数量 | 说明 |
-|------|----------|------|
-| 文件操作 | 14 | 读取、创建、覆盖、清空、追加、删除、复制、移动、重命名、行编辑等 |
-| 目录操作 | 8 | 创建、删除、复制、移动、重命名、列出文件夹 |
-| 二进制文件 | 2 | 读取二进制为十六进制、将十六进制写入二进制 |
-| 搜索工具 | 2 | 文件搜索、目录搜索（支持正则） |
-| 对话框工具 | 3 | 文本输入、确认对话框、文件选择 |
-| 串口工具 | 17 | CH340串口通信、数据收发、缓冲区管理、显示格式切换、窗口重启 |
-| BLE库管理 | 4 | Python BLE库安装、更新、状态检查 |
-| BLE蓝牙 | 19 | BLE设备扫描、连接、数据读写、通知订阅、窗口重启 |
-| 系统信息 | 2 | 版本信息获取、蓝牙状态检查 |
-| 数据管理 | 2 | 清除.dlqq数据目录和日志缓存 |
-| Office文件 | 2 | 读取和转换PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX，支持分页处理 |
-| 压缩/解压 | 2 | ZIP压缩/解压，支持密码保护（AES-256）和压缩级别设置 |
-| 项目脚本 | 32 | 构建、重建、擦除、下载、运行、调试等组合脚本执行与配置 |
+## MCP配置说明
 
----
+MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）。
 
-## 快速配置
+**发行固件包含示例 settings.json**，请参考该文件进行配置。
 
-在 `.qwen/mcp.json` 中添加：
+## 自动构建脚本
 
-```json
-{
-  "mcpServers": {
-    "dlqq-ai-tools": {
-      "command": "java",
-      "args": [
-        "-jar",
-        "A:\\MyProject\\Java\\donglouqiaoque_ai_tools\\debug\\V255.0.0\\dlqq_ai_tools.jar"
-      ],
-      "env": {
-        "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"
-      }
-    }
-  }
-}
+项目提供以下自动构建脚本，位于 `util/build/` 目录：
+
+### 配置文件 config.properties
+
+构建脚本会从 `util/build/config.properties` 读取版本号，自动确定发布目录。
+
+**配置文件示例：**
+```properties
+# 版本号配置
+release_version=1.0.0
+debug_version=255.0.0
+
+# 打包模式配置
+# true  = 打包 debug 版本 (输出到 debug/V255.0.x)
+# false = 打包 release 版本 (输出到 release/V1.0.x)
+use_debug=true
 ```
 
-> **注意**：请将 JAR 路径修改为你本地的实际绝对路径。
+### 1. build.bat - 普通构建
+仅执行 Maven 构建，生成 JAR 文件到 `target/` 目录。
 
----
-
-## 参数类型说明
-
-**所有整数参数（integer）都同时支持 integer 和 string 两种格式**，例如：
-
-```json
-// 端口号 - 两种格式都可以
-{ "port": 8001 }        // integer 格式
-{ "port": "8001" }      // string 格式
-
-// 行号 - 两种格式都可以
-{ "start_line": 1 }     // integer 格式
-{ "start_line": "1" }   // string 格式
-
-// 缓冲区大小 - 两种格式都可以
-{ "size_bytes": 5242880 }      // integer 格式
-{ "size_bytes": "5242880" }    // string 格式
+**使用方法：**
+```cmd
+util\build\build.bat
 ```
 
-这样设计是为了兼容不同 AI 模型的参数传递习惯，无论 AI 传递整数还是字符串都能正常工作。
+### 2. build_and_copy.bat - 构建并复制
+执行 Maven 构建，并将生成的 JAR 文件复制到发布目录（release 或 debug）。
 
----
-
-## 工具详细说明
-
-### 一、文件操作工具（14个）
-
-#### 1. `dlqq_read_file` - 读取文件
-
-读取指定文件的指定行范围内容，支持字符集编码。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 文件路径（支持绝对/相对路径） |
-| `start_line` | integer | ✗ | 起始行（1-based，默认1） |
-| `end_line` | integer | ✗ | 结束行（1-based，-1表示到末尾） |
-| `read_lines` | integer | ✗ | 读取行数（与end_line互斥） |
-| `charset` | string | ✗ | 字符集编码（默认UTF-8） |
-
-**示例**：
-```json
-{
-  "file_path": "src/main.java",
-  "start_line": 10,
-  "end_line": 20
-}
+**使用方法：**
+```cmd
+util\build\build_and_copy.bat
 ```
 
----
+**构建流程：**
+1. 从 `config.properties` 读取配置
+   - `use_debug=true`: 使用 `debug_version`，输出到 `debug/V{debug_version}/`
+   - `use_debug=false`: 使用 `release_version`，输出到 `release/V{release_version}/`
+2. 执行 `mvn clean package -DskipTests -Drevision={version}`
+3. 创建发布目录
+4. 将生成的 JAR 复制到对应目录
 
-#### 2. `dlqq_create_file` - 创建文件
+**示例：**
+```properties
+# debug 版本配置
+release_version=1.0.0
+debug_version=255.0.0
+use_debug=true
+# 输出: debug/V255.0.0/donglouqiaoque_ai_tools.jar
 
-创建新文件，可指定内容。自动创建父目录。文件已存在会覆盖。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 文件路径 |
-| `content` | string | ✗ | 文件内容（为空则创建空文件） |
-| `charset` | string | ✗ | 字符集编码（默认UTF-8） |
-
-**示例**：
-```json
-{
-  "file_path": "config.txt",
-  "content": "key=value\nname=test"
-}
+# release 版本配置
+release_version=1.0.0
+debug_version=255.0.0
+use_debug=false
+# 输出: release/V1.0.0/donglouqiaoque_ai_tools.jar
 ```
 
----
+> **提示：** 修改代码后，建议直接使用 `build_and_copy.bat` 进行构建。需要修改版本号时，只需编辑 `config.properties`。
 
-#### 3. `dlqq_overwrite_file` - 覆盖文件
+## MCP工具列表
 
-覆盖指定文件内容，不管文件是否存在都直接写入。
+### 数据管理工具
 
-**参数**：同 `dlqq_create_file`
-
----
-
-#### 4. `dlqq_append_file` - 追加文件内容
-
-在文件末尾追加内容。文件不存在则自动创建。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 文件路径 |
-| `content` | string | ✓ | 要追加的内容 |
-| `charset` | string | ✗ | 字符集编码（默认UTF-8） |
-
----
-
-#### 5. `dlqq_remove_lines_in_file` - 删除指定行
-
-删除文件中指定行范围的内容。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 文件路径 |
-| `start_line` | integer | ✓ | 起始行（包含） |
-| `end_line` | integer | ✓ | 结束行（包含） |
-| `charset` | string | ✗ | 字符集编码（默认UTF-8） |
-
----
-
-#### 6. `dlqq_replace_lines_in_file` - 替换指定行
-
-将文件中指定行范围的内容替换为新内容。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 文件路径 |
-| `start_line` | integer | ✓ | 起始行（包含） |
-| `end_line` | integer | ✓ | 结束行（包含） |
-| `content` | string | ✓ | 替换的新内容（支持多行） |
-| `charset` | string | ✗ | 字符集编码（默认UTF-8） |
-
----
-
-#### 7. `dlqq_insert_text_in_file` - 插入文本
-
-在文件指定行之前插入内容。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 文件路径 |
-| `line` | integer | ✓ | 插入位置（在该行之前插入） |
-| `content` | string | ✓ | 要插入的内容（支持多行） |
-| `charset` | string | ✗ | 字符集编码（默认UTF-8） |
-
----
-
-#### 8. `dlqq_replace_text_in_file` - 替换文本（支持正则）
-
-替换文件中的指定文本。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 文件路径 |
-| `search_text` | string | ✓ | 要搜索的文本或正则表达式 |
-| `replace_text` | string | ✓ | 替换后的文本 |
-| `mode` | string | ✗ | 模式："text"或"regex"（默认"text"） |
-| `charset` | string | ✗ | 字符集编码（默认UTF-8） |
-
-**示例**：
-```json
-{
-  "file_path": "config.txt",
-  "search_text": "old_value",
-  "replace_text": "new_value",
-  "mode": "text"
-}
-```
-
----
-
-#### 9. `dlqq_delete_file` - 删除文件
-
-删除文件，会弹出确认对话框。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 要删除的文件路径 |
-
----
-
-#### 10. `dlqq_copy_file` - 复制文件
-
-复制文件到指定位置，自动创建目标目录。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `source_path` | string | ✓ | 源文件路径 |
-| `target_path` | string | ✓ | 目标文件路径 |
-
----
-
-#### 11. `dlqq_move_file` - 移动文件
-
-移动文件到指定位置。
-
-**参数**：同 `dlqq_copy_file`
-
----
-
-#### 12. `dlqq_rename_file` - 重命名文件
-
-在同一目录下重命名文件。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 源文件路径 |
-| `new_name` | string | ✓ | 新文件名（仅文件名，不含路径） |
-
----
-
-### 二、目录操作工具（8个）
-
-#### 13. `dlqq_mdir` - 创建文件夹
-
-创建文件夹，父目录必须已存在。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `dir_path` | string | ✓ | 文件夹路径 |
-
----
-
-#### 14. `dlqq_mdirs` - 创建多级文件夹
-
-创建文件夹，自动创建所有父文件夹。
-
-**参数**：同 `dlqq_mdir`
-
----
-
-#### 15. `dlqq_delete_dir` - 删除文件夹
-
-递归删除文件夹，会弹出确认对话框显示文件和子目录数量。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `dir_path` | string | ✓ | 要删除的文件夹路径 |
-
----
-
-#### 16. `dlqq_copy_dir` - 复制文件夹
-
-递归复制文件夹及所有内容。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `source_path` | string | ✓ | 源文件夹路径 |
-| `target_path` | string | ✓ | 目标文件夹路径 |
-
----
-
-#### 17. `dlqq_move_dir` - 移动文件夹
-
-移动文件夹到指定位置。
-
-**参数**：同 `dlqq_copy_dir`
-
----
-
-#### 18. `dlqq_rename_dir` - 重命名文件夹
-
-在同一目录下重命名文件夹。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `dir_path` | string | ✓ | 源文件夹路径 |
-| `new_name` | string | ✓ | 新文件夹名（仅名称，不含路径） |
-
----
-
-### 三、二进制文件操作工具（2个）
-
-#### 19. `dlqq_read_bin_file` - 读取二进制文件
-
-读取二进制文件并将字节转换为十六进制文本。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 二进制文件路径 |
-| `start_byte` | integer | ✗ | 起始字节（0-based，默认0） |
-| `end_byte` | integer | ✗ | 结束字节（0-based，-1表示到末尾） |
-| `read_bytes` | integer | ✗ | 读取字节数（与end_byte互斥） |
-
-**返回**：十六进制文本（如 "89504E470D0A1A0A..."）
-
----
-
-#### 20. `dlqq_write_bin_file` - 写入二进制文件
-
-将十六进制文本转换为二进制并写入文件。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | 目标文件路径 |
-| `hex_content` | string | ✓ | 十六进制文本（可包含空格、换行） |
-| `append` | boolean | ✗ | 是否追加写入（默认false） |
-
----
-
-### 四、搜索工具（2个）
-
-#### 21. `dlqq_search_file` - 搜索文件
-
-在指定目录下查找文件，支持部分匹配和正则表达式。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `search_path` | string | ✓ | 搜索目录路径 |
-| `pattern` | string | ✓ | 搜索模式 |
-| `mode` | string | ✗ | 模式："text"（默认）或"regex" |
-
-**示例**：
-```json
-// 查找文件名包含 "test" 的文件
-{
-  "search_path": "src",
-  "pattern": "test",
-  "mode": "text"
-}
-
-// 查找以 .java 结尾的文件（正则）
-{
-  "search_path": "src",
-  "pattern": "\\.java$",
-  "mode": "regex"
-}
-```
-
----
-
-#### 22. `dlqq_search_dir` - 搜索文件夹
-
-在指定目录下查找文件夹。
-
-**参数**：同 `dlqq_search_file`
-
----
-
-### 五、对话框工具（3个）
-
-#### 23. `dlqq_dialog_text` - 文本输入对话框
-
-向用户展示文本输入对话框，等待用户输入。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `title` | string | ✓ | 对话框标题 |
-| `message` | string | ✓ | 提示消息 |
-
-**返回**：用户输入的文本内容
-
----
-
-#### 24. `dlqq_dialog_check` - 确认对话框
-
-向用户展示确认对话框，用户选择是/否。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `title` | string | ✓ | 对话框标题 |
-| `message` | string | ✓ | 确认消息内容 |
-
-**返回**："是" 或 "否"
-
----
-
-#### 25. `dlqq_dialog_file_path` - 文件选择对话框
-
-向用户展示文件选择对话框。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `title` | string | ✓ | 对话框标题 |
-| `extensions` | array | ✗ | 允许的文件扩展名列表，如 `["txt", "java"]` |
-
-**返回**：选中的文件路径
-
----
-
-### 六、串口工具（17个）
-
-串口工具支持多实例管理，每个实例通过**端口号**区分。
-
-#### 26. `dlqq_run_uart` - 启动串口服务器
-
-打开CH340串口工具窗口，启动服务器监听指定端口。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `port` | string | ✓ | 服务器端口号（1~65535，例如："8001"、"8002"等） |
-
-**示例**：
-```json
-{
-  "port": "9001"
-}
-```
-
-**注意**：必须先调用 `dlqq_run_uart` 启动串口工具，其他串口工具才能使用。
-
----
-
-#### 27. `dlqq_uart_get_com` - 获取串口列表
-
-获取系统中所有可用的串口通道列表。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `port` | string | ✓ | 串口工具实例端口号（例如："8001"、"8002"等） |
-
----
-
-#### 28. `dlqq_uart_refresh_com` - 刷新串口列表
-
-重新扫描系统串口，获取最新的串口列表。
-
-**参数**：同 `dlqq_uart_get_com`
-
----
-
-#### 29. `dlqq_uart_open_com` - 打开串口
-
-打开指定串口，开始捕获数据。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `port` | string | ✓ | 串口工具实例端口号（例如："8001"、"8002"等） |
-| `com` | string | ✓ | 串口名称，如 "COM3"、"ttyUSB0"、"USB Serial" |
-| `baud_rate` | integer | ✗ | 波特率（默认1000000，范围0~2000000） |
-
----
-
-#### 30. `dlqq_uart_reopen_com` - 重新打开串口
-
-先关闭当前串口，再用新的波特率重新打开。
-
-**参数**：同 `dlqq_uart_open_com`
-
----
-
-#### 31. `dlqq_uart_close_com` - 关闭串口
-
-关闭当前打开的串口通道。
-
-**参数**：同 `dlqq_uart_get_com`
-
----
-
-#### 32. `dlqq_uart_send_text` - 发送文本数据
-
-发送文本数据到串口。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `port` | string | ✓ | 串口工具实例端口号（例如："8001"、"8002"等） |
-| `text` | string | ✓ | 要发送的文本数据 |
-
----
-
-#### 33. `dlqq_uart_send_hex` - 发送十六进制数据
-
-发送十六进制数据到串口。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `port` | string | ✓ | 串口工具实例端口号（例如："8001"、"8002"等） |
-| `hex_array` | array | ✓ | 十六进制字符串数组，如 `["FF", "01", "02"]` |
-
----
-
-#### 34. `dlqq_uart_get_log` - 获取串口日志数据
-
-获取串口缓冲区中的日志数据，支持3种读取模式。返回格式取决于当前显示格式设置（文本或HEX）。
-
-**模式1 - 直接范围读取**：`start_line` + `end_line`
-**模式2 - 直接计数读取**：`start_line` + `line_count`
-**模式3 - 等待读取**：`timeout_ms` + `line_count`
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `port` | string | ✓ | 串口工具实例端口号（例如："8001"、"8002"等） |
-| `start_line` | integer | ✗ | 起始行号（1-based，模式1和2使用，模式3默认为-1） |
-| `end_line` | integer | ✗ | 结束行号（模式1使用，-1表示到末尾） |
-| `line_count` | integer | ✗ | 读取行数（模式2和3使用） |
-| `timeout_ms` | integer | ✗ | 等待超时毫秒（模式3使用，0表示不等待） |
-
-**说明**：返回格式可通过 `dlqq_uart_switch_text_hex` 切换为文本或HEX格式。如需固定格式，请使用 `dlqq_uart_get_log_text` 或 `dlqq_uart_get_log_hex`。
-
----
-
-#### 35. `dlqq_uart_get_log_text` - 获取串口日志数据（强制文本格式）
-
-获取串口缓冲区中的日志数据（强制文本格式）。支持3种模式（同 `dlqq_uart_get_log`）。
-
-**参数**：同 `dlqq_uart_get_log`
-
-**说明**：无论当前显示格式设置如何，始终返回文本格式。
-
----
-
-#### 36. `dlqq_uart_get_log_hex` - 获取串口日志数据（强制HEX格式）
-
-获取串口缓冲区中的日志数据（强制HEX格式）。支持3种模式（同 `dlqq_uart_get_log`）。
-
-**参数**：同 `dlqq_uart_get_log`
-
-**说明**：无论当前显示格式设置如何，始终返回HEX格式。
-
----
-
-#### 37. `dlqq_uart_clear_text` - 清除串口数据
-
-清除串口数据缓冲区。
-
-**参数**：同 `dlqq_uart_get_com`
-
----
-
-#### 38. `dlqq_uart_get_line_count` - 获取缓冲区行数
-
-获取当前串口数据缓冲区中的日志行数。
-
-**参数**：同 `dlqq_uart_get_com`
-
----
-
-#### 39. `dlqq_uart_set_text_size` - 设置缓冲区大小
-
-设置串口数据缓冲区大小。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `port` | string | ✓ | 串口工具实例端口号（例如："8001"、"8002"等） |
-| `size_bytes` | integer | ✓ | 缓冲区大小（字节） |
-
----
-
-#### 40. `dlqq_uart_switch_text_hex` - 切换显示格式
-
-切换日志显示格式（文本/HEX）。切换后，UI日志显示和 `dlqq_uart_get_log` 返回的数据格式都会相应改变。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `port` | string | ✓ | 串口工具实例端口号（例如："8001"、"8002"等） |
-| `format` | string | ✓ | 显示格式：`text` 或 `hex` |
-
-**示例**：
-```json
-// 切换为HEX显示
-{
-  "port": "8080",
-  "format": "hex"
-}
-
-// 切换为文本显示
-{
-  "port": "8080",
-  "format": "text"
-}
-```
-
----
-
-#### 41. `dlqq_exit_uart` - 退出串口工具
-
-关闭串口工具窗口及进程，释放所有资源。
-
-**参数**：同 `dlqq_uart_get_com`
-
----
-
-#### 42. `dlqq_rerun_uart` - 重新启动串口工具
-
-重新启动指定端口号的串口工具。先关闭该端口的串口工具（如果正在运行），然后重新启动。用于刷新串口工具窗口或解决连接问题。
-
-**参数**：同 `dlqq_run_uart`
-
----
-
-### 七、BLE库管理工具（4个）
-
-#### 43. `dlqq_ble_lib_has` - 检查BLE库安装状态
-
-检查Python BLE库（bleak）是否已安装，返回Python版本和各库的安装状态及版本信息。
-
-**参数**：无
-
----
-
-#### 44. `dlqq_ble_lib_install` - 安装BLE库
-
-自动安装Python BLE依赖库（bleak）。需要先确保Python 3.8+已安装且python命令可用。
-
-**参数**：无
-
----
-
-#### 45. `dlqq_ble_lib_update` - 更新BLE库
-
-检查Python BLE库是否有新版本可用，如果有更新会弹出对话框让用户选择是否立即更新。
-
-**参数**：无
-
----
-
-#### 46. `dlqq_ble_release_script` - 释放BLE脚本
-
-释放BLE Python脚本到项目目录下的.dlqq/script/python文件夹中。
-
-**参数**：无
-
----
-
-### 八、BLE蓝牙工具（19个）
-
-BLE蓝牙工具支持多实例管理，每个实例通过**端口号**区分。
-
-#### 47. `dlqq_run_ble` - 启动BLE工具
-
-打开BLE蓝牙工具，指定Python服务端口号。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `port` | string | ✓ | 服务器端口号（1~65535） |
-
----
-
-#### 47. `dlqq_ble_scan` - 扫描BLE设备
-
-扫描周围的BLE蓝牙设备。
-
-**参数**：无
-
----
-
-#### 48. `dlqq_ble_get_devices` - 获取设备列表
-
-获取扫描到的BLE设备列表。
-
-**参数**：无
-
----
-
-#### 49. `dlqq_ble_connect` - 连接BLE设备
-
-连接指定的BLE设备。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `address` | string | ✓ | 设备地址 |
-
----
-
-#### 50. `dlqq_ble_disconnect` - 断开连接
-
-断开当前连接的BLE设备。
-
-**参数**：无
-
----
-
-#### 51. `dlqq_ble_discover` - 发现服务
-
-发现已连接BLE设备的服务和特征。
-
-**参数**：无
-
----
-
-#### 52. `dlqq_ble_read` - 读取特征值
-
-读取BLE设备的特征值。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `service_uuid` | string | ✓ | 服务UUID |
-| `characteristic_uuid` | string | ✓ | 特征UUID |
-
----
-
-#### 53. `dlqq_ble_write_text` - 写入文本
-
-向BLE设备写入文本数据。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `service_uuid` | string | ✓ | 服务UUID |
-| `characteristic_uuid` | string | ✓ | 特征UUID |
-| `text` | string | ✓ | 要写入的文本 |
-
----
-
-#### 54. `dlqq_ble_write_hex` - 写入HEX数据
-
-向BLE设备写入16进制数据。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `service_uuid` | string | ✓ | 服务UUID |
-| `characteristic_uuid` | string | ✓ | 特征UUID |
-| `hex_array` | array | ✓ | 16进制字符串数组 |
-
----
-
-#### 55. `dlqq_ble_subscribe` - 订阅通知
-
-订阅或取消订阅BLE设备的特征通知。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `service_uuid` | string | ✓ | 服务UUID |
-| `characteristic_uuid` | string | ✓ | 特征UUID |
-| `subscribe` | boolean | ✓ | true=订阅，false=取消订阅 |
-
----
-
-#### 56. `dlqq_ble_get_log` - 获取日志
-
-获取BLE缓冲区日志数据。支持3种读取模式。
-
-**参数**：同 `dlqq_uart_get_log`
-
----
-
-#### 57. `dlqq_ble_get_log_text` - 获取日志（强制文本）
-
-获取BLE缓冲区日志数据（强制文本格式）。
-
-**参数**：同 `dlqq_ble_get_log`
-
----
-
-#### 58. `dlqq_ble_get_log_hex` - 获取日志（强制HEX）
-
-获取BLE缓冲区日志数据（强制HEX格式）。
-
-**参数**：同 `dlqq_ble_get_log`
-
----
-
-#### 59. `dlqq_ble_clear` - 清除缓冲区
-
-清除BLE工具接收的数据缓冲区。
-
-**参数**：无
-
----
-
-#### 60. `dlqq_ble_get_line_count` - 获取行数
-
-获取BLE工具缓冲区当前的日志行数。
-
-**参数**：无
-
----
-
-#### 61. `dlqq_ble_set_buffer_size` - 设置缓冲区大小
-
-设置BLE工具的数据缓冲区大小，单位字节。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `size_bytes` | integer | ✓ | 缓冲区大小（字节） |
-
----
-
-#### 62. `dlqq_ble_switch_text_hex` - 切换显示格式
-
-切换BLE日志的显示格式。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `format` | string | ✓ | `text` 或 `hex` |
-
----
-
-#### 63. `dlqq_exit_ble` - 退出BLE工具
-
-关闭指定端口号的BLE工具窗口及其进程。
-
-**参数**：无
-
----
-
-#### 64. `dlqq_rerun_ble` - 重新启动BLE工具
-
-重新启动指定端口号的BLE工具。先关闭该端口的BLE工具（如果正在运行），然后重新启动。用于刷新BLE工具窗口或解决连接问题。
-
-**参数**：同 `dlqq_run_ble`
-
----
-
-### 九、系统信息工具（2个）
-
-#### 65. `dlqq_get_mcp_version` - 获取版本信息
-
-获取MCP服务器的版本信息、JAR文件修改时间和构建信息。
-
-**参数**：无
-
----
-
-#### 66. `dlqq_check_bluetooth_open` - 检查蓝牙状态
-
-检查Windows电脑的蓝牙适配器是否已开启。
-
-**参数**：无
-
----
-
-### 十、数据管理工具（2个）
-
-#### 67. `dlqq_clear_data` - 清除数据目录
-
-清除.dlqq数据目录，删除整个.dlqq目录及其所有内容。
-
-**参数**：无
-
----
-
-#### 68. `dlqq_clear_cache` - 清除日志缓存
-
-清除.dlqq/log目录下的日志缓存文件，保留目录结构。
-
-**参数**：无
-
----
-
-### 十一、Office文件工具（2个）
-
-#### 69. `dlqq_read_office_file` - 读取Office文件
-
-读取Office文件（PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX）并转换为Markdown格式。支持分页/分段处理。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `file_path` | string | ✓ | Office文件路径 |
-| `start_page` | integer | ✗ | 起始页码/段落/Sheet/幻灯片（从1开始） |
-| `end_page` | integer | ✗ | 结束页码/段落/Sheet/幻灯片（包含该页） |
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_clear_data` | 清除.dlqq数据目录（包括日志、Python脚本等） |
+| `dlqq_clear_cache` | 清除日志缓存文件（仅删除.dlqq/log下的日志） |
 
 **说明**：
-- PDF：按页码处理
-- Word(DOC/DOCX)：按段落序号处理
-- Excel(XLS/XLSX)：按Sheet索引处理（第几个工作表）
-- PPT：按幻灯片页码处理
-- 不指定范围则处理全部内容，最大限制100页/段/Sheet/幻灯片
-- PDF特殊限制：处理超时90秒（复杂图形/表格的PDF可能超时）
+- `dlqq_clear_data`：删除整个 .dlqq 目录及其所有内容。即使部分文件被占用（如日志文件正在被MCP服务器写入），也会返回成功结果，并告知哪些文件被占用。这是正常现象，被占用的文件将在MCP服务器重启后可以被清除。
+- `dlqq_clear_cache`：仅清除 .dlqq/log 目录下的日志文件，保留目录结构。即使部分文件被占用也会返回成功结果，并告知哪些文件被占用。
 
-**示例**：
-```json
-// 读取PDF第1-10页
-{
-  "file_path": "doc/manual.pdf",
-  "start_page": 1,
-  "end_page": 10
-}
+### Office文件工具
 
-// 读取Word前50个段落
-{
-  "file_path": "doc/report.docx",
-  "start_page": 1,
-  "end_page": 50
-}
-```
-
----
-
-#### 70. `dlqq_convert_office_file` - 转换Office文件格式
-
-将Office文件从一种格式转换为另一种格式。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `source_path` | string | ✓ | 源文件路径 |
-| `target_format` | string | ✓ | 目标格式（docx/xlsx/pptx/md/txt） |
-| `output_path` | string | ✗ | 输出路径（可选，默认保存到.dlqq/cache） |
-| `start_page` | integer | ✗ | 起始页码/段落/Sheet/幻灯片（可选） |
-| `end_page` | integer | ✗ | 结束页码/段落/Sheet/幻灯片（可选） |
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_read_office_file` | 读取Office文件（PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX）并转换为Markdown，支持分页/分段处理 |
+| `dlqq_convert_office_file` | 将Office文件从一种格式转换为另一种格式（支持 MD/TXT/DOCX/XLSX/PPTX） |
 
 **说明**：
 - 支持的源格式：PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX、MD、TXT
 - 支持的目标格式：DOCX、XLSX、PPTX、MD、TXT（PDF暂不支持写入）
-- 分页参数说明同 `dlqq_read_office_file`
+- 转换后的文件默认保存到 `.dlqq/cache` 目录
+- 未指定输出路径时自动生成带时间戳的文件名
+- **分页/分段参数** `start_page` / `end_page`（可选，适用于读取和转换工具）：
+  - PDF：按页码（从1开始）
+  - Word(DOC/DOCX)：按段落序号
+  - Excel(XLS/XLSX)：按Sheet索引（第几个工作表）
+  - PPT：按幻灯片页码
+  - 不指定则处理全部内容，最大限制100页/段/Sheet/幻灯片
+- **PDF特殊限制**：
+  - 处理超时：90秒（复杂图形/表格的PDF可能超时）
 
----
+### 压缩/解压工具
 
-### 十二、压缩/解压工具（2个）
-
-#### 71. `dlqq_zip` - 压缩文件
-
-压缩文件或目录为ZIP格式，支持密码保护和压缩级别设置。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `source_paths` | array | ✓ | 源文件/目录路径列表（支持多个） |
-| `output_path` | string | ✗ | 输出ZIP路径（可选，自动生成） |
-| `password` | string | ✗ | 压缩密码（可选，AES-256加密） |
-| `compression_level` | integer | ✗ | 压缩级别1-9（1=最快/最低，9=最慢/最高，默认5） |
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_zip` | 压缩文件/目录（支持密码保护和压缩级别设置） |
+| `dlqq_unzip` | 解压缩ZIP文件（支持密码） |
 
 **说明**：
 - 当前仅支持 ZIP 格式
-- 支持多文件/目录同时压缩
-- 支持 AES-256 加密
-
----
-
-#### 72. `dlqq_unzip` - 解压缩文件
-
-解压ZIP文件，支持密码保护。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `zip_path` | string | ✓ | ZIP文件路径 |
-| `output_dir` | string | ✗ | 解压输出目录（可选，默认ZIP所在目录） |
-| `password` | string | ✗ | 解压密码（如ZIP有密码） |
-
----
-
-### 十三、项目脚本工具（29个）
-
-项目脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本。脚本路径默认空，首次使用前需通过 `dlqq_set_*_script` 工具设置。
-
-#### 73. `dlqq_build_project` - 构建项目
-
-执行 settings.properties 中 `script.build` 配置的脚本。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_build_script` 设置脚本路径
-
----
-
-#### 70. `dlqq_rebuild_project` - 重建项目
-
-执行 settings.properties 中 `script.rebuild` 配置的脚本。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_rebuild_script` 设置脚本路径
-
----
-
-#### 71. `dlqq_chip_erase` - 擦除芯片
-
-执行 settings.properties 中 `script.chip.erase` 配置的脚本。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_chip_erase_script` 设置脚本路径
-
----
-
-#### 72. `dlqq_chip_download` - 下载固件到芯片
-
-执行 settings.properties 中 `script.chip.download` 配置的脚本。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_chip_download_script` 设置脚本路径
-
----
-
-#### 73. `dlqq_erase_download` - 擦除并下载
-
-执行 settings.properties 中 `script.erase.download` 配置的脚本（组合操作）。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_erase_download_script` 设置脚本路径
-
----
-
-#### 74. `dlqq_build_erase_download` - 构建、擦除并下载
-
-执行 settings.properties 中 `script.build.erase.download` 配置的脚本（组合操作）。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_build_erase_download_script` 设置脚本路径
-
----
-
-#### 75. `dlqq_rebuild_erase_download` - 重建、擦除并下载
-
-执行 settings.properties 中 `script.rebuild.erase.download` 配置的脚本（组合操作）。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_rebuild_erase_download_script` 设置脚本路径
-
----
-
-#### 76. `dlqq_run_project` - 运行项目
-
-执行 settings.properties 中 `script.run` 配置的脚本。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_run_script` 设置脚本路径
-
----
-
-#### 77. `dlqq_debug_project` - 调试项目
-
-执行 settings.properties 中 `script.debug` 配置的脚本。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_debug_script` 设置脚本路径
-
----
-
-#### 78. `dlqq_build_run_project` - 构建并运行
-
-执行 settings.properties 中 `script.build.run` 配置的脚本（组合操作）。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_build_run_script` 设置脚本路径
-
----
-
-#### 79. `dlqq_build_debug_project` - 构建并调试
-
-执行 settings.properties 中 `script.build.debug` 配置的脚本（组合操作）。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_build_debug_script` 设置脚本路径
-
----
-
-#### 80. `dlqq_rebuild_run_project` - 重建并运行
-
-执行 settings.properties 中 `script.rebuild.run` 配置的脚本（组合操作）。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_rebuild_run_script` 设置脚本路径
-
----
-
-#### 81. `dlqq_rebuild_debug_project` - 重建并调试
-
-执行 settings.properties 中 `script.rebuild.debug` 配置的脚本（组合操作）。
-
-**参数**：无
-
-**使用前提**：需先使用 `dlqq_set_rebuild_debug_script` 设置脚本路径
-
----
-
-#### 82-95. `dlqq_set_*_script` - 设置脚本路径工具
-
-设置各类脚本的路径，保存到 settings.properties 文件中。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `script_path` | string | ✓ | 脚本文件路径 |
-
-**设置工具列表**：
-- `dlqq_set_build_script` - 设置 script.build
-- `dlqq_set_rebuild_script` - 设置 script.rebuild
-- `dlqq_set_chip_erase_script` - 设置 script.chip.erase
-- `dlqq_set_chip_download_script` - 设置 script.chip.download
-- `dlqq_set_erase_download_script` - 设置 script.erase.download
-- `dlqq_set_build_erase_download_script` - 设置 script.build.erase.download
-- `dlqq_set_rebuild_erase_download_script` - 设置 script.rebuild.erase.download
-- `dlqq_set_run_script` - 设置 script.run
-- `dlqq_set_debug_script` - 设置 script.debug
-- `dlqq_set_build_run_script` - 设置 script.build.run
-- `dlqq_set_build_debug_script` - 设置 script.build.debug
-- `dlqq_set_rebuild_run_script` - 设置 script.rebuild.run
-- `dlqq_set_rebuild_debug_script` - 设置 script.rebuild.debug
-
-**示例**：
-```json
-{
-  "script_path": "util/build/build.bat"
-}
-```
-
----
-
-#### 96. `dlqq_set_response_max_size` - 设置最大回复文本大小
-
-设置文件操作返回内容的最大字节数（默认32KB）。
-
-**参数**：
-| 参数 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `max_size` | string | ✓ | 最大字节数（建议1024-102400） |
-
-**示例**：
-```json
-{
-  "max_size": "65536"
-}
-```
-
----
-
-## 使用示例
-
-### 文件操作
-
-```
-读取 src/main.java 第10到20行
-在 config.txt 第5行插入 "// 新注释"
-把 data.txt 中的 "old" 替换为 "new"
-删除 temp.txt 文件
-```
-
-### 目录操作
-
-```
-创建文件夹 new_folder
-创建多级目录 parent/child/grandchild
-删除 old_folder 文件夹
-复制 src_folder 到 backup/src_folder
-```
-
-### 搜索
-
-```
-在 src 目录下搜索所有 .java 文件
-查找文件名包含 "test" 的文件
-```
-
-### 对话框
-
-```
-弹出一个对话框询问用户是否要保存
-让用户选择一个配置文件
-询问用户项目名称
-```
-
-### 串口操作
-
-```
-启动端口 9001 的串口工具
-获取可用串口列表
-打开 COM3 串口，波特率 115200
-发送文本 "Hello" 到串口
-获取最近 50 行串口日志
-切换日志显示格式为HEX
-设置缓冲区大小为10MB
-关闭串口
-退出串口工具
-```
-
-### 项目脚本操作
-
-```
-设置构建脚本路径为 util/build/build.bat
-构建项目
-擦除芯片并下载固件
-运行项目
-
-设置运行脚本路径为 scripts/run.bat
-运行项目
-
-设置调试脚本路径为 scripts/debug.bat
-调试项目
-```
-
----
-
-## 技术信息
-
-- **开发语言**：Java 17+
-- **构建工具**：Maven
-- **通信协议**：MCP (Model Context Protocol)
-- **串口库**：jSerialComm 2.10.4
-- **字符集**：默认 UTF-8，支持 GBK、ISO-8859-1 等
-
----
-
-## 项目结构
-
-```
-dlqq-ai-tools/
-├── src/main/java/com/donglouqiaoque/aitools/
-│   ├── mcp/
-│   │   ├── MCPServerMain.java      # MCP服务器入口
-│   │   ├── tools/
-│   │   │   ├── AITools.java        # 工具注册
-│   │   │   ├── FileTools.java      # 文件操作实现
-│   │   │   ├── DialogTools.java    # 对话框实现
-│   │   │   ├── UartTools.java      # 串口工具实现
-│   │   │   ├── BleTools.java       # BLE蓝牙工具实现
-│   │   │   └── McpTools.java       # 项目脚本和数据管理工具实现
-│   │   └── server/
-│   │       └── McpServer.java      # MCP服务器核心
-│   └── utils/
-│       └── FileUtils.java          # 文件工具类
-├── debug/V255.0.0/
-│   └── donglouqiaoque_ai_tools.jar # 可执行JAR
-├── release/V1.0.0/
-│   └── donglouqiaoque_ai_tools.jar # 可执行JAR
-└── pom.xml                          # Maven配置
-```
-
----
-
-## 版本更新日志
-
-### V255.0.0 (2026-07-06)
-- **新增**: Office文件工具（2个）
-    - `dlqq_read_office_file` - 读取Office文件并转换为Markdown
-    - `dlqq_convert_office_file` - 转换Office文件格式
-    - 支持格式：PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX、MD、TXT
-    - 支持分页/分段处理（PDF按页码、Word按段落、Excel按Sheet、PPT按幻灯片）
-    - 最大限制100页/段/Sheet/幻灯片
-    - PDF特殊处理：90秒超时保护，避免复杂图形卡死
-- **新增**: 压缩/解压工具（2个）
-    - `dlqq_zip` - 压缩文件/目录，支持密码保护（AES-256）和压缩级别设置
-    - `dlqq_unzip` - 解压ZIP文件，支持密码
-    - 支持多文件/目录同时压缩
-- **工具总数**: 97个 → 99个
-
-### V255.0.0 (2026-06-30)
-- **新增**: 项目脚本工具（27个）
-    - 执行类工具13个：构建、重建、擦除、下载、运行、调试及组合操作
-    - 设置类工具13个：设置各类脚本路径
-    - 配置类工具1个：设置最大回复文本大小
-    - 脚本路径配置在 `.dlqq/settings/settings.properties` 中
-    - 默认脚本路径为空，首次执行会提示需要设置
-- **新增**: 响应大小配置 `dlqq_set_response_max_size`
-    - 可动态设置文件操作返回内容的最大字节数
-    - 默认32KB，建议范围1024-102400字节
-- **新增**: `.dlqq` 目录结构调整
-    - Python脚本移至 `.dlqq/script/python/`
-    - 新增配置目录 `.dlqq/settings/`
-    - 配置文件 `settings.properties` 自动创建
-- **新增**: MCP服务器连接诊断日志增强
-    - 在 `StdioTransport` 中增加传输层启动、读取循环、消息处理的详细日志
-    - 在 `McpServer` 中增加消息处理、初始化流程的详细日志
-    - 在 `MCPServerMain` 中增强健康检查线程日志输出
-    - 日志文件位置：`./.dlqq/log/logger/` 和 `./.dlqq/log/stderr/`，按时间命名
-- **变更**: 日志目录从 `./log` 迁移到 `./.dlqq/log`
-
----
-
-## 许可证
-
-Apache License 2.0
+- 压缩支持 AES-256 加密
+- 压缩级别 1-9（1=最快/压缩率低，9=最慢/压缩率高，默认5）
+- 默认输出路径自动生成
+
+### AI规则文件支持
+
+MCP服务器支持三种AI规则文件，用于控制AI对项目文件的操作权限：
+
+| 文件名 | 作用 |
+|--------|------|
+| `.aiignore` | 指定AI应该忽略的文件/目录（不参与批量操作） |
+| `.aiwriterules` | 指定禁止AI修改的文件/目录（写保护） |
+| `.aireadrules` | 指定禁止AI读取的文件/目录（读保护） |
+
+**规则语法**（Gitignore风格）：
+- `*.log` - 忽略所有.log文件
+- `build/` - 忽略特定目录
+- `/config.txt` - 锚定到根目录
+- `!important.log` - 取反规则
+- `**/*.tmp` - 匹配任意目录层级
+
+**规则生效范围**：
+- 当前项目内：AI严格遵守规则文件
+- 非当前项目：通过JFrame弹窗由用户确认
+- 单文件操作：不需要遵守规则
+
+### BOM控制工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_add_unicode_bom` | 为文件或目录添加UTF-8 BOM（遵循AI规则） |
+| `dlqq_remove_unicode_bom` | 从文件或目录移除UTF-8 BOM（遵循AI规则） |
+
+**说明**：
+- 支持单文件或整个目录处理
+- 目录处理时遵循 `.aiignore` 规则
+- 文件读写操作保持BOM状态一致性
+
+### 计算器工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_calculator_math` | 数学计算器 - 精确计算支持指数、对数、三角函数等 |
+| `dlqq_calculator_programmer` | 程序计算器 - 整型/浮点计算，支持位运算(AND OR XOR 位移) |
+| `dlqq_calculator_function` | 函数计算器 - 自定义函数表达式，支持变量和内置函数计算 |
+
+**数学计算器支持的函数**：
+- `sqrt(x)` - 平方根, `cbrt(x)` - 立方根, `pow(base, exp)` - 幂运算
+- `log(x)` / `ln(x)` - 自然对数, `log10(x)` - 常用对数, `log2(x)` - 二进制对数
+- `exp(x)` - e的x次幂
+- `sin(x)`, `cos(x)`, `tan(x)` - 三角函数（弧度）
+- `asin(x)`, `acos(x)`, `atan(x)` - 反三角函数
+- `sinh(x)`, `cosh(x)`, `tanh(x)` - 双曲函数
+- `abs(x)`, `floor(x)`, `ceil(x)`, `round(x)`
+- `n!` - 阶乘
+- 常量: `PI`, `E`
+
+**程序计算器支持的操作**：
+- 四则运算: `+`, `-`, `*`, `/`, `%`
+- 位运算: `&` (AND), `|` (OR), `^` (XOR), `~` (NOT), `<<`, `>>`, `>>>` (位移)
+- 多进制表示: `0x` (十六进制), `0b` (二进制), `0o` (八进制)
+- 数据类型: `int`, `long`, `float`, `double`
+
+**函数计算器**：
+- 支持自定义变量
+- 支持嵌套函数调用
+- 支持所有数学计算器的内置函数
+
+### 命令执行工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_run_command` | 执行命令行指令（**需要用户审批**） |
+
+**说明**：
+- **执行前必须通过 JFrame 弹窗获得用户确认**
+- 支持设置工作目录
+- 支持设置超时时间（1-600秒，默认60秒）
+- Windows 使用 `cmd /c`，Linux/Mac 使用 `sh -c`
+- 返回命令的输出内容和退出码
+
+### USB工具
+
+USB通信工具，支持HID和CDC设备的扫描、连接和数据收发。
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_run_usb` | 启动USB工具 |
+| `dlqq_usb_scan` | 扫描USB HID/CDC设备 |
+| `dlqq_usb_get_devices` | 获取已扫描的设备列表 |
+| `dlqq_usb_open` | 打开USB设备（通过VID/PID） |
+| `dlqq_usb_close` | 关闭USB设备 |
+| `dlqq_usb_send_text` | 发送文本数据 |
+| `dlqq_usb_send_hex` | 发送十六进制数据 |
+| `dlqq_usb_get_log` | 获取USB通信日志 |
+| `dlqq_exit_usb` | 退出USB工具 |
+
+**说明**：
+- 支持HID和CDC两种设备类型
+- 基于usb4java库实现跨平台USB通信
+- 使用VID/PID标识设备
+- 支持文本/HEX两种数据显示格式
+
+### 项目脚本工具
+
+脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本。首次使用前需通过 `dlqq_set_*_script` 工具设置脚本路径。
+
+#### 执行类工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_build_project` | 构建项目 |
+| `dlqq_rebuild_project` | 重建项目 |
+| `dlqq_chip_erase` | 擦除芯片 |
+| `dlqq_chip_download` | 下载固件到芯片 |
+| `dlqq_erase_download` | 擦除并下载 |
+| `dlqq_build_erase_download` | 构建、擦除并下载 |
+| `dlqq_rebuild_erase_download` | 重建、擦除并下载 |
+| `dlqq_run_project` | 运行项目 |
+| `dlqq_debug_project` | 调试项目 |
+| `dlqq_build_run_project` | 构建并运行 |
+| `dlqq_build_debug_project` | 构建并调试 |
+| `dlqq_rebuild_run_project` | 重建并运行 |
+| `dlqq_rebuild_debug_project` | 重建并调试 |
+
+#### 设置类工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_set_build_script` | 设置构建脚本路径 |
+| `dlqq_set_rebuild_script` | 设置重建脚本路径 |
+| `dlqq_set_chip_erase_script` | 设置芯片擦除脚本路径 |
+| `dlqq_set_chip_download_script` | 设置芯片下载脚本路径 |
+| `dlqq_set_erase_download_script` | 设置擦除下载脚本路径 |
+| `dlqq_set_build_erase_download_script` | 设置构建擦除下载脚本路径 |
+| `dlqq_set_rebuild_erase_download_script` | 设置重建擦除下载脚本路径 |
+| `dlqq_set_run_script` | 设置运行脚本路径 |
+| `dlqq_set_debug_script` | 设置调试脚本路径 |
+| `dlqq_set_build_run_script` | 设置构建运行脚本路径 |
+| `dlqq_set_build_debug_script` | 设置构建调试脚本路径 |
+| `dlqq_set_rebuild_run_script` | 设置重建运行脚本路径 |
+| `dlqq_set_rebuild_debug_script` | 设置重建调试脚本路径 |
+| `dlqq_set_mcp_properties` | 设置MCP配置属性（含response.max.size，默认25804字节，最大258048） |
+
+**说明**：
+- 所有脚本路径默认空，首次执行会提示需要先使用 `dlqq_set_*_script` 工具设置
+- 脚本配置保存在 `.dlqq/settings/settings.properties` 文件中
+- `response.max.size` 控制文件操作返回内容的最大字节数（默认25804约25KB，最大258048约252KB）

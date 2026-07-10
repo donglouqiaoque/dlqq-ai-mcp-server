@@ -134,6 +134,23 @@ public class AITools {
         // ========== 命令执行工具 ==========
         RunCommandTools.registerTools(server);      // dlqq_run_command
 
+        // ========== USB工具 (88-101) ==========
+        registerRunUsbTool(server);                 // dlqq_run_usb
+        registerUsbScanTool(server);                // dlqq_usb_scan
+        registerUsbGetDevicesTool(server);            // dlqq_usb_get_devices
+        registerUsbOpenTool(server);                // dlqq_usb_open
+        registerUsbCloseTool(server);               // dlqq_usb_close
+        registerUsbSendTextTool(server);            // dlqq_usb_send_text
+        registerUsbSendHexTool(server);             // dlqq_usb_send_hex
+        registerUsbGetLogTool(server);              // dlqq_usb_get_log
+        registerUsbGetLogTextTool(server);          // dlqq_usb_get_log_text
+        registerUsbGetLogHexTool(server);           // dlqq_usb_get_log_hex
+        registerUsbClearTool(server);               // dlqq_usb_clear
+        registerUsbGetLineCountTool(server);        // dlqq_usb_get_line_count
+        registerUsbSwitchTextHexTool(server);       // dlqq_usb_switch_text_hex
+        registerExitUsbTool(server);                  // dlqq_exit_usb
+        registerRerunUsbTool(server);                 // dlqq_rerun_usb
+
         // ========== 项目构建和芯片操作工具 ==========
         registerBuildProjectTool(server);           // dlqq_build_project
         registerRebuildProjectTool(server);         // dlqq_rebuild_project
@@ -4630,6 +4647,686 @@ public class AITools {
                 } catch (Exception e) {
                     return errorResult("移除 BOM 失败: " + e.getMessage());
                 }
+            }
+        );
+    }
+
+    // ==================== USB工具 ====================
+
+    /**
+     * dlqq_run_usb - 启动USB工具
+     */
+    private void registerRunUsbTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "实例端口号，用于区分不同的USB工具实例");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_run_usb",
+            "启动USB工具（打开图形界面）。端口号用于区分不同的USB工具实例。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                if (UsbTools.hasInstance(port)) {
+                    return errorResult("USB工具实例已在运行中，端口: " + port);
+                }
+
+                UsbTools instance = UsbTools.createInstance(port);
+                String result = instance.start();
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_scan - 扫描USB设备
+     */
+    private void registerUsbScanTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_usb_scan",
+            "扫描可用的USB HID/CDC设备。返回设备列表，包含VID、PID、设备名称等信息。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动，请先使用 dlqq_run_usb");
+                }
+
+                List<Map<String, Object>> devices = instance.scanDevices();
+
+                StringBuilder sb = new StringBuilder();
+                sb.append("【USB设备扫描结果】\n");
+                sb.append("共找到 ").append(devices.size()).append(" 个设备\n\n");
+
+                for (int i = 0; i < devices.size(); i++) {
+                    Map<String, Object> dev = devices.get(i);
+                    sb.append(i + 1).append(". ").append(dev.get("displayName")).append("\n");
+                    sb.append("   VID: ").append(dev.get("vendorIdHex")).append("\n");
+                    sb.append("   PID: ").append(dev.get("productIdHex")).append("\n");
+                    sb.append("   类型: ").append(dev.get("deviceClass")).append("\n\n");
+                }
+
+                if (devices.isEmpty()) {
+                    sb.append("未发现USB设备\n");
+                }
+
+                return textResult(sb.toString());
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_get_devices - 获取已扫描的设备列表
+     */
+    private void registerUsbGetDevicesTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_usb_get_devices",
+            "获取上次扫描的USB设备列表（不需要重新扫描）。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                // 执行扫描获取设备
+                List<Map<String, Object>> devices = instance.scanDevices();
+
+                StringBuilder sb = new StringBuilder();
+                sb.append("【USB设备列表】\n");
+                for (int i = 0; i < devices.size(); i++) {
+                    Map<String, Object> dev = devices.get(i);
+                    sb.append(i + 1).append(". ").append(dev.get("displayName")).append("\n");
+                }
+                return textResult(sb.toString());
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_open - 打开USB设备
+     */
+    private void registerUsbOpenTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> vidProp = new HashMap<>();
+        vidProp.put("type", "string");
+        vidProp.put("description", "厂商ID (VID)，十六进制，如 \"0x0483\"");
+        properties.put("vid", vidProp);
+
+        Map<String, Object> pidProp = new HashMap<>();
+        pidProp.put("type", "string");
+        pidProp.put("description", "产品ID (PID)，十六进制，如 \"0x5740\"");
+        properties.put("pid", pidProp);
+
+        Map<String, Object> typeProp = new HashMap<>();
+        typeProp.put("type", "string");
+        typeProp.put("description", "设备类型: HID 或 CDC");
+        typeProp.put("enum", Arrays.asList("HID", "CDC"));
+        properties.put("type", typeProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "vid", "pid"));
+
+        server.addTool("dlqq_usb_open",
+            "打开指定的USB设备。需要先执行 dlqq_usb_scan 获取设备列表。支持HID和CDC设备。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                String vidStr = (String) arguments.get("vid");
+                String pidStr = (String) arguments.get("pid");
+                String type = (String) arguments.get("type");
+
+                int port, vid, pid;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                try {
+                    vid = Integer.parseInt(vidStr.replace("0x", ""), 16);
+                    pid = Integer.parseInt(pidStr.replace("0x", ""), 16);
+                } catch (NumberFormatException e) {
+                    return errorResult("VID/PID 格式错误");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                String result = instance.openDevice(vid, pid, type);
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_close - 关闭USB设备
+     */
+    private void registerUsbCloseTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_usb_close",
+            "关闭当前打开的USB设备。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                String result = instance.closeDevice();
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_send_text - 发送文本数据
+     */
+    private void registerUsbSendTextTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> textProp = new HashMap<>();
+        textProp.put("type", "string");
+        textProp.put("description", "要发送的文本内容");
+        properties.put("text", textProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "text"));
+
+        server.addTool("dlqq_usb_send_text",
+            "向USB设备发送文本数据（UTF-8编码）。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                String text = (String) arguments.get("text");
+
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                String result = instance.sendText(text);
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_send_hex - 发送十六进制数据
+     */
+    private void registerUsbSendHexTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> hexProp = new HashMap<>();
+        hexProp.put("type", "array");
+        hexProp.put("description", "十六进制数据数组，如 [\"FF\", \"01\", \"02\", \"03\"]");
+        properties.put("hex_array", hexProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Arrays.asList("port", "hex_array"));
+
+        server.addTool("dlqq_usb_send_hex",
+            "向USB设备发送十六进制数据。每个元素为两位的十六进制字符串。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                Object hexArray = arguments.get("hex_array");
+
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                String[] hexData;
+                if (hexArray instanceof List) {
+                    List<?> list = (List<?>) hexArray;
+                    hexData = list.stream().map(Object::toString).toArray(String[]::new);
+                } else {
+                    return errorResult("hex_array 必须是数组类型");
+                }
+
+                String result = instance.sendHex(hexData);
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_get_log - 获取USB日志
+     */
+    private void registerUsbGetLogTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "string");
+        startLineProp.put("description", "起始行号（1-based，默认1）");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> endLineProp = new HashMap<>();
+        endLineProp.put("type", "string");
+        endLineProp.put("description", "结束行号（-1表示到末尾）");
+        properties.put("end_line", endLineProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_usb_get_log",
+            "获取USB通信日志。支持文本/HEX格式，取决于当前显示设置。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                String startLineStr = (String) arguments.get("start_line");
+                String endLineStr = (String) arguments.get("end_line");
+
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                int startLine = (startLineStr != null) ? Integer.parseInt(startLineStr) : 1;
+                int endLine = (endLineStr != null) ? Integer.parseInt(endLineStr) : -1;
+
+                List<String> logs = instance.getLog(startLine, endLine, 0, 0);
+                StringBuilder sb = new StringBuilder();
+                sb.append("【USB通信日志】\n");
+                for (String line : logs) {
+                    sb.append(line).append("\n");
+                }
+                return textResult(sb.toString());
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_get_log_text - 获取USB日志（强制文本格式）
+     */
+    private void registerUsbGetLogTextTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "string");
+        startLineProp.put("description", "起始行号");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> lineCountProp = new HashMap<>();
+        lineCountProp.put("type", "string");
+        lineCountProp.put("description", "读取行数");
+        properties.put("line_count", lineCountProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_usb_get_log_text",
+            "获取USB通信日志（强制文本格式）。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                String startLineStr = (String) arguments.get("start_line");
+                String lineCountStr = (String) arguments.get("line_count");
+
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                int startLine = (startLineStr != null) ? Integer.parseInt(startLineStr) : 1;
+                int lineCount = (lineCountStr != null) ? Integer.parseInt(lineCountStr) : 100;
+
+                List<String> logs = instance.getLogText(startLine, -1, lineCount);
+                StringBuilder sb = new StringBuilder();
+                sb.append("【USB通信日志（文本）】\n");
+                for (String line : logs) {
+                    sb.append(line).append("\n");
+                }
+                return textResult(sb.toString());
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_get_log_hex - 获取USB日志（强制HEX格式）
+     */
+    private void registerUsbGetLogHexTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        Map<String, Object> startLineProp = new HashMap<>();
+        startLineProp.put("type", "string");
+        startLineProp.put("description", "起始行号");
+        properties.put("start_line", startLineProp);
+
+        Map<String, Object> lineCountProp = new HashMap<>();
+        lineCountProp.put("type", "string");
+        lineCountProp.put("description", "读取行数");
+        properties.put("line_count", lineCountProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_usb_get_log_hex",
+            "获取USB通信日志（强制HEX格式）。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                String startLineStr = (String) arguments.get("start_line");
+                String lineCountStr = (String) arguments.get("line_count");
+
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                int startLine = (startLineStr != null) ? Integer.parseInt(startLineStr) : 1;
+                int lineCount = (lineCountStr != null) ? Integer.parseInt(lineCountStr) : 100;
+
+                List<String> logs = instance.getLogHex(startLine, -1, lineCount);
+                StringBuilder sb = new StringBuilder();
+                sb.append("【USB通信日志（HEX）】\n");
+                for (String line : logs) {
+                    sb.append(line).append("\n");
+                }
+                return textResult(sb.toString());
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_clear - 清除USB缓冲区
+     */
+    private void registerUsbClearTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_usb_clear",
+            "清除USB数据缓冲区。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                String result = instance.clearBuffer();
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_get_line_count - 获取缓冲区行数
+     */
+    private void registerUsbGetLineCountTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_usb_get_line_count",
+            "获取USB缓冲区当前的日志行数。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                int count = instance.getLineCount();
+                return textResult("当前缓冲区行数: " + count);
+            }
+        );
+    }
+
+    /**
+     * dlqq_usb_switch_text_hex - 切换显示格式
+     */
+    private void registerUsbSwitchTextHexTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_usb_switch_text_hex",
+            "切换USB日志的显示格式（文本/HEX）。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null || !UsbTools.isInstanceRunning(port)) {
+                    return errorResult("USB工具实例未启动");
+                }
+
+                String result = instance.switchTextHex();
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_exit_usb - 退出USB工具
+     */
+    private void registerExitUsbTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_exit_usb",
+            "退出USB工具（关闭窗口及进程）。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null) {
+                    return errorResult("USB工具实例不存在");
+                }
+
+                String result = instance.stop();
+                UsbTools.removeInstance(port);
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_rerun_usb - 重新启动USB工具
+     */
+    private void registerRerunUsbTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> portProp = new HashMap<>();
+        portProp.put("type", "string");
+        portProp.put("description", "USB工具实例端口号");
+        properties.put("port", portProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("port"));
+
+        server.addTool("dlqq_rerun_usb",
+            "重新启动USB工具（先关闭再启动）。用于刷新窗口。",
+            inputSchema,
+            arguments -> {
+                String portStr = (String) arguments.get("port");
+                int port;
+                try {
+                    port = Integer.parseInt(portStr);
+                } catch (NumberFormatException e) {
+                    return errorResult("无效的端口号");
+                }
+
+                UsbTools instance = UsbTools.getInstance(port);
+                if (instance == null) {
+                    return errorResult("USB工具实例不存在");
+                }
+
+                String result = instance.restart();
+                return textResult(result);
             }
         );
     }

@@ -15,7 +15,7 @@
 
 ## 工具列表
 
-本MCP服务器提供102个核心工具：
+本MCP服务器提供116个核心工具：
 
 ### 文件操作工具 (1-14)
 
@@ -236,7 +236,62 @@
 }
 ```
 
-### 项目脚本工具 (89-102)
+### USB工具 (89-102)
+
+USB通信工具，支持HID和CDC设备的扫描、连接和数据收发。基于usb4java库实现跨平台USB通信。
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_run_usb` | 启动USB工具（打开图形界面） |
+| `dlqq_usb_scan` | 扫描可用的USB HID/CDC设备 |
+| `dlqq_usb_get_devices` | 获取已扫描的USB设备列表 |
+| `dlqq_usb_open` | 打开指定的USB设备（通过VID/PID） |
+| `dlqq_usb_close` | 关闭当前打开的USB设备 |
+| `dlqq_usb_send_text` | 向USB设备发送文本数据 |
+| `dlqq_usb_send_hex` | 向USB设备发送十六进制数据 |
+| `dlqq_usb_get_log` | 获取USB通信日志 |
+| `dlqq_usb_get_log_text` | 获取USB通信日志（强制文本格式） |
+| `dlqq_usb_get_log_hex` | 获取USB通信日志（强制HEX格式） |
+| `dlqq_usb_clear` | 清除USB数据缓冲区 |
+| `dlqq_usb_get_line_count` | 获取USB缓冲区当前的日志行数 |
+| `dlqq_usb_switch_text_hex` | 切换USB日志的显示格式（文本/HEX） |
+| `dlqq_exit_usb` | 退出USB工具（关闭窗口及进程） |
+| `dlqq_rerun_usb` | 重新启动USB工具（先关闭再启动） |
+
+**支持的设备类型**：
+- **HID设备** - USB人体学接口设备，如键盘、鼠标、自定义HID设备
+- **CDC设备** - USB通信设备类，如虚拟串口设备
+
+**示例**：
+```json
+// 启动USB工具
+{ "port": 9001 }
+
+// 扫描设备
+{ "port": 9001 }
+
+// 打开设备（VID=0x0483, PID=0x5740）
+{
+  "port": 9001,
+  "vid": "0x0483",
+  "pid": "0x5740",
+  "type": "HID"
+}
+
+// 发送十六进制数据
+{
+  "port": 9001,
+  "hex_array": ["FF", "01", "02", "03"]
+}
+
+// 发送文本数据
+{
+  "port": 9001,
+  "text": "Hello USB"
+}
+```
+
+### 项目脚本工具 (103-116)
 
 脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本，用于自动化项目构建、芯片操作等流程。
 
