@@ -112,12 +112,12 @@ public class RunCommandTools {
 
         try {
             SwingUtilities.invokeAndWait(() -> {
-                // 创建对话框
-                JDialog dialog = new JDialog((Frame) null, "命令执行确认", true);
-                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-                dialog.setSize(600, 300);
-                dialog.setLocationRelativeTo(null);
-                dialog.setResizable(true);
+                // 创建 JFrame 作为主窗口
+                JFrame frame = new JFrame("命令执行确认");
+                frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+                frame.setSize(600, 300);
+                frame.setLocationRelativeTo(null);
+                frame.setResizable(true);
 
                 // 主面板
                 JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
@@ -192,25 +192,25 @@ public class RunCommandTools {
 
                 cancelButton.addActionListener(e -> {
                     result[0] = false;
-                    dialog.dispose();
+                    frame.dispose();
                 });
 
                 executeButton.addActionListener(e -> {
                     result[0] = true;
-                    dialog.dispose();
+                    frame.dispose();
                 });
 
                 buttonPanel.add(cancelButton);
                 buttonPanel.add(executeButton);
                 mainPanel.add(buttonPanel, BorderLayout.SOUTH);
 
-                dialog.getContentPane().add(mainPanel);
+                frame.getContentPane().add(mainPanel);
 
                 // 设置默认按钮
-                dialog.getRootPane().setDefaultButton(cancelButton);
+                frame.getRootPane().setDefaultButton(cancelButton);
 
-                // 显示对话框
-                dialog.setVisible(true);
+                // 显示窗口
+                frame.setVisible(true);
             });
         } catch (Exception e) {
             // 如果对话框显示失败，默认拒绝执行

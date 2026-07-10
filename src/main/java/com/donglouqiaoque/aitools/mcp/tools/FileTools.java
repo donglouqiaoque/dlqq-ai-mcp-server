@@ -4,7 +4,9 @@ import com.donglouqiaoque.aitools.utils.AIRulesUtils;
 import com.donglouqiaoque.aitools.utils.FileUtils;
 
 import javax.swing.*;
-import java.awt.Component;
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import java.awt.Font;
 import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
@@ -188,7 +190,7 @@ public class FileTools {
     }
 
     /**
-     * 显示跨目录写入确认对话框
+     * 显示跨目录写入确认对话框（使用JFrame）
      * @param filePath 要操作的文件路径
      * @param operation 操作描述（如"写入"、"修改"、"删除"等）
      * @return true 表示用户确认，false 表示用户取消
@@ -204,35 +206,80 @@ public class FileTools {
         // 在 Swing 事件调度线程中显示对话框
         SwingUtilities.invokeLater(() -> {
             try {
-                // 使用自定义样式的确认对话框
-                String title = "跨目录操作确认 - " + operation;
+                // 创建 JFrame 窗口
+                JFrame frame = new JFrame("跨目录操作确认 - " + operation);
+                frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+                frame.setSize(550, 350);
+                frame.setLocationRelativeTo(null);
+                frame.setResizable(false);
+
+                // 主面板
+                JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+                mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+                // 消息区域
                 String message = "检测到您即将在【项目目录外】执行 " + operation + " 操作！\n\n"
                     + "操作目标:\n" + normalizedPath + "\n\n"
                     + "当前项目目录:\n" + workingDir + "\n\n"
                     + "注意：此操作可能会修改系统文件或其他项目文件。\n"
                     + "请确认您是否真的要继续执行此操作?";
 
-                // 创建自定义的选项数组
-                String[] options = {"确认执行", "取消操作"};
+                JTextArea messageArea = new JTextArea(message);
+                messageArea.setEditable(false);
+                messageArea.setLineWrap(true);
+                messageArea.setWrapStyleWord(true);
+                messageArea.setOpaque(false);
+                messageArea.setFont(new Font("Dialog", Font.PLAIN, 12));
+                JScrollPane messageScroll = new JScrollPane(messageArea);
+                messageScroll.setBorder(null);
+                mainPanel.add(messageScroll, BorderLayout.CENTER);
 
-                // 显示确认对话框
-                int choice = JOptionPane.showOptionDialog(
-                    null,                                   // 父组件
-                    message,                                // 消息内容
-                    title,                                  // 标题
-                    JOptionPane.YES_NO_OPTION,             // 选项类型
-                    JOptionPane.WARNING_MESSAGE,           // 消息类型
-                    null,                                   // 图标
-                    options,                                // 自定义选项
-                    options[1]                             // 默认选中"取消"
+                // 按钮面板
+                JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 5));
+                JButton confirmButton = new JButton("确认执行");
+                JButton cancelButton = new JButton("取消操作");
+
+                confirmButton.addActionListener(e -> {
+                    result[0] = true;
+                    frame.dispose();
+                    latch.countDown();
+                });
+
+                cancelButton.addActionListener(e -> {
+                    result[0] = false;
+                    frame.dispose();
+                    latch.countDown();
+                });
+
+                buttonPanel.add(confirmButton);
+                buttonPanel.add(cancelButton);
+                mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+                frame.add(mainPanel);
+
+                // 设置默认按钮和快捷键
+                frame.getRootPane().setDefaultButton(cancelButton);
+                frame.getRootPane().registerKeyboardAction(
+                    e -> cancelButton.doClick(),
+                    KeyStroke.getKeyStroke("ESCAPE"),
+                    JComponent.WHEN_IN_FOCUSED_WINDOW
                 );
 
-                result[0] = (choice == JOptionPane.YES_OPTION);
+                // 关闭窗口等于取消
+                frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent e) {
+                        result[0] = false;
+                        frame.dispose();
+                        latch.countDown();
+                    }
+                });
+
+                frame.setVisible(true);
+
             } catch (Exception e) {
-                // 对话框显示失败，安全起见返回 false
                 System.err.println("显示确认对话框失败: " + e.getMessage());
                 result[0] = false;
-            } finally {
                 latch.countDown();
             }
         });
@@ -303,22 +350,74 @@ public class FileTools {
 
             SwingUtilities.invokeLater(() -> {
                 try {
-                    String[] options = {"确认执行", "取消操作"};
-                    int choice = JOptionPane.showOptionDialog(
-                        null,
-                        message.toString(),
-                        "跨目录操作确认 - " + operation,
-                        JOptionPane.YES_NO_OPTION,
-                        JOptionPane.WARNING_MESSAGE,
-                        null,
-                        options,
-                        options[1]
+                    // 创建 JFrame 窗口
+                    JFrame frame = new JFrame("跨目录操作确认 - " + operation);
+                    frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+                    frame.setSize(550, 400);
+                    frame.setLocationRelativeTo(null);
+                    frame.setResizable(false);
+
+                    // 主面板
+                    JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+                    mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+                    // 消息区域
+                    JTextArea messageArea = new JTextArea(message.toString());
+                    messageArea.setEditable(false);
+                    messageArea.setLineWrap(true);
+                    messageArea.setWrapStyleWord(true);
+                    messageArea.setOpaque(false);
+                    messageArea.setFont(new Font("Dialog", Font.PLAIN, 12));
+                    JScrollPane messageScroll = new JScrollPane(messageArea);
+                    messageScroll.setBorder(null);
+                    mainPanel.add(messageScroll, BorderLayout.CENTER);
+
+                    // 按钮面板
+                    JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 5));
+                    JButton confirmButton = new JButton("确认执行");
+                    JButton cancelButton = new JButton("取消操作");
+
+                    confirmButton.addActionListener(e -> {
+                        result[0] = true;
+                        frame.dispose();
+                        latch.countDown();
+                    });
+
+                    cancelButton.addActionListener(e -> {
+                        result[0] = false;
+                        frame.dispose();
+                        latch.countDown();
+                    });
+
+                    buttonPanel.add(confirmButton);
+                    buttonPanel.add(cancelButton);
+                    mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+                    frame.add(mainPanel);
+
+                    // 设置默认按钮和快捷键
+                    frame.getRootPane().setDefaultButton(cancelButton);
+                    frame.getRootPane().registerKeyboardAction(
+                        e -> cancelButton.doClick(),
+                        KeyStroke.getKeyStroke("ESCAPE"),
+                        JComponent.WHEN_IN_FOCUSED_WINDOW
                     );
-                    result[0] = (choice == JOptionPane.YES_OPTION);
+
+                    // 关闭窗口等于取消
+                    frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                        @Override
+                        public void windowClosing(java.awt.event.WindowEvent e) {
+                            result[0] = false;
+                            frame.dispose();
+                            latch.countDown();
+                        }
+                    });
+
+                    frame.setVisible(true);
+
                 } catch (Exception e) {
                     System.err.println("显示确认对话框失败: " + e.getMessage());
                     result[0] = false;
-                } finally {
                     latch.countDown();
                 }
             });
@@ -1794,6 +1893,11 @@ public class FileTools {
      * @return 替换结果报告，包含修改前后对比
      * @throws IOException 操作异常
      */
+    // 文件大小限制：10MB
+    private static final long MAX_FILE_SIZE_FOR_REPLACE = 10 * 1024 * 1024;
+    // 正则表达式最大匹配次数，防止灾难性回溯
+    private static final int MAX_REGEX_MATCHES = 10000;
+
     public static String replaceTextInFile(String filePath, String searchText, String replaceText, boolean useRegex, String charset, Integer startLine, Integer endLine) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
 
@@ -1812,6 +1916,12 @@ public class FileTools {
         Path path = Paths.get(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
+        }
+
+        // 检查文件大小
+        long fileSize = Files.size(path);
+        if (fileSize > MAX_FILE_SIZE_FOR_REPLACE) {
+            return "【拒绝修改】文件过大（" + (fileSize / 1024 / 1024) + "MB），超过限制（" + (MAX_FILE_SIZE_FOR_REPLACE / 1024 / 1024) + "MB）。请使用 replace_lines_in_file 工具按行范围修改。";
         }
 
         // 解析字符集，默认为 UTF-8
@@ -1886,24 +1996,22 @@ public class FileTools {
                 Pattern pattern = Pattern.compile(searchText);
                 java.util.regex.Matcher matcher = pattern.matcher(content);
 
-                // 快速检查是否有匹配
-                if (!matcher.find()) {
+                // 单次遍历：检查匹配、记录位置、执行替换
+                StringBuffer sb = new StringBuffer(content.length());
+                while (matcher.find()) {
+                    replaceCount++;
+                    if (replaceCount > MAX_REGEX_MATCHES) {
+                        return "【拒绝修改】匹配次数过多（超过" + MAX_REGEX_MATCHES + "次），可能存在灾难性回溯风险。请优化正则表达式或缩小修改范围。";
+                    }
+                    matchPositions.add(new int[]{matcher.start(), matcher.end()});
+                    matcher.appendReplacement(sb, Matcher.quoteReplacement(replaceText));
+                }
+
+                // 检查是否有匹配
+                if (replaceCount == 0) {
                     return "【未替换】未找到匹配的正则表达式: " + searchText;
                 }
 
-                // 记录匹配位置
-                matcher.reset();
-                while (matcher.find()) {
-                    replaceCount++;
-                    matchPositions.add(new int[]{matcher.start(), matcher.end()});
-                }
-
-                // 执行替换
-                matcher.reset();
-                StringBuffer sb = new StringBuffer(content.length());
-                while (matcher.find()) {
-                    matcher.appendReplacement(sb, Matcher.quoteReplacement(replaceText));
-                }
                 matcher.appendTail(sb);
                 newContent = sb.toString();
             } catch (PatternSyntaxException e) {
@@ -1961,6 +2069,95 @@ public class FileTools {
     }
 
     /**
+     * 计算修改位置对应的行号（优化算法 O(n+m)）
+     * 使用前缀和数组，避免对每个匹配位置都遍历所有行
+     */
+    private static List<Integer> computeModifiedLines(List<String> lines, List<int[]> matchPositions) {
+        if (matchPositions.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 构建行起始位置的前缀和数组
+        int[] lineStartPos = new int[lines.size()];
+        int pos = 0;
+        for (int i = 0; i < lines.size(); i++) {
+            lineStartPos[i] = pos;
+            pos += lines.get(i).length() + 1; // +1 for newline
+        }
+
+        // 对每个匹配位置，使用二分查找确定行号
+        List<Integer> result = new ArrayList<>();
+        Set<Integer> uniqueLines = new HashSet<>();
+
+        for (int[] match : matchPositions) {
+            int matchStart = match[0];
+            int lineNum = findLineNumber(lineStartPos, matchStart);
+            if (!uniqueLines.contains(lineNum)) {
+                uniqueLines.add(lineNum);
+                result.add(lineNum);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 二分查找：根据字符位置确定行号（1-based）
+     */
+    private static int findLineNumber(int[] lineStartPos, int targetPos) {
+        int left = 0;
+        int right = lineStartPos.length - 1;
+
+        while (left < right) {
+            int mid = (left + right + 1) / 2;
+            if (lineStartPos[mid] <= targetPos) {
+                left = mid;
+            } else {
+                right = mid - 1;
+            }
+        }
+
+        return left + 1; // 1-based line number
+    }
+
+    /**
+     * 计算新旧文件的行号映射
+     * 对于每个旧文件的修改行号，计算其在新文件中对应的行号
+     * 基于累计行数差异进行映射
+     */
+    private static int[] computeLineMapping(List<String> oldLines, List<String> newLines, List<Integer> modifiedOldLines) {
+        int[] mapping = new int[modifiedOldLines.size()];
+        int oldSize = oldLines.size();
+        int newSize = newLines.size();
+        int totalDiff = newSize - oldSize;
+
+        // 计算每个修改位置的累计差异
+        // 假设差异均匀分布
+        for (int i = 0; i < modifiedOldLines.size(); i++) {
+            int oldLine = modifiedOldLines.get(i);
+
+            if (oldSize == 0) {
+                mapping[i] = i + 1;
+                continue;
+            }
+
+            // 计算到当前行为止的预期差异
+            // 使用更简单的线性映射
+            double progress = (double) oldLine / oldSize;
+            int expectedDiff = (int) Math.round(totalDiff * progress);
+
+            // 新文件行号 = 旧文件行号 + 累计差异
+            int newLine = oldLine + expectedDiff;
+
+            // 确保在有效范围内
+            newLine = Math.max(1, Math.min(newLine, newSize));
+            mapping[i] = newLine;
+        }
+
+        return mapping;
+    }
+
+    /**
      * 生成文本替换对比报告 - 使用diff风格（带颜色）
      */
     private static String generateTextReplaceReport(List<String> oldLines, String oldContent, String newContent,
@@ -1974,23 +2171,8 @@ public class FileTools {
             newLines = Arrays.asList(newContent.split("\r\n", -1));
         }
 
-        // 计算每处修改的行号
-        List<Integer> modifiedLineNumbers = new ArrayList<>();
-        for (int[] pos : matchPositions) {
-            int lineNum = 1;
-            int charCount = 0;
-            for (int i = 0; i < oldLines.size(); i++) {
-                String line = oldLines.get(i);
-                if (charCount + line.length() + 1 > pos[0]) {
-                    lineNum = i + 1;
-                    break;
-                }
-                charCount += line.length() + 1;
-            }
-            if (!modifiedLineNumbers.contains(lineNum)) {
-                modifiedLineNumbers.add(lineNum);
-            }
-        }
+        // 计算每处修改的行号（优化算法：O(n+m) 替代 O(n*m)）
+        List<Integer> modifiedLineNumbers = computeModifiedLines(oldLines, matchPositions);
 
         // 判断是否为删除操作（replaceText为空）
         boolean isDeleteOperation = (replaceText == null || replaceText.isEmpty());
@@ -2031,11 +2213,13 @@ public class FileTools {
 
         // 为每处修改生成diff
         int maxModifications = 20; // 最多显示20处修改，避免报告过长
+        // 预计算新旧文件行号映射（基于累计行数差异）
+        int[] lineMapping = computeLineMapping(oldLines, newLines, modifiedLineNumbers);
+
         for (int i = 0; i < modifiedLineNumbers.size() && i < maxModifications; i++) {
             int modLine = modifiedLineNumbers.get(i);
             int displayStart = Math.max(1, modLine - 3);
             int displayOldEnd = Math.min(oldLines.size(), modLine + 3);
-            int displayNewEnd = Math.min(newLines.size(), modLine + 3);
 
             // 上文（从旧文件获取）
             for (int lineNum = displayStart; lineNum < modLine && lineNum <= oldLines.size(); lineNum++) {
@@ -2046,20 +2230,33 @@ public class FileTools {
             if (modLine <= oldLines.size()) {
                 report.append(String.format("- %4d | %s\n", modLine, oldLines.get(modLine - 1)));
             }
-            
-            // 新行（+）- 只有替换操作才显示
-            if (!isDeleteOperation && modLine <= newLines.size()) {
-                report.append(String.format("+ %4d | %s\n", modLine, newLines.get(modLine - 1)));
+
+            // 新行（+）- 使用预计算的映射行号
+            if (!isDeleteOperation) {
+                int newLineNum = lineMapping[i];
+                int newLinesToShow = 1; // 默认显示1行新内容
+
+                // 如果新文件行数多于旧文件，尝试显示多行
+                if (totalDiff > 0 && i < modifiedLineNumbers.size() - 1) {
+                    int nextNewLine = lineMapping[i + 1];
+                    newLinesToShow = Math.max(1, nextNewLine - newLineNum);
+                }
+
+                for (int j = 0; j < newLinesToShow && (newLineNum - 1 + j) < newLines.size(); j++) {
+                    int currentNewLine = newLineNum + j;
+                    report.append(String.format("+ %4d | %s\n", currentNewLine, newLines.get(currentNewLine - 1)));
+                }
             }
 
             // 下文（删除操作从新文件获取，替换操作从旧文件获取）
             if (isDeleteOperation) {
-                // 删除操作：下文从新文件获取，行号需要调整
-                int linesAfter = Math.min(3, newLines.size() - (modLine - 1));
+                // 删除操作：下文从新文件获取，使用映射行号
+                int newLineNum = lineMapping[i];
+                int linesAfter = Math.min(3, newLines.size() - (newLineNum - 1));
                 for (int j = 0; j < linesAfter; j++) {
-                    int newLineNum = modLine + j;
-                    if ((modLine - 1 + j) < newLines.size()) {
-                        report.append(String.format("  %4d | %s\n", newLineNum, newLines.get(modLine - 1 + j)));
+                    int currentNewLine = newLineNum + j;
+                    if ((currentNewLine - 1) < newLines.size()) {
+                        report.append(String.format("  %4d | %s\n", currentNewLine, newLines.get(currentNewLine - 1)));
                     }
                 }
             } else {
