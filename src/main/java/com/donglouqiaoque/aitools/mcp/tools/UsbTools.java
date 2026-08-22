@@ -81,12 +81,18 @@ public class UsbTools {
 
     /**
      * 创建新实例
+     * 注意：实例以 serverPort 为key存储，与外部工具的port参数保持一致
      */
     public static synchronized UsbTools createInstance(int serverPort) {
+        // 如果该端口已有实例，直接返回现有实例
+        UsbTools existing = instances.get(serverPort);
+        if (existing != null) {
+            return existing;
+        }
         int id = nextInstanceId++;
         UsbTools instance = new UsbTools(id);
         instance.serverPort = serverPort;
-        instances.put(id, instance);
+        instances.put(serverPort, instance);
         return instance;
     }
 

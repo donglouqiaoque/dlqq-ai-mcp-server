@@ -363,6 +363,42 @@ public class McpServer {
     }
 
     /**
+     * 获取所有已注册工具的信息列表
+     * @param filter 名称过滤关键字（可为null，返回全部工具）
+     * @return 工具列表文本
+     */
+    public String getToolsInfo(String filter) {
+        StringBuilder sb = new StringBuilder();
+        List<String> names = new ArrayList<>(toolHandlers.keySet());
+        Collections.sort(names);
+
+        String keyword = (filter == null || filter.trim().isEmpty()) ? null : filter.trim().toLowerCase();
+        int count = 0;
+        for (String name : names) {
+            if (keyword != null && !name.toLowerCase().contains(keyword)) {
+                continue;
+            }
+            ToolHandler handler = toolHandlers.get(name);
+            sb.append("- `").append(name).append("`\n  ").append(handler.getDescription()).append("\n");
+            count++;
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append("MCP服务器已注册工具");
+        if (keyword != null) {
+            result.append("（过滤: ").append(filter.trim()).append("）");
+        }
+        result.append(": ").append(count).append(" 个");
+        if (keyword == null) {
+            result.append(" / 总计 ").append(toolHandlers.size()).append(" 个");
+        }
+        result.append("\n");
+        result.append("===================\n\n");
+        result.append(sb);
+        return result.toString();
+    }
+
+    /**
      * 注册资源
      */
     public void addResource(Resource resource, ResourceHandler handler) {

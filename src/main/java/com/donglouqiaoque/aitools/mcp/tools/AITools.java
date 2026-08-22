@@ -169,6 +169,36 @@ public class AITools {
         registerBuildDebugProjectTool(server);      // dlqq_build_debug_project
         registerRebuildRunProjectTool(server);      // dlqq_rebuild_run_project
         registerRebuildDebugProjectTool(server);    // dlqq_rebuild_debug_project
+
+        // ========== 脚本路径设置工具 ==========
+        registerSetBuildScriptTool(server);         // dlqq_set_build_script
+        registerSetRebuildScriptTool(server);       // dlqq_set_rebuild_script
+        registerSetChipEraseScriptTool(server);     // dlqq_set_chip_erase_script
+        registerSetChipDownloadScriptTool(server);  // dlqq_set_chip_download_script
+        registerSetEraseDownloadScriptTool(server); // dlqq_set_erase_download_script
+        registerSetBuildEraseDownloadScriptTool(server);  // dlqq_set_build_erase_download_script
+        registerSetRebuildEraseDownloadScriptTool(server); // dlqq_set_rebuild_erase_download_script
+        registerSetRunScriptTool(server);           // dlqq_set_run_script
+        registerSetDebugScriptTool(server);         // dlqq_set_debug_script
+        registerSetBuildRunScriptTool(server);      // dlqq_set_build_run_script
+        registerSetBuildDebugScriptTool(server);    // dlqq_set_build_debug_script
+        registerSetRebuildRunScriptTool(server);    // dlqq_set_rebuild_run_script
+        registerSetRebuildDebugScriptTool(server);  // dlqq_set_rebuild_debug_script
+
+        // ========== WiFi工具 ==========
+        WifiTools.registerTools(server);            // dlqq_run_wifi 等12个
+
+        // ========== 鼠标工具 ==========
+        MouseTools.registerTools(server);           // dlqq_mouse_get_position 等7个
+
+        // ========== 键盘工具 ==========
+        KeyboardTools.registerTools(server);        // dlqq_keyboard_type 等6个
+
+        // ========== 时间工具 ==========
+        TimeTools.registerTools(server);            // dlqq_get_current_time
+
+        // ========== 工具列表查询工具 ==========
+        registerGetToolListTool(server);            // dlqq_get_tool_list
     }
 
     // ==================== 文件操作工具 ====================
@@ -4214,6 +4244,172 @@ public class AITools {
                 return textResult(result);
             }
         );
+    }
+
+    // ==================== 脚本路径设置工具 ====================
+
+    /**
+     * 通用注册脚本路径设置工具
+     */
+    private void registerSetScriptTool(McpServer server, String toolName, String description,
+                                       java.util.function.Function<String, String> setter) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "脚本路径（.bat或.sh脚本的绝对路径）");
+        properties.put("script_path", pathProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("script_path"));
+
+        server.addTool(toolName, description, inputSchema, arguments -> {
+            String scriptPath = (String) arguments.get("script_path");
+            if (scriptPath == null || scriptPath.trim().isEmpty()) {
+                return errorResult("脚本路径不能为空");
+            }
+            String result = setter.apply(scriptPath.trim());
+            return textResult(result);
+        });
+    }
+
+    /**
+     * dlqq_set_build_script - 设置构建脚本路径
+     */
+    private void registerSetBuildScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_build_script",
+            "设置构建脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.build 项。",
+            McpTools::setBuildScript);
+    }
+
+    /**
+     * dlqq_get_tool_list - 获取工具列表
+     */
+    private void registerGetToolListTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> filterProp = new HashMap<>();
+        filterProp.put("type", "string");
+        filterProp.put("description", "名称过滤关键字（可选，如 wifi、keyboard、mouse、set_build，为空返回全部工具）");
+        properties.put("filter", filterProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_get_tool_list",
+            "获取MCP服务器上所有已注册工具的列表（工具名称和描述）。支持按名称关键字过滤。",
+            inputSchema,
+            arguments -> {
+                String filter = (String) arguments.get("filter");
+                return textResult(server.getToolsInfo(filter));
+            }
+        );
+    }
+
+    /**
+     * dlqq_set_rebuild_script - 设置重建脚本路径
+     */
+    private void registerSetRebuildScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_rebuild_script",
+            "设置重建脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.rebuild 项。",
+            McpTools::setRebuildScript);
+    }
+
+    /**
+     * dlqq_set_chip_erase_script - 设置芯片擦除脚本路径
+     */
+    private void registerSetChipEraseScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_chip_erase_script",
+            "设置芯片擦除脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.chip.erase 项。",
+            McpTools::setChipEraseScript);
+    }
+
+    /**
+     * dlqq_set_chip_download_script - 设置芯片下载脚本路径
+     */
+    private void registerSetChipDownloadScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_chip_download_script",
+            "设置芯片下载脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.chip.download 项。",
+            McpTools::setChipDownloadScript);
+    }
+
+    /**
+     * dlqq_set_erase_download_script - 设置擦除并下载组合脚本路径
+     */
+    private void registerSetEraseDownloadScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_erase_download_script",
+            "设置擦除并下载组合脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.erase.download 项。",
+            McpTools::setEraseDownloadScript);
+    }
+
+    /**
+     * dlqq_set_build_erase_download_script - 设置构建擦除下载组合脚本路径
+     */
+    private void registerSetBuildEraseDownloadScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_build_erase_download_script",
+            "设置构建、擦除并下载组合脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.build.erase.download 项。",
+            McpTools::setBuildEraseDownloadScript);
+    }
+
+    /**
+     * dlqq_set_rebuild_erase_download_script - 设置重建擦除下载组合脚本路径
+     */
+    private void registerSetRebuildEraseDownloadScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_rebuild_erase_download_script",
+            "设置重建、擦除并下载组合脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.rebuild.erase.download 项。",
+            McpTools::setRebuildEraseDownloadScript);
+    }
+
+    /**
+     * dlqq_set_run_script - 设置运行脚本路径
+     */
+    private void registerSetRunScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_run_script",
+            "设置运行项目脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.run 项。",
+            McpTools::setRunScript);
+    }
+
+    /**
+     * dlqq_set_debug_script - 设置调试脚本路径
+     */
+    private void registerSetDebugScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_debug_script",
+            "设置调试项目脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.debug 项。",
+            McpTools::setDebugScript);
+    }
+
+    /**
+     * dlqq_set_build_run_script - 设置构建并运行脚本路径
+     */
+    private void registerSetBuildRunScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_build_run_script",
+            "设置构建并运行组合脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.build.run 项。",
+            McpTools::setBuildRunScript);
+    }
+
+    /**
+     * dlqq_set_build_debug_script - 设置构建并调试脚本路径
+     */
+    private void registerSetBuildDebugScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_build_debug_script",
+            "设置构建并调试组合脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.build.debug 项。",
+            McpTools::setBuildDebugScript);
+    }
+
+    /**
+     * dlqq_set_rebuild_run_script - 设置重建并运行脚本路径
+     */
+    private void registerSetRebuildRunScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_rebuild_run_script",
+            "设置重建并运行组合脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.rebuild.run 项。",
+            McpTools::setRebuildRunScript);
+    }
+
+    /**
+     * dlqq_set_rebuild_debug_script - 设置重建并调试脚本路径
+     */
+    private void registerSetRebuildDebugScriptTool(McpServer server) {
+        registerSetScriptTool(server, "dlqq_set_rebuild_debug_script",
+            "设置重建并调试组合脚本路径。配置保存到 .dlqq/settings/settings.properties 的 script.rebuild.debug 项。",
+            McpTools::setRebuildDebugScript);
     }
 
     /**

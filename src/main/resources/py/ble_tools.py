@@ -35,6 +35,7 @@ class BleGuiTool:
         # 缓冲区（存储接收到的通知数据）
         self.data_buffer: List[str] = []
         self.max_buffer_lines = 10000
+        self.max_buffer_bytes = 5 * 1024 * 1024  # 缓冲区大小限制（字节），默认5MB
         self.display_as_hex = False
 
         # GUI组件
@@ -546,6 +547,7 @@ class BleGuiTool:
                 "get_log": self.handle_get_log,
                 "clear": self.handle_clear,
                 "switch_format": self.handle_switch_format,
+                "set_buffer_size": self.handle_set_buffer_size,
             }
 
             handler = handlers.get(cmd_type)
@@ -774,6 +776,7 @@ class BleGuiTool:
                 text = data.decode('utf-8', errors='ignore')
                 log_line = f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] [NOTIFY] {char_uuid}: {hex_str}"
                 self.data_buffer.append(log_line)
+                self._trim_buffer()
                 self.log(f"[Notify] {char_uuid}: {hex_str} | {text}", "NOTIFY")
             except Exception as e:
                 print(f"[ERROR] Notification callback error: {e}", flush=True)
@@ -843,6 +846,25 @@ class BleGuiTool:
         """清空缓冲区"""
         self.data_buffer.clear()
         return {"success": True}
+
+    def _trim_buffer(self):
+        """按字节大小裁剪缓冲区，超出限制时丢弃最早的数据"""
+        total = sum(len(x) for x in self.data_buffer)
+        while total > self.max_buffer_bytes and self.data_buffer:
+            total -= len(self.data_buffer[0])
+            self.data_buffer.pop(0)
+
+    def handle_set_buffer_size(self, command: Dict[str, Any]) -> Dict[str, Any]:
+        """设置缓冲区大小（字节），超出缓冲区最早的数据会被丢弃"""
+        try:
+            size = int(command.get("size_bytes", 0))
+        except (ValueError, TypeError):
+            return {"success": False, "error": "Invalid size_bytes"}
+        if size < 1024:
+            return {"success": False, "error": "Buffer size too small (min 1024 bytes)"}
+        self.max_buffer_bytes = size
+        self._trim_buffer()
+        return {"success": True, "size_bytes": self.max_buffer_bytes}
 
     def handle_switch_format(self, command: Dict[str, Any]) -> Dict[str, Any]:
         """切换显示格式"""

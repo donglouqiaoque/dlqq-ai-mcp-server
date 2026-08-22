@@ -595,7 +595,17 @@ public class BleTools {
     }
 
     public static String setBleBufferSize(Integer port, Integer size) {
-        return "缓冲区大小设置暂不支持";
+        if (!isInstanceRunning(port)) return "错误：BLE工具未启动";
+        if (size == null || size < 1024) {
+            return "错误：缓冲区大小必须不小于1024字节";
+        }
+        BleTools tools = getInstance(port);
+        JsonObject result = tools.sendCommand("set_buffer_size", Map.of("size_bytes", size));
+        if (result != null && result.has("success") && result.get("success").getAsBoolean()) {
+            return "缓冲区大小已设置为 " + size + " 字节";
+        }
+        String error = (result != null && result.has("error")) ? result.get("error").getAsString() : "未知错误";
+        return "设置失败: " + error;
     }
 
     public static String switchDisplayFormat(Integer port, String format) {

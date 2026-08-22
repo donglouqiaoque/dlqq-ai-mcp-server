@@ -107,11 +107,12 @@ public class RunCommandTools {
      * 显示用户确认对话框
      */
     private static boolean showApprovalDialog(String command, String workingDir, int timeout) {
-        // 使用 SwingUtilities.invokeAndWait 确保在 EDT 线程中显示对话框
+        // 使用 CountDownLatch 等待用户点击按钮（invokeAndWait 在 setVisible 后立即返回，无法等待用户操作）
         final boolean[] result = { false };
+        final CountDownLatch latch = new CountDownLatch(1);
 
         try {
-            SwingUtilities.invokeAndWait(() -> {
+            SwingUtilities.invokeLater(() -> {
                 // 创建 JFrame 作为主窗口
                 JFrame frame = new JFrame("命令执行确认");
                 frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -193,11 +194,21 @@ public class RunCommandTools {
                 cancelButton.addActionListener(e -> {
                     result[0] = false;
                     frame.dispose();
+                    latch.countDown();
                 });
 
                 executeButton.addActionListener(e -> {
                     result[0] = true;
                     frame.dispose();
+                    latch.countDown();
+                });
+
+                // 窗口被关闭（点X）时按取消处理
+                frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosed(java.awt.event.WindowEvent e) {
+                        latch.countDown();
+                    }
                 });
 
                 buttonPanel.add(cancelButton);
@@ -212,6 +223,12 @@ public class RunCommandTools {
                 // 显示窗口
                 frame.setVisible(true);
             });
+
+            // 阻塞等待用户点击（最多等10分钟，避免永久阻塞）
+            latch.await(10, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         } catch (Exception e) {
             // 如果对话框显示失败，默认拒绝执行
             return false;

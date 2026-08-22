@@ -324,6 +324,8 @@ public class CalculatorUtils {
      * 浮点计算
      */
     private static ProgrammerResult calculateFloating(String expr, String type) throws CalculatorException {
+        // 将多进制字面量（0x/0b/0o）归一化为十进制，避免解析错误
+        expr = normalizeLiterals(expr);
         BigDecimal result = evaluateExpression(expr);
 
         // 转换为不同进制表示（浮点数的十六进制表示）
@@ -352,6 +354,9 @@ public class CalculatorUtils {
      * 评估整型表达式（支持位运算）
      */
     private static BigInteger evaluateIntegerExpression(String expr) throws CalculatorException {
+        // 将多进制字面量（0x/0b/0o）归一化为十进制，避免被运算拆分导致解析错误
+        expr = normalizeLiterals(expr);
+
         // 先处理括号内的表达式
         while (expr.contains("(")) {
             int openIndex = expr.lastIndexOf('(');
@@ -475,6 +480,27 @@ public class CalculatorUtils {
             }
         }
 
+        return expr;
+    }
+
+    /**
+     * 将表达式中的多进制字面量（0x/0b/0o）替换为十进制表示
+     * 修复：原实现对 0xFF+0x10 这类混合表达式解析错误的问题
+     */
+    private static String normalizeLiterals(String expr) throws CalculatorException {
+        Pattern p = Pattern.compile("(?i)(0x[0-9a-f]+|0b[01]+|0o[0-7]+)");
+        Matcher m = p.matcher(expr);
+        StringBuffer sb = new StringBuffer();
+        boolean found = false;
+        while (m.find()) {
+            found = true;
+            BigInteger v = parseInteger(m.group());
+            m.appendReplacement(sb, Matcher.quoteReplacement(v.toString()));
+        }
+        if (found) {
+            m.appendTail(sb);
+            return sb.toString();
+        }
         return expr;
     }
 

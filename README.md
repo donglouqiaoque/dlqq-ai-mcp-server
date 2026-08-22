@@ -15,7 +15,7 @@
 
 ## 工具列表
 
-本MCP服务器提供116个核心工具：
+本MCP服务器提供155个核心工具：
 
 ### 文件操作工具 (1-14)
 
@@ -153,12 +153,12 @@
 | 工具名称 | 描述 |
 |---------|------|
 | `dlqq_zip` | 压缩文件或目录为ZIP格式，支持多文件压缩、密码保护、压缩级别设置（1-9） |
-| `dlqq_unzip` | 解压ZIP文件，支持密码保护的ZIP文件解压 |
+| `dlqq_unzip` | 解压多种压缩格式（ZIP/7Z/TAR/GZ/BZ2/XZ/RAR/CPIO/AR等），ZIP支持密码保护 |
 
 **说明**：
-- 压缩格式：仅支持 ZIP（后续可扩展其他格式）
-- 密码保护：使用 AES-256 加密
-- 压缩级别：1（最快，压缩率最低）到 9（最慢，压缩率最高），默认 5
+- 压缩格式：仅支持 ZIP（AES-256 加密，压缩级别 1-9，默认 5）
+- **解压格式**：zip、7z、tar、tar.gz、tgz、tar.bz2、tar.xz、gz、bz2、xz、rar、jar、war、cpio、ar
+- 密码仅适用于ZIP格式（7z/rar加密暂不支持）
 - 多文件压缩：`source_paths` 参数支持多个文件/目录路径
 
 ### BOM控制工具 (83-84)
@@ -291,11 +291,73 @@ USB通信工具，支持HID和CDC设备的扫描、连接和数据收发。基�
 }
 ```
 
-### 项目脚本工具 (103-116)
+### WiFi工具 (103-114)
+
+WiFi工具（Java原生实现），支持扫描周围WiFi网络、查看连接状态、连接/断开WiFi。
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_run_wifi` | 启动WiFi工具（打开图形界面窗口） |
+| `dlqq_wifi_scan` | 扫描周围的WiFi网络 |
+| `dlqq_wifi_get_networks` | 获取最近一次扫描的网络列表 |
+| `dlqq_wifi_status` | 获取当前WiFi连接状态 |
+| `dlqq_wifi_profiles` | 列出系统已保存的WiFi配置文件 |
+| `dlqq_wifi_connect` | 连接指定WiFi（SSID+密码，支持WPA/WPA2-PSK和开放网络） |
+| `dlqq_wifi_disconnect` | 断开当前WiFi连接 |
+| `dlqq_wifi_get_log` | 获取WiFi工具日志 |
+| `dlqq_wifi_clear_log` | 清除WiFi工具日志 |
+| `dlqq_wifi_get_line_count` | 获取WiFi工具日志行数 |
+| `dlqq_exit_wifi` | 关闭WiFi工具 |
+| `dlqq_rerun_wifi` | 重新启动WiFi工具 |
+
+**说明**：
+- Java原生实现（Swing GUI + 系统命令），不依赖Python
+- Windows使用 `netsh wlan`，Linux使用 `nmcli`
+- 部分操作（如添加配置文件）需要管理员权限
+
+### 鼠标工具 (115-121)
+
+鼠标工具（Java原生实现，基于 java.awt.Robot），模拟鼠标点击、移动、滚动。
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_mouse_get_position` | 获取鼠标当前位置坐标 |
+| `dlqq_mouse_move` | 移动鼠标（支持绝对坐标x/y和相对位移dx/dy） |
+| `dlqq_mouse_click` | 模拟鼠标点击（左/右/中键，单击/双击，可指定坐标） |
+| `dlqq_mouse_press` | 按下鼠标按钮（不释放） |
+| `dlqq_mouse_release` | 释放鼠标按钮 |
+| `dlqq_mouse_scroll` | 滚动鼠标滚轮 |
+| `dlqq_mouse_drag` | 模拟鼠标拖拽（按下→移动→释放） |
+
+### 键盘工具 (122-127)
+
+键盘工具（Java原生实现，基于 java.awt.Robot），模拟键盘输入、按键、组合键。
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_keyboard_type` | 输入文本（支持中文等任意字符，通过剪贴板粘贴） |
+| `dlqq_keyboard_tap` | 敲击一次按键（字母/数字/功能键/方向键/特殊键） |
+| `dlqq_keyboard_press` | 按下按键（不释放） |
+| `dlqq_keyboard_release` | 释放按键 |
+| `dlqq_keyboard_hotkey` | 执行组合键（如 ctrl+c、ctrl+alt+delete、alt+tab） |
+| `dlqq_keyboard_key_list` | 列出支持的按键名称列表 |
+
+**说明**：
+- 使用前请确保目标窗口获得焦点
+- 组合键格式：用+连接按键名，如 `ctrl+c`、`ctrl+shift+esc`
+- 鼠标/键盘模拟为系统级操作，请谨慎使用
+
+### 时间工具 (128)
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_get_current_time` | 获取当前日期时间（支持指定时区和格式，返回时间戳、星期、时区等） |
+
+### 项目脚本工具 (129-142)
 
 脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本，用于自动化项目构建、芯片操作等流程。
 
-**脚本配置说明**：首次使用前需通过 `dlqq_set_mcp_properties` 工具设置脚本路径，或手动编辑 `.dlqq/settings/settings.properties` 文件。
+**脚本配置说明**：首次使用前需通过 `dlqq_set_*_script` 工具设置脚本路径，或手动编辑 `.dlqq/settings/settings.properties` 文件。
 
 #### 执行类工具
 
@@ -314,6 +376,30 @@ USB通信工具，支持HID和CDC设备的扫描、连接和数据收发。基�
 | `dlqq_build_debug_project` | 构建并调试（执行 script.build.debug 配置的脚本） |
 | `dlqq_rebuild_run_project` | 重建并运行（执行 script.rebuild.run 配置的脚本） |
 | `dlqq_rebuild_debug_project` | 重建并调试（执行 script.rebuild.debug 配置的脚本） |
+
+#### 设置类工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_set_build_script` | 设置构建脚本路径（script.build） |
+| `dlqq_set_rebuild_script` | 设置重建脚本路径（script.rebuild） |
+| `dlqq_set_chip_erase_script` | 设置芯片擦除脚本路径（script.chip.erase） |
+| `dlqq_set_chip_download_script` | 设置芯片下载脚本路径（script.chip.download） |
+| `dlqq_set_erase_download_script` | 设置擦除下载组合脚本路径（script.erase.download） |
+| `dlqq_set_build_erase_download_script` | 设置构建擦除下载组合脚本路径（script.build.erase.download） |
+| `dlqq_set_rebuild_erase_download_script` | 设置重建擦除下载组合脚本路径（script.rebuild.erase.download） |
+| `dlqq_set_run_script` | 设置运行脚本路径（script.run） |
+| `dlqq_set_debug_script` | 设置调试脚本路径（script.debug） |
+| `dlqq_set_build_run_script` | 设置构建运行组合脚本路径（script.build.run） |
+| `dlqq_set_build_debug_script` | 设置构建调试组合脚本路径（script.build.debug） |
+| `dlqq_set_rebuild_run_script` | 设置重建运行组合脚本路径（script.rebuild.run） |
+| `dlqq_set_rebuild_debug_script` | 设置重建调试组合脚本路径（script.rebuild.debug） |
+| `dlqq_set_mcp_properties` | 设置MCP配置属性（含response.max.size，默认25804字节，最大258048） |
+
+**说明**：
+- 所有脚本路径默认空，首次执行会提示需要先使用 `dlqq_set_*_script` 工具设置
+- 脚本配置保存在 `.dlqq/settings/settings.properties` 文件中
+- `response.max.size` 控制文件操作返回内容的最大字节数（默认25804约25KB，最大258048约252KB）
 
 ## 参数类型说明
 

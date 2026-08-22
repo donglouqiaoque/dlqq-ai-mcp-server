@@ -111,6 +111,13 @@
             <version>1.25.0</version>
         </dependency>
 
+        <!-- XZ for Java - 支持XZ和7z的LZMA/LZMA2解压（commons-compress需要） -->
+        <dependency>
+            <groupId>org.tukaani</groupId>
+            <artifactId>xz</artifactId>
+            <version>1.9</version>
+        </dependency>
+
         <!-- usb4java - USB通信库，基于libusb -->
         <dependency>
             <groupId>org.usb4java</groupId>

@@ -126,13 +126,13 @@ use_debug=false
 
 | 工具名称 | 描述 |
 |---------|------|
-| `dlqq_zip` | 压缩文件/目录（支持密码保护和压缩级别设置） |
-| `dlqq_unzip` | 解压缩ZIP文件（支持密码） |
+| `dlqq_zip` | 压缩文件/目录为ZIP（支持密码保护和压缩级别设置） |
+| `dlqq_unzip` | 解压缩多种格式（ZIP/7Z/TAR/GZ/BZ2/XZ/RAR/CPIO/AR等，ZIP支持密码） |
 
 **说明**：
-- 当前仅支持 ZIP 格式
-- 压缩支持 AES-256 加密
-- 压缩级别 1-9（1=最快/压缩率低，9=最慢/压缩率高，默认5）
+- 压缩目前支持 ZIP 格式（AES-256 加密，压缩级别 1-9，默认5）
+- **解压支持多种格式**：zip、7z、tar、tar.gz、tgz、tar.bz2、tar.xz、gz、bz2、xz、rar、jar、war、cpio、ar
+- 密码仅适用于ZIP格式（7z/rar加密暂不支持）
 - 默认输出路径自动生成
 
 ### AI规则文件支持
@@ -233,6 +233,68 @@ USB通信工具，支持HID和CDC设备的扫描、连接和数据收发。
 - 基于usb4java库实现跨平台USB通信
 - 使用VID/PID标识设备
 - 支持文本/HEX两种数据显示格式
+
+### WiFi工具
+
+WiFi工具（Java原生实现），支持扫描周围WiFi网络、查看连接状态、连接/断开WiFi。
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_run_wifi` | 启动WiFi工具（打开图形界面窗口） |
+| `dlqq_wifi_scan` | 扫描周围的WiFi网络 |
+| `dlqq_wifi_get_networks` | 获取最近一次扫描的网络列表 |
+| `dlqq_wifi_status` | 获取当前WiFi连接状态 |
+| `dlqq_wifi_profiles` | 列出系统已保存的WiFi配置文件 |
+| `dlqq_wifi_connect` | 连接指定WiFi（SSID+密码，支持WPA/WPA2-PSK和开放网络） |
+| `dlqq_wifi_disconnect` | 断开当前WiFi连接 |
+| `dlqq_wifi_get_log` | 获取WiFi工具日志 |
+| `dlqq_wifi_clear_log` | 清除WiFi工具日志 |
+| `dlqq_wifi_get_line_count` | 获取WiFi工具日志行数 |
+| `dlqq_exit_wifi` | 关闭WiFi工具 |
+| `dlqq_rerun_wifi` | 重新启动WiFi工具 |
+
+**说明**：
+- Java原生实现（Swing GUI + 系统命令），不依赖Python
+- Windows使用 `netsh wlan`，Linux使用 `nmcli`
+- 需要管理员权限执行部分操作（如添加配置文件）
+
+### 鼠标工具
+
+鼠标工具（Java原生实现，基于 java.awt.Robot），模拟鼠标点击、移动、滚动。
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_mouse_get_position` | 获取鼠标当前位置坐标 |
+| `dlqq_mouse_move` | 移动鼠标（支持绝对坐标x/y和相对位移dx/dy） |
+| `dlqq_mouse_click` | 模拟鼠标点击（左/右/中键，单击/双击，可指定坐标） |
+| `dlqq_mouse_press` | 按下鼠标按钮（不释放） |
+| `dlqq_mouse_release` | 释放鼠标按钮 |
+| `dlqq_mouse_scroll` | 滚动鼠标滚轮 |
+| `dlqq_mouse_drag` | 模拟鼠标拖拽（按下→移动→释放） |
+
+### 键盘工具
+
+键盘工具（Java原生实现，基于 java.awt.Robot），模拟键盘输入、按键、组合键。
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_keyboard_type` | 输入文本（支持中文等任意字符，通过剪贴板粘贴） |
+| `dlqq_keyboard_tap` | 敲击一次按键（字母/数字/功能键/方向键/特殊键） |
+| `dlqq_keyboard_press` | 按下按键（不释放） |
+| `dlqq_keyboard_release` | 释放按键 |
+| `dlqq_keyboard_hotkey` | 执行组合键（如 ctrl+c、ctrl+alt+delete、alt+tab） |
+| `dlqq_keyboard_key_list` | 列出支持的按键名称列表 |
+
+**说明**：
+- 使用前请确保目标窗口获得焦点
+- 组合键格式：用+连接按键名，如 `ctrl+c`、`ctrl+shift+esc`
+- 鼠标/键盘模拟为系统级操作，请谨慎使用
+
+### 时间工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_get_current_time` | 获取当前日期时间（支持指定时区和格式，返回时间戳、星期、时区等） |
 
 ### 项目脚本工具
 

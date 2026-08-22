@@ -2170,6 +2170,11 @@ public class FileTools {
         if (newLines.size() == 1 && newContent.contains("\r\n")) {
             newLines = Arrays.asList(newContent.split("\r\n", -1));
         }
+        // 修复行数统计：去掉末尾空元素（与 Files.readAllLines 的行为保持一致），
+        // 否则以换行结尾的文件会多算一行，导致"原文件行数 → 新文件行数"显示异常
+        while (!newLines.isEmpty() && newLines.get(newLines.size() - 1).isEmpty()) {
+            newLines = new ArrayList<>(newLines.subList(0, newLines.size() - 1));
+        }
 
         // 计算每处修改的行号（优化算法：O(n+m) 替代 O(n*m)）
         List<Integer> modifiedLineNumbers = computeModifiedLines(oldLines, matchPositions);

@@ -1685,7 +1685,20 @@ public class McpTools {
             // 重置单个属性
             String defaultValue = DEFAULT_PROPERTIES.get(key);
             if (defaultValue == null) {
-                return "✗ 错误：未知的配置项 '" + key + "'，无法重置";
+                // 非预定义属性：如果配置文件中存在，则删除该自定义属性
+                if (getConfigFromSettings(key) != null) {
+                    String removeResult = removePropertyFromSettings(key);
+                    if (removeResult.startsWith("✓")) {
+                        result.append("✓ 自定义配置项已删除\n");
+                        result.append("===================\n\n");
+                        result.append("键: ").append(key).append("\n");
+                        result.append("（该键不是预定义配置项，已从配置文件中删除）\n");
+                        result.append("\n").append(removeResult);
+                        return result.toString();
+                    }
+                    return "✗ 错误：删除配置项失败\n" + removeResult;
+                }
+                return "✗ 错误：配置项 '" + key + "' 不存在";
             }
 
             // 设置默认值
@@ -1721,6 +1734,75 @@ public class McpTools {
                 result.append("失败: ").append(failCount).append("个\n");
             }
         }
+
+        return result.toString();
+    }
+
+    /**
+     * 从settings.properties中删除指定key的属性
+     * @param key 属性键
+     * @return 删除结果消息
+     */
+    private static String removePropertyFromSettings(String key) {
+        if (key == null || key.isEmpty()) {
+            return "✗ 错误：属性键不能为空";
+        }
+
+        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        if (!Files.exists(settingsPath)) {
+            return "✗ 错误：配置文件不存在: " + settingsPath.toAbsolutePath();
+        }
+
+        // 读取现有内容
+        List<String> lines = new ArrayList<>();
+        String oldValue = null;
+        try (BufferedReader reader = Files.newBufferedReader(settingsPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lines.add(line);
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                int equalIndex = line.indexOf('=');
+                if (equalIndex > 0) {
+                    String configKey = line.substring(0, equalIndex).trim();
+                    if (configKey.equals(key)) {
+                        oldValue = line.substring(equalIndex + 1).trim();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            return "✗ 错误：无法读取settings.properties: " + e.getMessage();
+        }
+
+        if (oldValue == null) {
+            return "✗ 错误：配置项 '" + key + "' 不存在";
+        }
+
+        // 重写文件，跳过该key的行
+        try (BufferedWriter writer = Files.newBufferedWriter(settingsPath, StandardCharsets.UTF_8)) {
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
+                    int equalIndex = line.indexOf('=');
+                    if (equalIndex > 0 && line.substring(0, equalIndex).trim().equals(key)) {
+                        continue; // 跳过被删除的key
+                    }
+                }
+                writer.write(line);
+                writer.write("\n");
+            }
+        } catch (IOException e) {
+            return "✗ 错误：无法写入settings.properties: " + e.getMessage();
+        }
+
+        StringBuilder result = new StringBuilder();
+        result.append("✓ 属性已删除\n");
+        result.append("===================\n\n");
+        result.append("配置项: ").append(key).append("\n");
+        result.append("旧值: ").append(oldValue).append("\n\n");
+        result.append("配置文件: ").append(settingsPath.toAbsolutePath()).append("\n");
 
         return result.toString();
     }
