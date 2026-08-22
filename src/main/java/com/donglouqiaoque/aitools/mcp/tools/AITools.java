@@ -197,6 +197,9 @@ public class AITools {
         // ========== 时间工具 ==========
         TimeTools.registerTools(server);            // dlqq_get_current_time
 
+        // ========== 屏幕截图工具 ==========
+        ScreenTools.registerTools(server);          // dlqq_capture_screen
+
         // ========== 工具列表查询工具 ==========
         registerGetToolListTool(server);            // dlqq_get_tool_list
     }
