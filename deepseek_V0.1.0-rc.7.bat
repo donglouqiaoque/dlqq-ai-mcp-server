@@ -1,1 +1,0 @@
-npx @deepseek-ai/dsh@0.1.0-rc.7 web

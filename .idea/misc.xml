@@ -2,7 +2,9 @@
 <project version="4">
   <component name="CidrRootsConfiguration">
     <excludeRoots>
-      <file path="$PROJECT_DIR$/runtime" />
+      <file path="$PROJECT_DIR$/temp" />
+      <file path="$PROJECT_DIR$/temp/ai_res" />
+      <file path="$PROJECT_DIR$/temp/runtime" />
     </excludeRoots>
   </component>
   <component name="ExternalStorageConfigurationManager" enabled="true" />
