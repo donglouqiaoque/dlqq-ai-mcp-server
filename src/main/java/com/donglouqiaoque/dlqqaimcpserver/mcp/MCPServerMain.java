@@ -170,13 +170,13 @@ public class MCPServerMain {
             version = "255.0.0";
         }
         server = new McpServer(
-            "dlqq-ai-tools",
+            "dlqq-ai-mcp-server",
             version,
             transport
         );
         logger.debug("Server created");
 
-        // 注册AI工具
+        // 注册工具
         AITools aiTools = new AITools();
         aiTools.registerTools(server);
         logger.debug("Tools registered");
@@ -185,7 +185,7 @@ public class MCPServerMain {
         server.start();
         logger.info("========================================");
         logger.info("MCP Server started successfully!");
-        logger.info("Server name: dlqq-ai-tools");
+        logger.info("Server name: dlqq-ai-mcp-server");
         logger.info("Server version: {}", version);
         logger.info("Waiting for requests...");
         logger.info("========================================");

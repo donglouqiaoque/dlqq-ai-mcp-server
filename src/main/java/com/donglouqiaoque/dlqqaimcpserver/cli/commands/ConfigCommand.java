@@ -81,7 +81,7 @@ public class ConfigCommand implements Command {
 
     @Override
     public String getDescription() {
-        return "管理AI工具的配置";
+        return "管理 MCP 服务器的配置";
     }
 
     @Override

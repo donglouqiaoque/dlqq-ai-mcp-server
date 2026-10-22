@@ -39,9 +39,9 @@ public class HelpCommand implements Command {
      * 显示通用帮助信息
      */
     private void showGeneralHelp() {
-        System.out.println("鸫楼桥鹊AI工具 - 命令行AI助手");
+        System.out.println("鸫楼桥鹊 MCP Server (dlqq-ai-mcp-server) - 命令行工具");
         System.out.println();
-        System.out.println("用法: aitools <command> [args...]");
+        System.out.println("用法: dlqq-ai-mcp-server <command> [args...]");
         System.out.println();
         System.out.println("可用命令:");
         System.out.println();
@@ -52,12 +52,11 @@ public class HelpCommand implements Command {
         }
 
         System.out.println();
-        System.out.println("使用 'aitools help <command>' 查看具体命令的详细用法");
+        System.out.println("使用 'dlqq-ai-mcp-server help <command>' 查看具体命令的详细用法");
         System.out.println();
         System.out.println("示例:");
-        System.out.println("  aitools config set-key your-api-key");
-        System.out.println("  aitools chat 你好");
-        System.out.println("  aitools file summarize ./readme.md");
+        System.out.println("  dlqq-ai-mcp-server config set-key your-api-key");
+        System.out.println("  dlqq-ai-mcp-server config show");
     }
 
     @Override

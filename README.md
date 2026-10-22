@@ -1,21 +1,28 @@
-# 鸫楼桥鹊AI工具 (dlqq-ai-tools)
+# 鸫楼桥鹊 MCP Server (dlqq-ai-mcp-server)
 
-一个Java编写的AI工具集，支持MCP（Model Context Protocol）协议，专为Qwen Code集成使用。
+一个 Java 编写的 **MCP 服务器**（Model Context Protocol），为各类 AI Agent 工具（DeepSeek Harness、Qwen Code、Claude Code、Cursor、Cline 等）提供本地工具能力。
 
 ## 功能特性
 
-- **文件操作** - 读取、创建、删除、复制、移动文件，支持行级编辑
-- **目录操作** - 创建、删除、复制、移动文件夹，支持多级目录
+- **文件/目录操作** - 读写、创建、删除、复制、移动、重命名，支持行级编辑与正则替换
 - **二进制文件** - 读取二进制文件为十六进制，将十六进制写入为二进制
 - **搜索工具** - 在目录下搜索文件或文件夹，支持部分匹配和正则
 - **对话框交互** - 文本输入、确认、文件选择等GUI对话框
 - **串口通信** - CH340等USB转串口设备的图形化通信工具
-- **BLE蓝牙** - 蓝牙低功耗设备的扫描、连接、数据读写工具
-- **MCP服务器** - 完整支持MCP协议，可作为AI工具服务器使用
+- **BLE蓝牙** - 蓝牙低功耗设备的扫描、连接、数据读写工具（Python bleak + Socket）
+- **USB通信** - HID/CDC 设备的扫描、连接与收发（usb4java）
+- **WiFi工具** - 扫描、连接、断开 WiFi（netsh / nmcli）
+- **键鼠/截图** - `java.awt.Robot` 模拟鼠标键盘、截取桌面图像
+- **Office/压缩** - Office 转 Markdown、格式转换；ZIP(带密码) 与多格式解压
+- **计算器/命令/脚本** - 数学与程序计算、人工确认的命令执行、项目脚本编排
+- **MCP服务器** - 完整支持MCP协议，可作为各类 AI Agent 的本地工具服务器
 
 ## 工具列表
 
-本MCP服务器提供155个核心工具：
+本MCP服务器提供 **159** 个工具（146 个常规工具 + 13 个 `dlqq_set_*_script` 脚本路径设置工具）。
+> 说明：分组标题中的序号为历史遗留编号，实际工具数以各分组表格为准。
+
+产物 JAR 名为 **`dlqq_ai_mcp_server.jar`**（早期版本叫 `dlqq_ai_tools.jar`）。
 
 ### 文件操作工具 (1-14)
 
@@ -30,6 +37,7 @@
 | `dlqq_replace_lines_in_file` | 替换文件指定行范围的内容（支持字符集） |
 | `dlqq_insert_text_in_file` | 在文件指定行插入内容（支持字符集） |
 | `dlqq_replace_text_in_file` | 替换文件中的文本（支持正则，支持字符集） |
+| `dlqq_replace_text_in_dir` | 在目录下所有文件中批量替换文本（支持正则，遵循AI规则） |
 | `dlqq_remove_text_in_file` | 删除文件中匹配的文本（支持正则，相当于替换为空） |
 | `dlqq_delete_file` | 删除文件（带确认对话框） |
 | `dlqq_copy_file` | 复制文件 |
@@ -401,6 +409,31 @@ WiFi工具（Java原生实现），支持扫描周围WiFi网络、查看连接�
 - 脚本配置保存在 `.dlqq/settings/settings.properties` 文件中
 - `response.max.size` 控制文件操作返回内容的最大字节数（默认25804约25KB，最大258048约252KB）
 
+### 屏幕截图工具
+
+屏幕截图工具（Java原生实现，基于 `java.awt.Robot`），把桌面或指定区域保存为图片。
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_capture_screen` | 截取整个桌面或指定区域，保存为 PNG/JPG 并返回文件路径和尺寸 |
+
+**参数**：
+- `output_path` (string, 可选): 输出文件路径（默认 `.dlqq/cache/screenshot_时间戳.png`）
+- `x` / `y` / `width` / `height` (integer, 可选): 截取区域，默认整个屏幕
+
+### 工具列表查询工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_get_tool_list` | 获取服务器上所有已注册工具的名称和描述，支持关键字过滤 |
+
+**参数**：
+- `filter` (string, 可选): 名称过滤关键字，如 `wifi`、`keyboard`、`set_build`；为空返回全部工具
+
+**说明**：
+- 用于让 AI 在不重启会话的情况下自查询当前可用的工具清单
+- 返回内容来自运行时注册表，与实际 `tools/list` 一致
+
 ## 参数类型说明
 
 **所有整数参数（integer）都同时支持 integer 和 string 两种格式**，例如：
@@ -428,41 +461,100 @@ WiFi工具（Java原生实现），支持扫描周围WiFi网络、查看连接�
 #### Java运行环境
 
 - **需要 Java 17 或更高版本**
-- 如果未安装Java，可在项目 `runtime/` 目录中找到Java 17安装包
+- **必须使用完整版 JRE**：精简的 jlink 运行时只含部分模块，缺少 `jdk.crypto.ec`、`jdk.zipfs`、`java.net.http` 等，可能在 PDF、TLS、zip 文件系统等场景报错
+- 用 JDK 生成完整 JRE（`ALL-MODULE-PATH` 会把 JDK 的全部模块打进镜像，约 130 MB）：
+
+```cmd
+"<JDK17>\bin\jlink" --module-path "<JDK17>\jmods" --add-modules ALL-MODULE-PATH --output "<目标目录>\jre" --strip-debug --no-man-pages --no-header-files
+```
+
+- 也可以把同一条命令存成 `.bat` 放到 JDK 根目录（与 `bin`、`jmods` 同级），用 `%~dp0` 自动定位：
+
+```cmd
+"%~dp0bin\jlink" --module-path "%~dp0jmods" --add-modules ALL-MODULE-PATH --output "%~dp0jre" --strip-debug --no-man-pages --no-header-files
+pause
+```
+
+- 生成后把 `<目标目录>\jre\bin\java` 作为客户端的 `command` 即可（详见下文各客户端配置）
+- 也可以直接用完整 JDK 运行，无需单独生成 JRE：`"<JDK17>\bin\java" -Dfile.encoding=UTF-8 -jar dlqq_ai_mcp_server.jar`
+- **执行时出现警告属正常现象**：`WARNING: Using incubator modules: jdk.incubator.vector, jdk.incubator.foreign`（JDK 24 只有 `jdk.incubator.vector`）只是提示 `ALL-MODULE-PATH` 把 JDK 自带的孵化器模块也打包进了镜像，这些 API 尚属实验性；jlink 退出码仍为 0，生成结果可正常使用，**忽略即可**。
 
 #### Python运行环境（用于串口/BLE工具）
 
-- **需要 Python 3.8 或更高版本**
-- 如果未安装Python，可在项目 `runtime/` 目录中找到Python 3.13安装包（向下兼容3.8+）
+- **需要 Python 3.8 或更高版本**（BLE 工具依赖 `bleak` 库）
+- 当前仓库未附带 Python 安装包，请自行安装
 
-### 1. 编译项目
+### 1. 编译与打包
 
-使用 Maven 构建（需要安装 Maven）：
+需要 Java 17+ 与 Maven。
 
-```bash
-mvn clean package
+```cmd
+REM 只构建，产物在 target\ 下
+script\build.bat
+
+REM 构建并复制到发布目录（推荐）
+script\build_and_copy.bat
 ```
 
-构建完成后，可执行 JAR 文件将生成在 `target/aitools-1.0.0.jar`。
+构建产物为 `target\dlqq_ai_mcp_server.jar`（shade fat jar，已内嵌全部依赖）。
 
-### 2. 配置MCP客户端
+发布目录规则（由 `script\config.properties` 中的 `use_debug` 决定）：
 
-#### Qwen Code 配置
+| 模式 | 条件 | 目标路径 |
+|------|------|----------|
+| Debug | `use_debug=true` | `debug\dlqq_ai_mcp_server.jar`（不区分版本号，直接平铺） |
+| Release | `use_debug=false` | `release\V{release_version}\jar\dlqq_ai_mcp_server.jar` |
 
-MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）。
+也可以直接调用 Maven：
 
-**发行固件包含示例 settings.json**，请参考该文件进行配置。
+```bash
+mvn clean package -DskipTests -Drevision=255.0.0
+```
 
-配置示例：
+### 2. 接入 AI Agent 客户端
+
+本服务是标准 **stdio MCP Server**（JSON-RPC 2.0），不绑定某个客户端，任何支持 MCP 的 Agent 工具都能接入。下面按常用客户端给出配置，**DeepSeek Harness 放在第一位**。
+
+> 示例中的 JAR 路径请替换为本机真实路径：Debug 包是 `debug\dlqq_ai_mcp_server.jar`，Release 包是 `release\V1.0.0\jar\dlqq_ai_mcp_server.jar`。
+
+#### ① DeepSeek Harness (DSH)
+
+DSH 在用户目录的 `cordis.patch.yml`（Windows：`C:\Users\<用户名>\.dsh\cordis.patch.yml`）里注册 MCP 客户端插件，追加一个 `- insert:` 条目即可：
+
+```yaml
+- insert:
+    - id: dlqq-mcp
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: dlqq-ai-mcp-server
+        transport: stdio
+        command: java
+        args:
+          - "-Dfile.encoding=UTF-8"
+          - "-jar"
+          - 'E:\Code\AIProject\dlqq-ai-mcp-server\debug\dlqq_ai_mcp_server.jar'
+        env:
+          JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8"
+```
+
+说明：
+- `id` 在文件内唯一即可；`serverName` 就是会话中显示的服务器名。
+- `command: java` 要求 java 在 PATH 中；也可以写绝对路径并加引号，例如 `command: 'D:\Soft\Java\jdk-17\bin\java.exe'`。
+- 保存后重启 DeepSeek Harness，新会话即可通过 `tools/list` 看到全部 `dlqq_*` 工具。
+
+#### ② Qwen Code
+
+Qwen Code 的 MCP 配置放在 **settings.json**（不是 mcp.json）：
 
 ```json
 {
   "mcpServers": {
-    "dlqq-ai-tools": {
+    "dlqq-ai-mcp-server": {
       "command": "java",
       "args": [
+        "-Dfile.encoding=UTF-8",
         "-jar",
-        "A:\\MyProject\\Java\\donglouqiaoque_ai_tools\\release\\V1.0.0\\dlqq_ai_tools.jar"
+        "E:\\Code\\AIProject\\dlqq-ai-mcp-server\\debug\\dlqq_ai_mcp_server.jar"
       ],
       "env": {
         "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"
@@ -473,7 +565,102 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 }
 ```
 
-**注意**：请将 JAR 路径修改为你本地的实际路径。
+配置教程：<https://qwenlm.github.io/qwen-code-docs/zh/users/features/mcp/>
+
+#### ③ Claude Code / Claude Desktop
+
+Claude Code 项目级配置 `.mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "dlqq-ai-mcp-server": {
+      "type": "stdio",
+      "command": "java",
+      "args": ["-Dfile.encoding=UTF-8", "-jar", "E:\\Code\\AIProject\\dlqq-ai-mcp-server\\debug\\dlqq_ai_mcp_server.jar"]
+    }
+  }
+}
+```
+
+也可以用命令行添加：
+
+```bash
+claude mcp add dlqq-ai-mcp-server -- java -Dfile.encoding=UTF-8 -jar E:\Code\AIProject\dlqq-ai-mcp-server\debug\dlqq_ai_mcp_server.jar
+```
+
+Claude Desktop 使用 `claude_desktop_config.json`（Windows：`%APPDATA%\Claude\claude_desktop_config.json`），结构与上面相同（`type` 可省略）。
+
+#### ④ Cursor
+
+全局配置 `%USERPROFILE%\.cursor\mcp.json`，或项目级 `<项目>\.cursor\mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "dlqq-ai-mcp-server": {
+      "command": "java",
+      "args": ["-Dfile.encoding=UTF-8", "-jar", "E:\\Code\\AIProject\\dlqq-ai-mcp-server\\debug\\dlqq_ai_mcp_server.jar"]
+    }
+  }
+}
+```
+
+#### ⑤ VS Code（GitHub Copilot Chat）
+
+`.vscode/mcp.json`，注意顶层键是 **`servers`**（不是 `mcpServers`），且需要 `type`：
+
+```json
+{
+  "servers": {
+    "dlqq-ai-mcp-server": {
+      "type": "stdio",
+      "command": "java",
+      "args": ["-Dfile.encoding=UTF-8", "-jar", "E:\\Code\\AIProject\\dlqq-ai-mcp-server\\debug\\dlqq_ai_mcp_server.jar"]
+    }
+  }
+}
+```
+
+#### ⑥ Cline / Roo Code（VS Code 扩展）
+
+`cline_mcp_settings.json`（也可以用扩展里的 MCP Servers 面板添加）：
+
+```json
+{
+  "mcpServers": {
+    "dlqq-ai-mcp-server": {
+      "command": "java",
+      "args": ["-Dfile.encoding=UTF-8", "-jar", "E:\\Code\\AIProject\\dlqq-ai-mcp-server\\debug\\dlqq_ai_mcp_server.jar"],
+      "env": { "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8" },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+#### ⑦ Windsurf
+
+`%USERPROFILE%\.codeium\windsurf\mcp_config.json`：
+
+```json
+{
+  "mcpServers": {
+    "dlqq-ai-mcp-server": {
+      "command": "java",
+      "args": ["-Dfile.encoding=UTF-8", "-jar", "E:\\Code\\AIProject\\dlqq-ai-mcp-server\\debug\\dlqq_ai_mcp_server.jar"]
+    }
+  }
+}
+```
+
+#### 通用提示
+
+- 传输方式统一为 **stdio**，不占用端口，也不需要网络。
+- 编码：务必带 `-Dfile.encoding=UTF-8`（或设 `JAVA_TOOL_OPTIONS`），否则中文路径/内容可能乱码。
+- 启动耗时约 1~2 秒，客户端 `timeout` 建议 ≥ 30 秒。
+- 验证是否打通：让 Agent 调用 `dlqq_get_mcp_version`（返回版本与构建时间），或 `dlqq_get_tool_list`（列出全部工具）。
 
 ## 工具详细说明
 
@@ -1784,7 +1971,7 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 { "key": "search.max.files", "value": "500" }
 
 // 设置构建脚本路径
-{ "key": "script.build", "value": "util/build/build.bat" }
+{ "key": "script.build", "value": "script\\build.bat" }
 
 // 设置默认文本文件后缀
 { "key": "search.text.extensions", "value": ".java,.c,.cpp,.h,.py" }
@@ -1935,49 +2122,60 @@ MCP服务器配置需要放在 **settings.json** 文件中（而非 mcp.json）�
 
 ## 技术栈
 
-- **Java 17+**（必需，runtime目录提供安装包）
-- **Python 3.8+**（串口/BLE工具必需，runtime目录提供3.13安装包）
+- **Java 17+**（必需，须使用完整版 JRE，见“运行环境要求”）
+- **Python 3.8+**（串口/BLE 工具必需，需自行安装）
 - MCP协议（Model Context Protocol）
 - Maven构建工具
 - 依赖：
   - jSerialComm（UART串口通信）
-  - Python bleak库（BLE蓝牙通信）
-  - Apache POI（Office文件处理：DOC/DOCX/XLS/XLSX/PPT/PPTX）
-  - Apache PDFBox（PDF文件处理）
+  - usb4java（USB HID/CDC 通信）
+  - Python bleak库（BLE蓝牙通信，经 `ble_tools.py` + Socket）
+  - Apache POI 5.2.5（Office文件处理：DOC/DOCX/XLS/XLSX/PPT/PPTX）
+  - Apache PDFBox 3.0.1（PDF文件处理）
+  - zip4j（ZIP压缩/AES加密）
+  - Apache Commons Compress 1.25 + XZ（7z/tar/gz/bz2/xz/rar/cpio/ar 解压）
+  - Gson（JSON 序列化）
+  - SLF4J Simple（日志）
 
 ## 项目结构
 
 ```
-src/main/java/com/donglouqiaoque/aitools/
+src/main/java/com/donglouqiaoque/dlqqaimcpserver/
 ├── mcp/
-│   ├── MCPServerMain.java         # MCP服务器入口
+│   ├── MCPServerMain.java         # MCP服务器入口（日志/UTF-8初始化、健康检查）
 │   ├── protocol/
 │   │   ├── JsonRpcMessage.java    # JSON-RPC消息
 │   │   └── McpSchema.java         # MCP协议定义
 │   ├── server/
-│   │   └── McpServer.java         # MCP服务器核心
+│   │   └── McpServer.java         # MCP服务器核心（分发 + 工具注册表）
 │   ├── tools/
-│   │   ├── AITools.java           # 工具注册
-│   │   ├── FileTools.java         # 文件操作工具
+│   │   ├── AITools.java           # 工具注册中心
+│   │   ├── FileTools.java         # 文件/目录操作工具
 │   │   ├── DialogTools.java       # GUI对话框工具
 │   │   ├── UartTools.java         # 串口工具
-│   │   ├── BleTools.java          # BLE蓝牙工具
-│   │   ├── McpTools.java          # MCP数据管理工具
-│   │   └── OfficeTools.java       # Office文件读取工具
+│   │   ├── BleTools.java          # BLE蓝牙工具（Python桥）
+│   │   ├── BleManager.java        # BLE进程/脚本管理
+│   │   ├── UsbTools.java          # USB工具
+│   │   ├── WifiTools.java         # WiFi工具
+│   │   ├── MouseTools.java        # 鼠标模拟
+│   │   ├── KeyboardTools.java     # 键盘模拟
+│   │   ├── ScreenTools.java       # 屏幕截图
+│   │   ├── TimeTools.java         # 时间工具
+│   │   ├── OfficeTools.java       # Office读取/转换
+│   │   ├── ZipTools.java          # 压缩/解压
+│   │   ├── CalculatorTools.java   # 计算器
+│   │   ├── RunCommandTools.java   # 命令执行（人工确认）
+│   │   └── McpTools.java          # MCP数据/属性/版本/项目脚本
 │   └── transport/
 │       ├── McpTransport.java      # 传输层接口
 │       └── StdioTransport.java    # stdio传输实现
-├── ai/
-│   ├── ChatMessage.java           # 聊天消息模型
-│   └── AIService.java             # AI服务
-├── cli/
-│   └── commands/                  # CLI命令（可选）
+├── cli/                           # 命令行解析（历史保留）
 ├── config/
-│   └── ConfigManager.java         # 配置管理器
-├── http/
-│   └── HttpClient.java            # HTTP客户端
+│   └── ConfigManager.java         # 旧配置管理器
 └── utils/
-    └── FileUtils.java             # 文件工具类
+    ├── FileUtils.java             # 路径/文件工具
+    ├── AIRulesUtils.java          # .aiignore/.aiwriterules/.aireadrules
+    └── CalculatorUtils.java       # 计算内核
 ```
 
 ## AI规则文件
@@ -2307,6 +2505,14 @@ settings.json
 - Windows 使用 `cmd /c` 执行，Linux/Mac 使用 `sh -c` 执行
 - 命令超时后会强制终止进程
 - 返回结果包含：命令、工作目录、退出码、状态、输出内容
+
+## 已知限制
+
+- **PDF 等模块相关功能**：请使用**完整版 JRE**。精简 jlink 运行时缺少 `jdk.crypto.ec`、`jdk.zipfs`、`java.net.http` 等模块，可能在 PDF（PDFBox 字体/IOUtils）、TLS、zip 文件系统等场景报错；历史报错 `Could not initialize class org.apache.pdfbox.io.IOUtils` 即与运行环境相关。完整 JRE 的生成命令见“运行环境要求”。
+- **PDF 写入**：工具侧不提供（`dlqq_convert_office_file` 的目标格式不含 PDF），请先转 DOCX 再用外部工具导出。
+- **字体缓存**：PDFBox 会尝试写 `~/.pdfbox.cache`，写不进去只会在每次启动时重建缓存（多花 1~3 秒），不影响功能；可用 `-Dpdfbox.fontcache=<可写目录>` 指定。
+- **硬件相关工具**：串口 / BLE / USB 在没有对应硬件时只能验证窗口与管理类接口，收发的端到端链路需要实机验证。
+- **GUI 工具**：串口、BLE、WiFi、命令确认等依赖桌面环境，纯服务器（无显示）环境下不可用。
 
 ## 许可证
 

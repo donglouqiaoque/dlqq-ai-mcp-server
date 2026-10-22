@@ -7,13 +7,12 @@ import java.io.IOException;
 import java.util.*;
 
 /**
- * AI工具集 - 注册到MCP服务器的工具
- * 包含12个核心工具：文件操作、对话框、串口功能
+ * 工具注册中心 - 将各分组工具注册到 MCP 服务器（dlqq-ai-mcp-server）
  */
 public class AITools {
 
     /**
-     * 注册所有AI工具到MCP服务器
+     * 注册所有 MCP 工具到服务器
      */
     public void registerTools(McpServer server) {
         // ========== 文件操作工具 (1-11) ==========
@@ -3954,7 +3953,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_build_project",
-            "构建项目。执行settings.properties中script.build定义的脚本。默认执行util/build/build.bat。",
+            "构建项目。执行settings.properties中script.build定义的脚本。默认执行script/build.bat。",
             inputSchema,
             arguments -> {
                 String result = McpTools.buildProject();
@@ -3968,7 +3967,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_rebuild_project",
-            "重建项目（clean + build）。执行settings.properties中script.rebuild定义的脚本。默认执行util/build/rebuild.bat。",
+            "重建项目（clean + build）。执行settings.properties中script.rebuild定义的脚本。",
             inputSchema,
             arguments -> {
                 String result = McpTools.rebuildProject();
@@ -4026,7 +4025,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_build_erase_download",
-            "构建项目、擦除芯片并下载固件。执行settings.properties中script.build.erase.download定义的脚本。默认执行util/build/build_erase_download.bat。",
+            "构建项目、擦除芯片并下载固件。执行settings.properties中script.build.erase.download定义的脚本。",
             inputSchema,
             arguments -> {
                 String result = McpTools.buildEraseDownload();

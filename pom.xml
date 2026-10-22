@@ -10,8 +10,8 @@
     <version>${revision}</version>
     <packaging>jar</packaging>
 
-    <name>dlqq-ai-tools</name>
-    <description>AI工具集 - 提供MCP服务和AI对话功能</description>
+    <name>dlqq-ai-mcp-server</name>
+    <description>MCP服务器 - 为AI客户端提供文件、串口、BLE、USB、WiFi、Office、压缩等工具</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -151,7 +151,7 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.3.0</version>
                 <configuration>
-                    <finalName>dlqq_ai_tools</finalName>
+                    <finalName>dlqq_ai_mcp_server</finalName>
                     <archive>
                         <manifest>
                             <mainClass>com.donglouqiaoque.dlqqaimcpserver.mcp.MCPServerMain</mainClass>
@@ -172,14 +172,14 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <finalName>dlqq_ai_tools</finalName>
+                            <finalName>dlqq_ai_mcp_server</finalName>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.donglouqiaoque.dlqqaimcpserver.mcp.MCPServerMain</mainClass>
                                     <manifestEntries>
                                         <Implementation-Version>${revision}</Implementation-Version>
-                                        <Implementation-Title>dlqq-ai-tools</Implementation-Title>
+                                        <Implementation-Title>dlqq-ai-mcp-server</Implementation-Title>
                                         <Implementation-Vendor>com.donglouqiaoque</Implementation-Vendor>
                                         <Build-Time>${maven.build.timestamp}</Build-Time>
                                     </manifestEntries>

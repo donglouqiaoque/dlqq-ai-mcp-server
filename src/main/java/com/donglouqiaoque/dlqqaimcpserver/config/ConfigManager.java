@@ -10,7 +10,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.Properties;
 
 /**
- * 配置管理器 - 管理AI工具的各类配置
+ * 配置管理器 - 管理 MCP 服务器的各类配置
  * 支持多进程并发访问（使用文件锁）
  */
 public class ConfigManager {

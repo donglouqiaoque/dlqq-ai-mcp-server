@@ -2,9 +2,9 @@
 <project version="4">
   <component name="CidrRootsConfiguration">
     <excludeRoots>
+      <file path="$PROJECT_DIR$/.ai_res" />
       <file path="$PROJECT_DIR$/.dlqq" />
       <file path="$PROJECT_DIR$/.idea" />
-      <file path="$PROJECT_DIR$/ai_res" />
       <file path="$PROJECT_DIR$/debug" />
       <file path="$PROJECT_DIR$/release" />
       <file path="$PROJECT_DIR$/runtime" />
