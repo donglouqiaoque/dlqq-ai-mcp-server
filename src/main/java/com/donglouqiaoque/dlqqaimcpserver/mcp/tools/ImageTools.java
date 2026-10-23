@@ -4,6 +4,7 @@ import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.CallToolResult;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolContent;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolInputSchema;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.server.McpServer;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
 
 import org.apache.batik.transcoder.TranscoderException;
 import org.apache.batik.transcoder.TranscoderInput;
@@ -101,7 +102,7 @@ public class ImageTools {
                         return error("不支持的目标格式: " + fmt + "（支持 svg/png/jpg/gif/bmp）");
                     }
 
-                    Path src = Paths.get(srcStr);
+                    Path src = Workspace.resolve(srcStr);
                     if (!Files.exists(src) || !Files.isRegularFile(src)) {
                         return error("源文件不存在: " + src);
                     }
@@ -216,13 +217,17 @@ public class ImageTools {
     private static Path resolveTarget(Map<String, Object> args, Path src, String fmt) throws IOException {
         Object outObj = args.get("output_path");
         if (outObj != null && !String.valueOf(outObj).trim().isEmpty()) {
-            Path p = Paths.get(String.valueOf(outObj).trim());
+            Path p = Workspace.resolve(String.valueOf(outObj).trim());
+            String permissionError = FileTools.checkWritePermission(p.toString(), "图片转换输出");
+            if (permissionError != null) {
+                throw new IOException(permissionError);
+            }
             if (p.getParent() != null) {
                 Files.createDirectories(p.getParent());
             }
             return p;
         }
-        Path cache = Paths.get(".dlqq", "cache");
+        Path cache = Workspace.getRoot().resolve(".dlqq/cache");
         Files.createDirectories(cache);
         String base = src.getFileName().toString();
         int dot = base.lastIndexOf('.');

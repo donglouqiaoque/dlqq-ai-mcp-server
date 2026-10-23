@@ -1,13 +1,13 @@
 # AGENTS.md — dlqq-ai-mcp-server 工程约定
 
 > 本文给 AI 助手（Qwen Code / DeepSeek Harness 等）阅读，包含硬性规则、构建发布方式、结构与工具速查。
-> 完整工具手册见 [README.md](README.md)。两份文档是**唯一**的说明文档（原 `ai_res/doc` 下的内容已合并到这里与 README，目录已删除）。
+> 完整工具手册见 [README.md](README.md)（英文版：[README.en.md](README.en.md)）。两份文档是**唯一**的说明文档。
 
 ## 一、硬性规则（必须遵守）
 
 1. **语言与构建**：Java 17 + Maven。
 2. **工程定位**：面向各类 AI Agent 客户端（DeepSeek Harness、Qwen Code、Claude Code、Cursor、Cline 等）的 MCP 服务器（stdio 传输、JSON-RPC 2.0），入口 `com.donglouqiaoque.dlqqaimcpserver.mcp.MCPServerMain`。
-3. **脚本位置**：构建/发布/部署脚本放工程根目录 `script\`（含 `build.bat`、`build_and_copy.bat`、`start-http.bat`、`make-jre.bat`）；临时脚本放 `.ai_res\script\`。不要把 `.bat/.ps1/.sh` 放在这两处之外。
+3. **脚本位置**：构建/发布/部署脚本放工程根目录 `script\`（含 `build.bat`、`build_and_copy.bat`、`start-http.bat`、`make-jre.bat`）；临时脚本放本地临时工作目录（约定见 `AIRES.md`）。不要把 `.bat/.ps1/.sh` 放在这两处之外。
 4. **.bat 必须使用英文**：`.bat` 文件**只能出现英文/ASCII 字符，不得出现任何中文**（注释、`echo`、提示语、变量说明一律用英文）。
    原因：cmd 默认代码页（GBK/936）与 UTF-8 混用会导致中文乱码，甚至影响批处理解析。
 5. **产物命名**：JAR 固定名为 **`dlqq_ai_mcp_server.jar`**（历史名 `dlqq_ai_tools.jar` 已弃用）。
@@ -15,8 +15,14 @@
 7. **Debug 版本不区分版本号**：直接把 JAR 复制到 `debug\` 下，即 `debug\dlqq_ai_mcp_server.jar`。
 8. **Release 版本按版本号分目录**：`release\V{版本号}\jar\dlqq_ai_mcp_server.jar`。
 9. **工具变更要同步文档**：增删或修改 MCP 工具后，必须同步更新 [README.md](README.md) 与本文的工具速查。
-10. **诊断日志**：`StdioTransport`、`McpServer`、`MCPServerMain` 有详细连接诊断日志，输出到 `./.dlqq/log/logger/` 与 `./.dlqq/log/stderr/`，按时间命名（每次启动新建）。
-11. **临时文件位置**：临时文件/中间产物**禁止放 C 盘系统临时目录**，统一放工程内 `.ai_res\<类型>\`，按类型分子目录（如 `.ai_res\doc\` 放文档/差异报告、`.ai_res\script\` 放脚本、`.ai_res\tmp\` 放其他中间产物），用完自行清理。
+10. **诊断日志**：`StdioTransport`、`McpServer`、`MCPServerMain` 有详细连接诊断日志，输出到 `<工作区>/.dlqq/log/logger/` 与 `<工作区>/.dlqq/log/stderr/`，按时间命名（每次启动新建）。
+11. **临时文件位置**：临时文件/中间产物**禁止放 C 盘系统临时目录**，统一放工程根目录下的本地临时工作目录（约定见 `AIRES.md`），按类型分子目录，用完自行清理。
+12. **禁止用脚本批量修改代码**：不允许用 PowerShell / Python / sed / awk 等脚本对源码做批量查找替换或自动改写。所有代码修改必须逐个文件、逐个位置人工确认后用编辑工具完成；确需大范围调整时，先列出清单交由用户确认，再逐项修改。
+13. **禁止使用任何 git 命令**：包括但不限于 `git status`、`git diff`、`git log`、`git checkout/restore/reset`、`git add/commit/push/pull/stash` 等。版本管理由用户本人操作，AI 一律不得执行任何 git 命令（读取与回滚都不允许）。
+14. **禁止使用全限定类名**：代码中不得出现 `new java.xxx.XXX()`、`java.util.List` 这类全限定写法。**能 import 的一律在文件顶部 import，然后使用短类名**；只有无法 import 的情况（同名类冲突、需要显式区分同名的不同包类型、静态导入等）才允许写全限定名，并在该处注释说明原因。注释/文档中的类名描述不算代码，但也不建议加包名。
+15. **README 中英文必须同步**：修改 [README.md](README.md)（中文）时必须同步修改 [README.en.md](README.en.md)（英文），反之亦然；两份 README 的章节、工具数量、工具说明、配置示例必须保持一致，不允许只改其中一份。
+16. **日志必须 UTF-8 且纯英文**：`.dlqq/log/` 下的日志文件必须使用 **UTF-8** 编码写入；日志内容**只能使用英文**，不得出现中文（包括 `logger.info/warn/error/debug` 的提示文本、异常附加说明）。新增或修改日志时必须写英文。
+17. **配置文件必须 UTF-8 且注释纯英文**：`settings.properties` 等配置文件必须使用 **UTF-8** 编码读写；文件内的注释**一律使用英文**，不得写入中文注释；键值内容如含中文（如脚本路径）保持 UTF-8 原样，不做转义。
 
 ## 二、运行环境要求
 
@@ -135,7 +141,7 @@ use_debug=true
 |------|------|------|
 | `script\build.bat` | 仅执行 `mvn clean package -DskipTests -Drevision={version}` | `target\dlqq_ai_mcp_server.jar` |
 | `script\build_and_copy.bat` | 构建并复制到发布目录 | debug 或 release 目录 |
-| `script\start-http.bat` | 部署用 HTTP 启动脚本（与 `jre\`、JAR 同目录，默认端口 49129） | 常驻 HTTP 服务 |
+| `script\start-http.bat` | 部署用 HTTP 启动脚本（与 `jre\`、JAR 同目录，默认端口 49129；启动前先要求输入工作区目录，回车=CWD） | 常驻 HTTP 服务 |
 | `script\make-jre.bat` | 生成完整版 JRE（复制到 JDK 根目录执行，输出 `<JDK>\jre`） | `jre\`（约 130 MB） |
 
 **发布目录规则**
@@ -187,13 +193,13 @@ src/main/resources/
 └── simplelogger.properties
 ```
 
-启动参数：`--transport http|stdio`、`--port N`（默认 49129）、`--path /mcp`；默认 stdio。
+启动参数：`--transport http|stdio`、`--port N`（默认 49129）、`--path /mcp`、`--workspace <dir>`；默认 stdio。
 
-运行期目录（首次启动自动创建，已被 `.gitignore` 忽略）：`.dlqq/log/{logger,stderr}`、`.dlqq/settings/settings.properties`、`.dlqq/cache`。
+运行期目录（首次启动自动创建，已被 `.gitignore` 忽略）：工作区内 `.dlqq/log/{logger,stderr}`、`.dlqq/cache`、`.dlqq/settings/settings.properties`（工作区默认 = 进程 CWD）。
 
 ## 六、工具速查
 
-共 **164** 个工具（151 个常规工具 + 13 个 `dlqq_set_*_script`），实现见 `mcp/tools/`，逐个参数说明见 [README.md](README.md)。
+共 **169** 个工具（156 个常规工具 + 13 个 `dlqq_set_*_script`），实现见 `mcp/tools/`，逐个参数说明见 [README.md](README.md)。
 
 | 分组 | 数量 | 说明 |
 |------|------|------|
@@ -215,13 +221,15 @@ src/main/resources/
 | 命令执行 | 1 | `dlqq_run_command`（JFrame 人工确认） |
 | Office | 2 | 读取转 Markdown、格式转换 |
 | 压缩解压 | 2 | zip4j + commons-compress |
-| MCP 数据/属性 | 11 | 版本信息（含编译进代码的真实构建时间）、热加载测试、动态工具管理（移除/刷新/恢复）、属性读写、清理数据/缓存/日志 |
+| MCP 数据/属性 | 15 | 版本信息（含编译进代码的真实构建时间）、热加载测试、动态工具管理（移除/刷新/恢复/直接调用）、工作区设置与权限（set/get/reset/permission）、属性读写、清理数据/缓存/日志 |
 | 项目脚本 | 15 | 构建/烧写/运行/调试 ＋ 脚本路径设置 |
 | 工具列表 | 1 | `dlqq_get_tool_list` |
 
-**动态工具管理**：`dlqq_mcp_remove_tools`（移除并持久化）、`dlqq_mcp_refresh_tools`（仅推送 `notifications/tools/list_changed`）、`dlqq_mcp_reset_tools`（恢复全部并清空配置）。排除项存于 `.dlqq/settings/settings.properties` 的 `mcp.tools.excluded`（逗号分隔），服务端重启后仍保持移除状态；这三个管理工具受保护，不允许被移除。HTTP 模式下立即刷新需要客户端已打开 SSE 长连接。
+**动态工具管理**：`dlqq_mcp_remove_tools`（移除并持久化）、`dlqq_mcp_refresh_tools`（仅推送 `notifications/tools/list_changed`）、`dlqq_mcp_reset_tools`（恢复全部并清空配置）、`dlqq_mcp_run_tools`（按名称直接调用任意已注册工具，绕过“已移除/客户端未加载”限制）。排除项存于 `<工作区>/.dlqq/settings/settings.properties` 的 `mcp.tools.excluded`（逗号分隔），服务端重启后仍保持移除状态；这四个管理工具受保护，不允许被移除。HTTP 模式下立即刷新需要客户端已打开 SSE 长连接。
 
-**脚本工具规则**：`dlqq_build_project` / `dlqq_rebuild_project` / `dlqq_chip_*` / `dlqq_*erase_download` / `dlqq_run_project` / `dlqq_debug_project` 等**没有任何内置默认脚本路径**；未配置时直接报错“需要先配置工具路径”，并提示对应的 `dlqq_set_*_script`。配置写入 `.dlqq/settings/settings.properties` 的 `script.*` 项。
+**工作区**：`dlqq_workspace_set` / `dlqq_workspace_get` / `dlqq_workspace_reset` / `dlqq_workspace_permission_set`；启动参数 `--workspace <dir>`。未指定且未运行期设置时，工作区 = 进程 CWD。**工作区路径不持久化**（仅 `--workspace` 或运行期设置，重启需重新指定）；修改权限和其它全部配置（`script.*`、`response.max.size`、`mcp.tools.excluded` 等）持久化在工作区内 `.dlqq/settings/settings.properties`，权限键为 `workspace.write.mode`（`readonly` 只读 / `workspace` 仅工作区 / `approval` 工作区外审批 / `full` 完全权限），切换工作区自动重载。所有工具的相对路径、脚本执行目录、AI 规则基准都基于工作区解析；工作区内 `.dlqq`（日志、缓存、配置）整个随工作区移动。
+
+**脚本工具规则**：`dlqq_build_project` / `dlqq_rebuild_project` / `dlqq_chip_*` / `dlqq_*erase_download` / `dlqq_run_project` / `dlqq_debug_project` 等**没有任何内置默认脚本路径**；未配置时直接报错“需要先配置工具路径”，并提示对应的 `dlqq_set_*_script`。配置写入 `<工作区>/.dlqq/settings/settings.properties` 的 `script.*` 项。
 
 ## 七、AI 规则文件
 
@@ -266,8 +274,8 @@ src/main/resources/
 
 ### 动态工具管理（不重启服务端的替代）
 
-- `dlqq_mcp_remove_tools` / `dlqq_mcp_refresh_tools` / `dlqq_mcp_reset_tools`：运行时禁用/恢复已注册工具，持久化到 `mcp.tools.excluded`，SSE 存活时客户端实时刷新。
-- 限制：只能隐藏/恢复**已注册**的工具，不能加载新代码；三个管理工具受保护不可移除。
+- `dlqq_mcp_remove_tools` / `dlqq_mcp_refresh_tools` / `dlqq_mcp_reset_tools` / `dlqq_mcp_run_tools`：运行时禁用/恢复已注册工具，持久化到 `mcp.tools.excluded`，SSE 存活时客户端实时刷新；`run_tools` 可按名称直接调用被移除或客户端未加载的工具。
+- 限制：只能隐藏/恢复**已注册**的工具，不能加载新代码；四个管理工具受保护不可移除。
 
 ## 九、已知限制
 

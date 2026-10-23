@@ -9,6 +9,7 @@ import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
+import java.lang.reflect.Field;
 import java.util.*;
 import java.util.List;
 
@@ -134,7 +135,7 @@ public class KeyboardTools {
         if (code != null) return code;
         // 尝试KeyEvent中的静态字段名（如 VK_A）
         try {
-            java.lang.reflect.Field field = KeyEvent.class.getField("VK_" + key.toUpperCase());
+            Field field = KeyEvent.class.getField("VK_" + key.toUpperCase());
             return field.getInt(null);
         } catch (Exception e) {
             // 忽略

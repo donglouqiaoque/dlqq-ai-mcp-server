@@ -17,6 +17,11 @@ import java.net.URI;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
+import java.net.URLDecoder;
+import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
 
 /**
  * 图形化工具的"关于信息栏"：
@@ -105,7 +110,7 @@ final class AboutPanel {
             // 获取当前类的JAR文件路径
             String classPath = AboutPanel.class.getProtectionDomain().getCodeSource().getLocation().getPath();
             // URL解码处理中文路径
-            classPath = java.net.URLDecoder.decode(classPath, "UTF-8");
+            classPath = URLDecoder.decode(classPath, "UTF-8");
             File jarFile = new File(classPath);
 
             if (jarFile.exists()) {
@@ -125,12 +130,12 @@ final class AboutPanel {
                         if (buildTimeAttr != null) {
                             try {
                                 // 将UTC时间转换为本地时间
-                                java.time.LocalDateTime utcTime = java.time.LocalDateTime.parse(buildTimeAttr,
-                                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                                java.time.ZonedDateTime utcZoned = utcTime.atZone(java.time.ZoneId.of("UTC"));
-                                java.time.ZonedDateTime localZoned = utcZoned.withZoneSameInstant(java.time.ZoneId.systemDefault());
+                                LocalDateTime utcTime = LocalDateTime.parse(buildTimeAttr,
+                                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                                ZonedDateTime utcZoned = utcTime.atZone(ZoneId.of("UTC"));
+                                ZonedDateTime localZoned = utcZoned.withZoneSameInstant(ZoneId.systemDefault());
                                 buildTime = localZoned.format(
-                                    java.time.format.DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss"));
+                                    DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss"));
                             } catch (Exception e) {
                                 // 构建时间解析失败，忽略
                             }

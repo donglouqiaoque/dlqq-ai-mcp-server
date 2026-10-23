@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.io.File;
 
 /**
  * 文件工具类
@@ -25,7 +26,7 @@ public class FileUtils {
         // 先将反斜杠替换为正斜杠（处理JSON转义问题）
         String normalized = filePath.replace("\\", "/");
         // 再将正斜杠替换为系统默认分隔符
-        return normalized.replace("/", java.io.File.separator);
+        return normalized.replace("/", File.separator);
     }
 
     /**

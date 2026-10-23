@@ -62,8 +62,8 @@ public class AIRulesUtils {
      * @return true 表示被忽略，false 表示未忽略
      */
     public static boolean isIgnored(String filePath) {
-        String normalizedPath = FileUtils.normalizePath(filePath);
-        String workingDir = FileUtils.normalizePath(System.getProperty("user.dir"));
+        String normalizedPath = FileUtils.normalizePath(Workspace.resolve(filePath).toString());
+        String workingDir = FileUtils.normalizePath(Workspace.getRoot().toString());
 
         // 只在当前工程目录内才应用.aiignore规则
         if (!normalizedPath.startsWith(workingDir + "/") && !normalizedPath.equals(workingDir)) {
@@ -138,8 +138,8 @@ public class AIRulesUtils {
      * 通用保护检查方法
      */
     private static boolean isProtectedByRules(String filePath, RuleType ruleType) {
-        String normalizedPath = FileUtils.normalizePath(filePath);
-        String workingDir = FileUtils.normalizePath(System.getProperty("user.dir"));
+        String normalizedPath = FileUtils.normalizePath(Workspace.resolve(filePath).toString());
+        String workingDir = FileUtils.normalizePath(Workspace.getRoot().toString());
 
         // 只在当前工程目录内才应用规则
         if (!normalizedPath.startsWith(workingDir + "/") && !normalizedPath.equals(workingDir)) {

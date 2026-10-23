@@ -9,7 +9,15 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * MCP服务器核心类
@@ -29,6 +37,22 @@ public class McpServer {
     private boolean initialized = false;
     private String clientProtocolVersion;
     private int toolsListRequestCount = 0;  // 记录tools/list请求次数
+
+    /** 兜底通知默认延时（毫秒），可用 -Dmcp.listChanged.delay.ms 覆盖 */
+    private static final long DEFAULT_TOOLS_NOTIFY_DELAY_MS = 10_000L;
+    /** 兜底通知调度器（守护线程，避免阻止进程退出） */
+    private final ScheduledExecutorService notificationScheduler =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread thread = new Thread(r, "tools-list-changed-notifier");
+                thread.setDaemon(true);
+                return thread;
+            });
+    /** 当前待执行的兜底通知任务 */
+    private volatile ScheduledFuture<?> pendingToolsNotification;
+    /** 客户端是否已请求过 tools/list（请求过后不再推送兜底通知） */
+    private volatile boolean toolsListRequested = false;
+    /** 兜底通知是否已经发送过（只发一次） */
+    private volatile boolean fallbackToolsNotificationSent = false;
 
     public McpServer(String serverName, String serverVersion, McpTransport transport) {
         this.serverName = serverName;
@@ -50,7 +74,7 @@ public class McpServer {
      */
     public boolean notifyToolsListChanged() {
         boolean sent = transport.notifyToolsListChanged();
-        logger.info("[McpServer] 发送 notifications/tools/list_changed, 结果={}", sent);
+        logger.info("[McpServer] Sent notifications/tools/list_changed, result={}", sent);
         return sent;
     }
 
@@ -64,7 +88,8 @@ public class McpServer {
     private static final Set<String> PROTECTED_TOOLS = Set.of(
             "dlqq_mcp_remove_tools",
             "dlqq_mcp_refresh_tools",
-            "dlqq_mcp_reset_tools");
+            "dlqq_mcp_reset_tools",
+            "dlqq_mcp_run_tools");
 
     /**
      * 动态工具变更结果。
@@ -93,7 +118,7 @@ public class McpServer {
      * 当前被移除（禁用）的工具列表。
      */
     public Set<String> getDisabledTools() {
-        return new java.util.LinkedHashSet<>(disabledTools);
+        return new LinkedHashSet<>(disabledTools);
     }
 
     /**
@@ -120,14 +145,14 @@ public class McpServer {
             }
             String toolName = name.trim();
             if (PROTECTED_TOOLS.contains(toolName) || !toolHandlers.containsKey(toolName)) {
-                logger.warn("[McpServer] 启动时忽略无效的排除工具: {}", toolName);
+                logger.warn("[McpServer] Ignored invalid excluded tool at startup: {}", toolName);
                 continue;
             }
             if (disabledTools.add(toolName)) {
                 applied++;
             }
         }
-        logger.info("[McpServer] 启动时应用排除工具 {} 个, 当前启用工具数={}", applied, getEnabledToolCount());
+        logger.info("[McpServer] Applied {} excluded tools at startup, enabled tools={}", applied, getEnabledToolCount());
         return applied;
     }
 
@@ -153,7 +178,7 @@ public class McpServer {
         }
         result.enabledCount = getEnabledToolCount();
         result.disabledCount = disabledTools.size();
-        logger.info("[McpServer] 移除工具: 生效={}, 未知={}, 受保护={}, 当前启用数={}",
+        logger.info("[McpServer] Removed tools: applied={}, unknown={}, protected={}, enabled={}",
                 result.applied, result.unknown, result.protectedNames, result.enabledCount);
         return result;
     }
@@ -166,7 +191,7 @@ public class McpServer {
     public List<String> enableAllTools() {
         List<String> restored = new ArrayList<>(disabledTools);
         disabledTools.clear();
-        logger.info("[McpServer] 恢复全部被移除工具: {}", restored);
+        logger.info("[McpServer] Restored all removed tools: {}", restored);
         return restored;
     }
 
@@ -175,6 +200,26 @@ public class McpServer {
      */
     public boolean isToolDisabled(String name) {
         return disabledTools.contains(name);
+    }
+
+    /**
+     * 直接调用已注册工具，忽略“运行时移除/客户端可见性”限制。
+     *
+     * <p>供 {@code dlqq_mcp_run_tools} 使用：即使工具已被 {@code dlqq_mcp_remove_tools}
+     * 移除、或客户端尚未加载，也按名称直接执行服务端已注册的处理器。</p>
+     *
+     * @param name      工具名
+     * @param arguments 工具参数（可为 null）
+     * @return 工具执行结果；工具未注册时返回 null
+     * @throws Exception 工具执行过程中的异常
+     */
+    public CallToolResult invokeToolDirect(String name, Map<String, Object> arguments) throws Exception {
+        ToolHandler handler = toolHandlers.get(name);
+        if (handler == null) {
+            return null;
+        }
+        logger.info("[McpServer] dlqq_mcp_run_tools direct call: {} (disabled={})", name, disabledTools.contains(name));
+        return handler.call(arguments);
     }
 
     /**
@@ -193,9 +238,55 @@ public class McpServer {
     }
 
     /**
+     * 客户端发来任意消息时调用：取消兜底通知；收到 tools/list 后永久取消。
+     *
+     * @param method JSON-RPC 方法名
+     */
+    private void onClientActivity(String method) {
+        cancelPendingToolsNotification();
+        if ("tools/list".equals(method)) {
+            toolsListRequested = true;
+            return;
+        }
+        if ("initialize".equals(method) || "initialized".equals(method)
+                || "notifications/initialized".equals(method)) {
+            scheduleFallbackToolsNotification();
+        }
+    }
+
+    /**
+     * 初始化后启动兜底计时：若客户端在延时内没有请求 tools/list，则推送一次列表变更通知。
+     */
+    private void scheduleFallbackToolsNotification() {
+        if (toolsListRequested || fallbackToolsNotificationSent) {
+            return;
+        }
+        cancelPendingToolsNotification();
+        long delayMs = Long.getLong("mcp.listChanged.delay.ms", DEFAULT_TOOLS_NOTIFY_DELAY_MS);
+        pendingToolsNotification = notificationScheduler.schedule(() -> {
+            if (!toolsListRequested && !fallbackToolsNotificationSent) {
+                fallbackToolsNotificationSent = true;
+                logger.info("[McpServer] No tools/list within {}ms after initialize; sending notifications/tools/list_changed", delayMs);
+                notifyToolsListChanged();
+            }
+        }, delayMs, TimeUnit.MILLISECONDS);
+    }
+
+    /** 取消尚未触发的兜底通知。 */
+    private void cancelPendingToolsNotification() {
+        ScheduledFuture<?> pending = pendingToolsNotification;
+        if (pending != null) {
+            pending.cancel(false);
+            pendingToolsNotification = null;
+        }
+    }
+
+    /**
      * 停止服务器
      */
     public void stop() throws IOException {
+        cancelPendingToolsNotification();
+        notificationScheduler.shutdownNow();
         this.transport.stop();
     }
 
@@ -204,7 +295,8 @@ public class McpServer {
      */
     private void handleMessage(JsonRpcMessage.Request request) {
         String method = request.getMethod();
-        logger.info("[McpServer.handleMessage] 收到请求: method={}, id={}, isNotification={}",
+        onClientActivity(method);
+        logger.info("[McpServer.handleMessage] Received request: method={}, id={}, isNotification={}",
                 method, request.getId(), request.isNotification());
 
         try {
@@ -213,57 +305,57 @@ public class McpServer {
 
             switch (method) {
                 case "initialize":
-                    logger.info("[McpServer.handleMessage] 处理 initialize 请求");
+                    logger.info("[McpServer.handleMessage] Handling initialize request");
                     handleInitialize(request);
                     break;
                 case "initialized":
                 case "notifications/initialized":
                     // 客户端确认初始化完成 - 这是通知，不返回响应
-                    logger.info("[McpServer.handleMessage] 处理 initialized 通知");
+                    logger.info("[McpServer.handleMessage] Handling initialized notification");
                     handleInitialized(request);
                     break;
                 case "tools/list":
-                    logger.info("[McpServer.handleMessage] 处理 tools/list 请求");
+                    logger.info("[McpServer.handleMessage] Handling tools/list request");
                     handleToolsList(request);
                     break;
                 case "tools/call":
-                    logger.info("[McpServer.handleMessage] 处理 tools/call 请求");
+                    logger.info("[McpServer.handleMessage] Handling tools/call request");
                     handleToolsCall(request);
                     break;
                 case "resources/list":
-                    logger.info("[McpServer.handleMessage] 处理 resources/list 请求");
+                    logger.info("[McpServer.handleMessage] Handling resources/list request");
                     handleResourcesList(request);
                     break;
                 case "prompts/list":
-                    logger.info("[McpServer.handleMessage] 处理 prompts/list 请求");
+                    logger.info("[McpServer.handleMessage] Handling prompts/list request");
                     handlePromptsList(request);
                     break;
                 case "prompts/get":
-                    logger.info("[McpServer.handleMessage] 处理 prompts/get 请求");
+                    logger.info("[McpServer.handleMessage] Handling prompts/get request");
                     handlePromptsGet(request);
                     break;
                 default:
                     // 对于通知，不发送错误响应
                     if (!isNotification) {
-                        logger.warn("[McpServer.handleMessage] 未知方法: {}", method);
+                        logger.warn("[McpServer.handleMessage] Unknown method: {}", method);
                         sendErrorResponse(request.getId(), JsonRpcMessage.ERROR_METHOD_NOT_FOUND,
                                 "Unknown method: " + method);
                     } else {
-                        logger.warn("[McpServer.handleMessage] 忽略未知通知: {}", method);
+                        logger.warn("[McpServer.handleMessage] Ignoring unknown notification: {}", method);
                     }
             }
         } catch (Exception e) {
-            logger.error("[McpServer.handleMessage] 处理请求时出错: method={}, error={}", method, e.getMessage(), e);
+            logger.error("[McpServer.handleMessage] Error handling request: method={}, error={}", method, e.getMessage(), e);
             try {
                 // 对于通知，不发送错误响应
                 if (request.getId() != null) {
                     sendErrorResponse(request.getId(), JsonRpcMessage.ERROR_INTERNAL_ERROR,
                             "Internal error: " + e.getMessage());
                 } else {
-                    logger.error("[McpServer.handleMessage] 处理通知时出错: {}", e.getMessage(), e);
+                    logger.error("[McpServer.handleMessage] Error handling notification: {}", e.getMessage(), e);
                 }
             } catch (IOException ioException) {
-                logger.error("[McpServer.handleMessage] 发送错误响应失败: {}", ioException.getMessage(), ioException);
+                logger.error("[McpServer.handleMessage] Failed to send error response: {}", ioException.getMessage(), ioException);
             }
         }
     }
@@ -274,10 +366,10 @@ public class McpServer {
     @SuppressWarnings("unchecked")
     private void handleInitialize(JsonRpcMessage.Request request) throws IOException {
         Map<String, Object> params = request.getParams();
-        logger.info("[McpServer.handleInitialize] 开始处理，params={}", params);
+        logger.info("[McpServer.handleInitialize] Starting, params={}", params);
 
         if (params == null) {
-            logger.error("[McpServer.handleInitialize] 缺少params参数");
+            logger.error("[McpServer.handleInitialize] Missing params");
             sendErrorResponse(request.getId(), JsonRpcMessage.ERROR_INVALID_PARAMS, "Missing params");
             return;
         }
@@ -285,10 +377,10 @@ public class McpServer {
         this.clientProtocolVersion = (String) params.get("protocolVersion");
         this.initialized = true;
 
-        logger.info("[McpServer.handleInitialize] 客户端协议版本: {}", this.clientProtocolVersion);
-        logger.info("[McpServer.handleInitialize] 注册的工具数量: {}", getEnabledToolCount());
-        logger.info("[McpServer.handleInitialize] 注册的资源数量: {}", resourceHandlers.size());
-        logger.info("[McpServer.handleInitialize] 注册的提示数量: {}", promptHandlers.size());
+        logger.info("[McpServer.handleInitialize] Client protocol version: {}", this.clientProtocolVersion);
+        logger.info("[McpServer.handleInitialize] Registered tools: {}", getEnabledToolCount());
+        logger.info("[McpServer.handleInitialize] Registered resources: {}", resourceHandlers.size());
+        logger.info("[McpServer.handleInitialize] Registered prompts: {}", promptHandlers.size());
 
         // 构建初始化结果 - 使用客户端请求的协议版本
         InitializeResult result = new InitializeResult();
@@ -296,11 +388,11 @@ public class McpServer {
         result.setCapabilities(this.capabilities);
         result.setServerInfo(new ServerInfo(serverName, serverVersion));
 
-        logger.info("[McpServer.handleInitialize] 发送初始化响应...");
-        logger.info("[McpServer.handleInitialize] 响应内容: protocolVersion={}, serverName={}, serverVersion={}",
+        logger.info("[McpServer.handleInitialize] Sending initialize response...");
+        logger.info("[McpServer.handleInitialize] Response: protocolVersion={}, serverName={}, serverVersion={}",
                 this.clientProtocolVersion, serverName, serverVersion);
         sendResponse(request.getId(), result);
-        logger.info("[McpServer.handleInitialize] 初始化响应已发送完成");
+        logger.info("[McpServer.handleInitialize] Initialize response sent");
     }
 
     /**
@@ -309,18 +401,18 @@ public class McpServer {
     private void handleInitialized(JsonRpcMessage.Request request) {
         // 初始化确认是通知，不需要响应
         // 但需要确认服务器已正确初始化
-        logger.info("MCP服务器初始化完成，准备处理请求");
+        logger.info("MCP server initialized, ready for requests");
     }
 
     /**
      * 处理工具列表请求
      */
     private void handleToolsList(JsonRpcMessage.Request request) throws IOException {
-        logger.info("[McpServer.handleToolsList] ========== 开始处理tools/list请求 ==========");
+        logger.info("[McpServer.handleToolsList] ========== Handling tools/list request ==========");
         long startTime = System.currentTimeMillis();
 
         List<Tool> tools = new ArrayList<>();
-        logger.info("[McpServer.handleToolsList] 正在构建工具列表，handler数量: {}", toolHandlers.size());
+        logger.info("[McpServer.handleToolsList] Building tool list, handler count: {}", toolHandlers.size());
 
         for (Map.Entry<String, ToolHandler> entry : toolHandlers.entrySet()) {
             if (disabledTools.contains(entry.getKey())) {
@@ -334,17 +426,17 @@ public class McpServer {
             tools.add(tool);
         }
 
-        logger.info("[McpServer.handleToolsList] 工具列表构建完成，共 {} 个工具（已移除 {} 个）",
+        logger.info("[McpServer.handleToolsList] Tool list built: {} tools ({} removed)",
                 tools.size(), disabledTools.size());
 
         ListToolsResult result = new ListToolsResult(tools);
-        logger.info("[McpServer.handleToolsList] ListToolsResult对象已创建");
+        logger.info("[McpServer.handleToolsList] ListToolsResult created");
 
         long buildTime = System.currentTimeMillis() - startTime;
-        logger.info("[McpServer.handleToolsList] 构建耗时 {}ms，准备发送响应...", buildTime);
+        logger.info("[McpServer.handleToolsList] Build took {}ms, sending response...", buildTime);
 
         sendResponse(request.getId(), result);
-        logger.info("[McpServer.handleToolsList] ========== tools/list响应发送完成，总耗时 {}ms ==========", System.currentTimeMillis() - startTime);
+        logger.info("[McpServer.handleToolsList] ========== tools/list response sent, total {}ms ==========", System.currentTimeMillis() - startTime);
     }
 
     /**
@@ -448,28 +540,28 @@ public class McpServer {
      * 发送响应
      */
     private void sendResponse(Object id, Object result) throws IOException {
-        logger.info("[McpServer.sendResponse] ========== 准备发送响应 ==========");
-        logger.info("[McpServer.sendResponse] 响应ID: {}", id);
-        logger.info("[McpServer.sendResponse] 结果类型: {}", result != null ? result.getClass().getSimpleName() : "null");
+        logger.info("[McpServer.sendResponse] ========== Sending response ==========");
+        logger.info("[McpServer.sendResponse] Response ID: {}", id);
+        logger.info("[McpServer.sendResponse] Result type: {}", result != null ? result.getClass().getSimpleName() : "null");
 
         // 记录结果内容摘要
         if (result != null) {
             String resultStr = result.toString();
             String preview = resultStr.length() > 500 ? resultStr.substring(0, 500) + "..." : resultStr;
-            logger.info("[McpServer.sendResponse] 结果内容摘要: {}", preview);
+            logger.info("[McpServer.sendResponse] Result summary: {}", preview);
         }
 
         try {
             JsonRpcMessage.Response response = JsonRpcMessage.Response.success(id, result);
-            logger.info("[McpServer.sendResponse] Response对象已创建, isError: {}", response.isError());
+            logger.info("[McpServer.sendResponse] Response created, isError: {}", response.isError());
 
             transport.sendResponse(response);
-            logger.info("[McpServer.sendResponse] ========== 响应发送成功 ==========");
+            logger.info("[McpServer.sendResponse] ========== Response sent ==========");
         } catch (IOException e) {
-            logger.error("[McpServer.sendResponse] 发送响应时发生IO异常: {}", e.getMessage(), e);
+            logger.error("[McpServer.sendResponse] IO error while sending response: {}", e.getMessage(), e);
             throw e;
         } catch (Exception e) {
-            logger.error("[McpServer.sendResponse] 发送响应时发生异常: {}", e.getMessage(), e);
+            logger.error("[McpServer.sendResponse] Error while sending response: {}", e.getMessage(), e);
             throw e;
         }
     }
@@ -478,18 +570,18 @@ public class McpServer {
      * 发送错误响应
      */
     private void sendErrorResponse(Object id, int code, String message) throws IOException {
-        logger.error("[McpServer.sendErrorResponse] ========== 准备发送错误响应 ==========");
-        logger.error("[McpServer.sendErrorResponse] 响应ID: {}, 错误码: {}, 错误消息: {}", id, code, message);
+        logger.error("[McpServer.sendErrorResponse] ========== Sending error response ==========");
+        logger.error("[McpServer.sendErrorResponse] Response ID: {}, code: {}, message: {}", id, code, message);
 
         try {
             JsonRpcMessage.Response response = JsonRpcMessage.Response.error(id, code, message);
             transport.sendResponse(response);
-            logger.info("[McpServer.sendErrorResponse] ========== 错误响应发送成功 ==========");
+            logger.info("[McpServer.sendErrorResponse] ========== Error response sent ==========");
         } catch (IOException e) {
-            logger.error("[McpServer.sendErrorResponse] 发送错误响应时发生IO异常: {}", e.getMessage(), e);
+            logger.error("[McpServer.sendErrorResponse] IO error while sending error response: {}", e.getMessage(), e);
             throw e;
         } catch (Exception e) {
-            logger.error("[McpServer.sendErrorResponse] 发送错误响应时发生异常: {}", e.getMessage(), e);
+            logger.error("[McpServer.sendErrorResponse] Error while sending error response: {}", e.getMessage(), e);
             throw e;
         }
     }
@@ -590,12 +682,12 @@ public class McpServer {
         CallToolResult call(Map<String, Object> arguments) {
             // 校验参数：检测未知参数
             if (inputSchema != null && inputSchema.getProperties() != null) {
-                java.util.Set<String> validParams = inputSchema.getProperties().keySet();
+                Set<String> validParams = inputSchema.getProperties().keySet();
                 for (String key : arguments.keySet()) {
                     if (!validParams.contains(key)) {
                         CallToolResult result = new CallToolResult();
                         result.setError(true);
-                        java.util.List<ToolContent> content = new java.util.ArrayList<>();
+                        List<ToolContent> content = new ArrayList<>();
                         content.add(ToolContent.error("未知参数: " + key + "，有效参数为: " + String.join(", ", validParams)));
                         result.setContent(content);
                         return result;

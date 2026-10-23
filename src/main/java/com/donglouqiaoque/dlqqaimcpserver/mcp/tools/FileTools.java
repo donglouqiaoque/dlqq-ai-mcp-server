@@ -2,6 +2,7 @@ package com.donglouqiaoque.dlqqaimcpserver.mcp.tools;
 
 import com.donglouqiaoque.dlqqaimcpserver.utils.AIRulesUtils;
 import com.donglouqiaoque.dlqqaimcpserver.utils.FileUtils;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
 
 import javax.swing.*;
 import java.awt.BorderLayout;
@@ -22,6 +23,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.io.FileOutputStream;
+import java.io.RandomAccessFile;
+import java.util.stream.Stream;
 
 /**
  * 文件操作工具 - 提供文件读写、修改、复制移动等功能
@@ -121,7 +127,7 @@ public class FileTools {
      * 获取当前工作目录（项目目录）
      */
     private static String getWorkingDirectory() {
-        return FileUtils.normalizePath(System.getProperty("user.dir"));
+        return FileUtils.normalizePath(Workspace.getRoot().toString());
     }
 
     /**
@@ -181,7 +187,7 @@ public class FileTools {
      * @return true 表示在项目目录内，false 表示在项目目录外
      */
     private static boolean isInsideProject(String filePath) {
-        String normalizedFilePath = FileUtils.normalizePath(filePath);
+        String normalizedFilePath = FileUtils.normalizePath(Workspace.resolve(filePath).toString());
         String workingDir = getWorkingDirectory();
         // 添加路径分隔符确保准确匹配
         String fileWithSep = normalizedFilePath + File.separator;
@@ -197,7 +203,7 @@ public class FileTools {
      */
     private static boolean showOutsideProjectConfirmDialog(String filePath, String operation) {
         String workingDir = getWorkingDirectory();
-        String normalizedPath = FileUtils.normalizePath(filePath);
+        String normalizedPath = FileUtils.normalizePath(Workspace.resolve(filePath).toString());
 
         // 创建一个 CountDownLatch 来同步 GUI 线程和调用线程
         CountDownLatch latch = new CountDownLatch(1);
@@ -266,9 +272,9 @@ public class FileTools {
                 );
 
                 // 关闭窗口等于取消
-                frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                frame.addWindowListener(new WindowAdapter() {
                     @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
+                    public void windowClosing(WindowEvent e) {
                         result[0] = false;
                         frame.dispose();
                         latch.countDown();
@@ -300,21 +306,37 @@ public class FileTools {
     }
 
     /**
+     * 统一写权限检查（供文件工具与其它输出类工具复用）。
+     *
+     * @param path      用户路径（相对路径基于工作区解析）
+     * @param operation 操作描述
+     * @return null 表示允许；否则返回错误消息
+     */
+    public static String checkWritePermission(String path, String operation) {
+        Path resolved = Workspace.resolve(path);
+        String permissionError = Workspace.checkWrite(resolved);
+        if (permissionError != null) {
+            return permissionError;
+        }
+        if (Workspace.requiresApproval(resolved) && !isInsideProject(path)) {
+            boolean confirmed = showOutsideProjectConfirmDialog(path, operation);
+            if (!confirmed) {
+                return "【操作已取消】用户拒绝了在【项目目录外】执行 " + operation + " 操作\n"
+                        + "目标路径: " + resolved + "\n"
+                        + "项目路径: " + getWorkingDirectory();
+            }
+        }
+        return null;
+    }
+
+    /**
      * 检查并确认跨目录写入操作
      * @param filePath 文件路径
      * @param operation 操作描述
      * @return 操作结果字符串，null 表示允许执行
      */
     private static String checkCrossDirectoryWrite(String filePath, String operation) {
-        if (!isInsideProject(filePath)) {
-            boolean confirmed = showOutsideProjectConfirmDialog(filePath, operation);
-            if (!confirmed) {
-                return "【操作已取消】用户拒绝了在【项目目录外】执行 " + operation + " 操作\n"
-                    + "目标路径: " + filePath + "\n"
-                    + "项目路径: " + getWorkingDirectory();
-            }
-        }
-        return null; // 允许执行
+        return checkWritePermission(filePath, operation);
     }
 
     /**
@@ -326,20 +348,35 @@ public class FileTools {
      * @return 操作结果字符串，null 表示允许执行
      */
     private static String checkCrossDirectoryOperation(String sourcePath, String targetPath, String operation) {
+        String targetPermissionError = Workspace.checkWrite(Workspace.resolve(targetPath));
+        if (targetPermissionError != null) {
+            return targetPermissionError;
+        }
+        // 移动/重命名会删除源文件，源路径也需要写权限
+        if (sourcePath != null && operation != null && operation.contains("移动")) {
+            String sourcePermissionError = Workspace.checkWrite(Workspace.resolve(sourcePath));
+            if (sourcePermissionError != null) {
+                return sourcePermissionError;
+            }
+        }
+        if (Workspace.PERMISSION_FULL.equals(Workspace.getPermission())) {
+            return null; // 完全权限：任意位置直接允许
+        }
+
         boolean sourceOutside = sourcePath != null && !isInsideProject(sourcePath);
         boolean targetOutside = !isInsideProject(targetPath);
 
         if (sourceOutside || targetOutside) {
             StringBuilder message = new StringBuilder("检测到您即将在【项目目录外】执行 " + operation + " 操作！\n\n");
             if (sourceOutside) {
-                message.append("源路径 (项目外):\n").append(FileUtils.normalizePath(sourcePath)).append("\n\n");
+                message.append("源路径 (项目外):\n").append(FileUtils.normalizePath(Workspace.resolve(sourcePath).toString())).append("\n\n");
             } else if (sourcePath != null) {
-                message.append("源路径:\n").append(FileUtils.normalizePath(sourcePath)).append("\n\n");
+                message.append("源路径:\n").append(FileUtils.normalizePath(Workspace.resolve(sourcePath).toString())).append("\n\n");
             }
             if (targetOutside) {
-                message.append("目标路径 (项目外):\n").append(FileUtils.normalizePath(targetPath)).append("\n\n");
+                message.append("目标路径 (项目外):\n").append(FileUtils.normalizePath(Workspace.resolve(targetPath).toString())).append("\n\n");
             } else {
-                message.append("目标路径:\n").append(FileUtils.normalizePath(targetPath)).append("\n\n");
+                message.append("目标路径:\n").append(FileUtils.normalizePath(Workspace.resolve(targetPath).toString())).append("\n\n");
             }
             message.append("当前项目目录:\n").append(getWorkingDirectory()).append("\n\n");
             message.append("注意：此操作可能会影响系统文件或其他项目文件。\n");
@@ -404,9 +441,9 @@ public class FileTools {
                     );
 
                     // 关闭窗口等于取消
-                    frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                    frame.addWindowListener(new WindowAdapter() {
                         @Override
-                        public void windowClosing(java.awt.event.WindowEvent e) {
+                        public void windowClosing(WindowEvent e) {
                             result[0] = false;
                             frame.dispose();
                             latch.countDown();
@@ -459,7 +496,7 @@ public class FileTools {
             throw new IOException("文件被读保护规则禁止读取（.aireadrules）: " + filePath);
         }
 
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
@@ -655,10 +692,10 @@ public class FileTools {
             byte[] result = new byte[bom.length + contentBytes.length];
             System.arraycopy(bom, 0, result, 0, bom.length);
             System.arraycopy(contentBytes, 0, result, bom.length, contentBytes.length);
-            Files.write(path, result, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            Files.write(path, result, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } else {
             // 标准追加模式
-            Files.writeString(path, content, charset, java.nio.file.StandardOpenOption.APPEND);
+            Files.writeString(path, content, charset, StandardOpenOption.APPEND);
         }
     }
 
@@ -856,7 +893,7 @@ public class FileTools {
             return checkResult;
         }
 
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
 
         // 解析字符集，默认为 UTF-8
         Charset cs = StandardCharsets.UTF_8;
@@ -939,7 +976,7 @@ public class FileTools {
             return checkResult;
         }
 
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
 
         // 解析字符集，默认为 UTF-8
         Charset cs = StandardCharsets.UTF_8;
@@ -1043,7 +1080,7 @@ public class FileTools {
             return checkResult;
         }
 
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
 
         // 检查内容是否为空，拒绝追加空内容
         if (content == null || content.isEmpty()) {
@@ -1150,7 +1187,7 @@ public class FileTools {
             return checkResult;
         }
 
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
 
         // 解析字符集，默认为 UTF-8
         Charset cs = StandardCharsets.UTF_8;
@@ -1222,7 +1259,7 @@ public class FileTools {
             throw new IOException(checkResult);
         }
 
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
@@ -1231,7 +1268,7 @@ public class FileTools {
         String fileName = path.getFileName().toString();
         boolean confirmed = DialogTools.showConfirmDialog(
                 "确认删除",
-                "确定要删除文件 \"" + fileName + "\" 吗？\n路径: " + filePath + "\n\n此操作不可恢复！"
+                "确定要删除文件 \"" + fileName + "\" 吗？\n路径: " + path + "\n\n此操作不可恢复！"
         );
 
         if (!confirmed) {
@@ -1259,7 +1296,7 @@ public class FileTools {
             throw new IOException(checkResult);
         }
 
-        Path source = Paths.get(sourcePath);
+        Path source = Workspace.resolve(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源文件不存在: " + sourcePath);
         }
@@ -1267,7 +1304,7 @@ public class FileTools {
             throw new IOException("源路径不是文件: " + sourcePath);
         }
 
-        Path target = Paths.get(targetPath);
+        Path target = Workspace.resolve(targetPath);
         // 确保目标目录存在
         Path parent = target.getParent();
         if (parent != null && !Files.exists(parent)) {
@@ -1294,7 +1331,7 @@ public class FileTools {
             throw new IOException(checkResult);
         }
 
-        Path source = Paths.get(sourcePath);
+        Path source = Workspace.resolve(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源文件不存在: " + sourcePath);
         }
@@ -1302,7 +1339,7 @@ public class FileTools {
             throw new IOException("源路径不是文件: " + sourcePath);
         }
 
-        Path target = Paths.get(targetPath);
+        Path target = Workspace.resolve(targetPath);
         // 确保目标目录存在
         Path parent = target.getParent();
         if (parent != null && !Files.exists(parent)) {
@@ -1328,7 +1365,7 @@ public class FileTools {
             throw new IOException(checkResult);
         }
 
-        Path source = Paths.get(sourcePath);
+        Path source = Workspace.resolve(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源文件不存在: " + sourcePath);
         }
@@ -1363,7 +1400,7 @@ public class FileTools {
             throw new IOException(checkResult);
         }
 
-        Path source = Paths.get(sourcePath);
+        Path source = Workspace.resolve(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源文件夹不存在: " + sourcePath);
         }
@@ -1407,7 +1444,7 @@ public class FileTools {
             return checkResult;
         }
 
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
@@ -1566,7 +1603,7 @@ public class FileTools {
             return checkResult;
         }
 
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
@@ -1765,7 +1802,7 @@ public class FileTools {
             return checkResult;
         }
 
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
@@ -1913,7 +1950,7 @@ public class FileTools {
             return checkResult;
         }
 
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
@@ -1994,7 +2031,7 @@ public class FileTools {
             try {
                 // 预编译正则表达式，使用高效模式
                 Pattern pattern = Pattern.compile(searchText);
-                java.util.regex.Matcher matcher = pattern.matcher(content);
+                Matcher matcher = pattern.matcher(content);
 
                 // 单次遍历：检查匹配、记录位置、执行替换
                 StringBuffer sb = new StringBuffer(content.length());
@@ -2302,7 +2339,7 @@ public class FileTools {
             throw new IOException(checkResult);
         }
 
-        Path path = Paths.get(dirPath);
+        Path path = Workspace.resolve(dirPath);
         if (Files.exists(path)) {
             if (!Files.isDirectory(path)) {
                 throw new IOException("路径已存在但不是目录: " + dirPath);
@@ -2327,7 +2364,7 @@ public class FileTools {
             throw new IOException(checkResult);
         }
 
-        Path path = Paths.get(dirPath);
+        Path path = Workspace.resolve(dirPath);
         if (Files.exists(path)) {
             if (!Files.isDirectory(path)) {
                 throw new IOException("路径已存在但不是目录: " + dirPath);
@@ -2353,7 +2390,7 @@ public class FileTools {
             throw new IOException(checkResult);
         }
 
-        Path path = Paths.get(dirPath);
+        Path path = Workspace.resolve(dirPath);
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + dirPath);
         }
@@ -2364,7 +2401,7 @@ public class FileTools {
         // 计算目录中的文件和子目录数量
         int fileCount = 0;
         int dirCount = 0;
-        try (java.util.stream.Stream<Path> stream = Files.walk(path)) {
+        try (Stream<Path> stream = Files.walk(path)) {
             for (Path p : stream.toList()) {
                 if (Files.isRegularFile(p)) {
                     fileCount++;
@@ -2378,7 +2415,7 @@ public class FileTools {
         String dirName = path.getFileName().toString();
         StringBuilder message = new StringBuilder();
         message.append("确定要删除目录 \"").append(dirName).append("\" 吗？\n");
-        message.append("路径: ").append(dirPath).append("\n");
+        message.append("路径: ").append(path).append("\n");
         if (fileCount > 0 || dirCount > 0) {
             message.append("包含: ").append(fileCount).append(" 个文件, ").append(dirCount).append(" 个子目录\n");
         }
@@ -2403,7 +2440,7 @@ public class FileTools {
      */
     private static void deleteDirectoryRecursive(Path path) throws IOException {
         if (Files.isDirectory(path)) {
-            try (java.util.stream.Stream<Path> stream = Files.list(path)) {
+            try (Stream<Path> stream = Files.list(path)) {
                 for (Path child : stream.toList()) {
                     deleteDirectoryRecursive(child);
                 }
@@ -2429,7 +2466,7 @@ public class FileTools {
             throw new IOException(checkResult);
         }
 
-        Path source = Paths.get(sourcePath);
+        Path source = Workspace.resolve(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源目录不存在: " + sourcePath);
         }
@@ -2437,7 +2474,7 @@ public class FileTools {
             throw new IOException("源路径不是目录: " + sourcePath);
         }
 
-        Path target = Paths.get(targetPath);
+        Path target = Workspace.resolve(targetPath);
 
         // 遍历源目录并复制
         Files.walk(source).forEach(sourceFile -> {
@@ -2480,7 +2517,7 @@ public class FileTools {
             throw new IOException(checkResult);
         }
 
-        Path source = Paths.get(sourcePath);
+        Path source = Workspace.resolve(sourcePath);
         if (!Files.exists(source)) {
             throw new IOException("源目录不存在: " + sourcePath);
         }
@@ -2488,7 +2525,7 @@ public class FileTools {
             throw new IOException("源路径不是目录: " + sourcePath);
         }
 
-        Path target = Paths.get(targetPath);
+        Path target = Workspace.resolve(targetPath);
 
         // 如果目标已存在，先删除
         if (Files.exists(target)) {
@@ -2519,7 +2556,7 @@ public class FileTools {
      */
     public static String readBinaryFileAsHex(String filePath, long startByte, long endByte, long readBytes) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
@@ -2556,7 +2593,7 @@ public class FileTools {
         long bytesToRead = endByte - startByte + 1;
         byte[] buffer = new byte[(int) bytesToRead];
 
-        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(filePath, "r")) {
+        try (RandomAccessFile raf = new RandomAccessFile(filePath, "r")) {
             raf.seek(startByte);
             raf.readFully(buffer);
         }
@@ -2578,8 +2615,11 @@ public class FileTools {
      * @throws IOException 写入异常
      */
     public static void writeBinaryFileFromHex(String filePath, String hexText, boolean append) throws IOException {
-        filePath = FileUtils.normalizePath(filePath);
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(FileUtils.normalizePath(filePath));
+        String permissionError = checkWritePermission(path.toString(), "写入二进制文件");
+        if (permissionError != null) {
+            throw new IOException(permissionError);
+        }
 
         // 确保父目录存在
         Path parent = path.getParent();
@@ -2609,9 +2649,7 @@ public class FileTools {
         // 根据append模式选择写入方式
         if (append && Files.exists(path)) {
             // 追加写入
-            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(filePath, true)) {
-                fos.write(data);
-            }
+            Files.write(path, data, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } else {
             // 覆盖写入
             Files.write(path, data);
@@ -2631,7 +2669,7 @@ public class FileTools {
      */
     public static List<String> searchFiles(String searchPath, String pattern, boolean useRegex) throws IOException {
         searchPath = FileUtils.normalizePath(searchPath);
-        Path path = Paths.get(searchPath);
+        Path path = Workspace.resolve(searchPath);
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + searchPath);
         }
@@ -2674,7 +2712,7 @@ public class FileTools {
      */
     public static List<String> searchDirectories(String searchPath, String pattern, boolean useRegex) throws IOException {
         searchPath = FileUtils.normalizePath(searchPath);
-        Path path = Paths.get(searchPath);
+        Path path = Workspace.resolve(searchPath);
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + searchPath);
         }
@@ -2722,7 +2760,7 @@ public class FileTools {
      */
     public static String listDirectoryTree(String dirPath, int maxDepth, int maxEntries, boolean showHidden) throws IOException {
         dirPath = FileUtils.normalizePath(dirPath);
-        Path path = Paths.get(dirPath);
+        Path path = Workspace.resolve(dirPath);
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + dirPath);
         }
@@ -2760,7 +2798,7 @@ public class FileTools {
             return false;
         }
 
-        try (java.util.stream.Stream<Path> stream = Files.list(path)) {
+        try (Stream<Path> stream = Files.list(path)) {
             List<Path> entries = stream
                 .filter(p -> showHidden || !isHidden(p))
                 .sorted((a, b) -> {
@@ -2825,7 +2863,7 @@ public class FileTools {
      */
     public static String listDirectoryFiles(String dirPath, boolean showHidden) throws IOException {
         dirPath = FileUtils.normalizePath(dirPath);
-        Path path = Paths.get(dirPath);
+        Path path = Workspace.resolve(dirPath);
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + dirPath);
         }
@@ -2837,7 +2875,7 @@ public class FileTools {
         result.append("目录: ").append(dirPath).append("\n");
         result.append("=".repeat(Math.min(60, dirPath.length() + 8))).append("\n\n");
 
-        try (java.util.stream.Stream<Path> stream = Files.list(path)) {
+        try (Stream<Path> stream = Files.list(path)) {
             List<Path> entries = stream
                 .filter(p -> showHidden || !isHidden(p))
                 .sorted((a, b) -> {
@@ -2949,7 +2987,7 @@ public class FileTools {
             long maxFileSize) throws IOException {
 
         searchPath = FileUtils.normalizePath(searchPath);
-        Path path = Paths.get(searchPath);
+        Path path = Workspace.resolve(searchPath);
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + searchPath);
         }
@@ -3086,7 +3124,7 @@ public class FileTools {
             boolean ignoreCase) throws IOException {
 
         filePath = FileUtils.normalizePath(filePath);
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
         }
@@ -3261,7 +3299,7 @@ public class FileTools {
             return checkResult;
         }
 
-        Path path = Paths.get(dirPath);
+        Path path = Workspace.resolve(dirPath);
 
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + dirPath);
@@ -3406,7 +3444,7 @@ public class FileTools {
     private static String replaceTextInFileInternal(String filePath, String searchText, String replaceText,
                                                      boolean useRegex, String charset) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
 
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -3509,7 +3547,7 @@ public class FileTools {
      */
     public static String addUnicodeBom(String filePath) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
 
         // 检查文件是否被写保护（只在项目内检查）
         boolean insideProject = isInsideProject(filePath);
@@ -3584,7 +3622,7 @@ public class FileTools {
      */
     public static String addUnicodeBomInDir(String dirPath, List<String> extensions) throws IOException {
         dirPath = FileUtils.normalizePath(dirPath);
-        Path path = Paths.get(dirPath);
+        Path path = Workspace.resolve(dirPath);
 
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + dirPath);
@@ -3710,7 +3748,7 @@ public class FileTools {
      */
     public static String removeUnicodeBom(String filePath) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
 
         // 检查文件是否被写保护（只在项目内检查）
         boolean insideProject = isInsideProject(filePath);
@@ -3771,7 +3809,7 @@ public class FileTools {
      */
     public static String removeUnicodeBomInDir(String dirPath, List<String> extensions) throws IOException {
         dirPath = FileUtils.normalizePath(dirPath);
-        Path path = Paths.get(dirPath);
+        Path path = Workspace.resolve(dirPath);
 
         if (!Files.exists(path)) {
             throw new IOException("目录不存在: " + dirPath);

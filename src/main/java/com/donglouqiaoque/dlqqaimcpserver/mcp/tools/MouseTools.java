@@ -11,6 +11,7 @@ import java.awt.event.MouseEvent;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Arrays;
 
 /**
  * 鼠标工具 - 模拟鼠标点击、移动、滚动（Java原生实现，使用 java.awt.Robot）
@@ -194,7 +195,7 @@ public class MouseTools {
         Map<String, Object> buttonProp = new HashMap<>();
         buttonProp.put("type", "string");
         buttonProp.put("description", "按键: left(左键)/right(右键)/middle(中键)，默认left");
-        buttonProp.put("enum", java.util.Arrays.asList("left", "right", "middle"));
+        buttonProp.put("enum", Arrays.asList("left", "right", "middle"));
         properties.put("button", buttonProp);
         addIntProp(properties, "clicks", "点击次数（1=单击，2=双击，默认1）");
         addIntProp(properties, "interval", "多次点击之间的间隔毫秒（默认100）");
@@ -244,7 +245,7 @@ public class MouseTools {
         Map<String, Object> buttonProp = new HashMap<>();
         buttonProp.put("type", "string");
         buttonProp.put("description", "按键: left(左键)/right(右键)/middle(中键)，默认left");
-        buttonProp.put("enum", java.util.Arrays.asList("left", "right", "middle"));
+        buttonProp.put("enum", Arrays.asList("left", "right", "middle"));
         properties.put("button", buttonProp);
         addIntProp(properties, "x", "按下位置的X坐标（可选，默认当前位置）");
         addIntProp(properties, "y", "按下位置的Y坐标（可选，默认当前位置）");
@@ -276,7 +277,7 @@ public class MouseTools {
         Map<String, Object> buttonProp = new HashMap<>();
         buttonProp.put("type", "string");
         buttonProp.put("description", "按键: left(左键)/right(右键)/middle(中键)，默认left");
-        buttonProp.put("enum", java.util.Arrays.asList("left", "right", "middle"));
+        buttonProp.put("enum", Arrays.asList("left", "right", "middle"));
         properties.put("button", buttonProp);
         ToolInputSchema schema = new ToolInputSchema(properties, Collections.emptyList());
 
@@ -305,7 +306,7 @@ public class MouseTools {
         Map<String, Object> directionProp = new HashMap<>();
         directionProp.put("type", "string");
         directionProp.put("description", "滚动方向: up(向上)/down(向下)，与amount正负等价（可选）");
-        directionProp.put("enum", java.util.Arrays.asList("up", "down"));
+        directionProp.put("enum", Arrays.asList("up", "down"));
         properties.put("direction", directionProp);
         ToolInputSchema schema = new ToolInputSchema(properties, Collections.emptyList());
 
@@ -349,9 +350,9 @@ public class MouseTools {
         Map<String, Object> buttonProp = new HashMap<>();
         buttonProp.put("type", "string");
         buttonProp.put("description", "按键: left(左键)/right(右键)/middle(中键)，默认left");
-        buttonProp.put("enum", java.util.Arrays.asList("left", "right", "middle"));
+        buttonProp.put("enum", Arrays.asList("left", "right", "middle"));
         properties.put("button", buttonProp);
-        ToolInputSchema schema = new ToolInputSchema(properties, java.util.Arrays.asList("end_x", "end_y"));
+        ToolInputSchema schema = new ToolInputSchema(properties, Arrays.asList("end_x", "end_y"));
 
         server.addTool("dlqq_mouse_drag",
             "模拟鼠标拖拽：从起点按下按钮，移动鼠标到终点后释放。",

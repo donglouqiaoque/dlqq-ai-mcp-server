@@ -2,6 +2,8 @@
 
 一个 Java 编写的 **MCP 服务器**（Model Context Protocol），为各类 AI Agent 工具（DeepSeek Harness、Qwen Code、Claude Code、Cursor、Cline 等）提供本地工具能力。
 
+> English version: [README.en.md](README.en.md)
+
 ## 功能特性
 
 - **文件/目录操作** - 读写、创建、删除、复制、移动、重命名，支持行级编辑与正则替换
@@ -20,7 +22,7 @@
 
 ## 工具列表
 
-本MCP服务器提供 **164** 个工具（151 个常规工具 + 13 个 `dlqq_set_*_script` 脚本路径设置工具）。
+本MCP服务器提供 **169** 个工具（156 个常规工具 + 13 个 `dlqq_set_*_script` 脚本路径设置工具）。
 > 说明：分组标题中的序号为历史遗留编号，实际工具数以各分组表格为准。
 
 产物 JAR 名为 **`dlqq_ai_mcp_server.jar`**（早期版本叫 `dlqq_ai_tools.jar`）。
@@ -147,6 +149,11 @@
 | `dlqq_mcp_remove_tools` | 动态移除（禁用）指定工具，立即隐藏并持久化到 `mcp.tools.excluded`，下次启动仍保持移除 |
 | `dlqq_mcp_refresh_tools` | 仅发送 `notifications/tools/list_changed`，让客户端重新拉取工具列表（不改工具集） |
 | `dlqq_mcp_reset_tools` | 恢复所有被移除的工具、清空 `mcp.tools.excluded`，并发送刷新通知 |
+| `dlqq_mcp_run_tools` | 按名称直接调用任意已注册工具，绕过“已移除/客户端未加载”限制 |
+| `dlqq_workspace_set` | 设置工作区目录（相对路径的基准），不持久化 |
+| `dlqq_workspace_get` | 查看当前工作区、来源、修改权限与进程 CWD |
+| `dlqq_workspace_reset` | 回退到启动参数 `--workspace` 或进程 CWD |
+| `dlqq_workspace_permission_set` | 设置工作区文件修改权限（readonly/workspace/approval/full）并持久化到工作区配置 |
 | `dlqq_clear_mcp_data` | 清除MCP数据目录（.dlqq），包括日志、Python脚本等 |
 | `dlqq_clear_mcp_cache` | 清除MCP缓存目录（.dlqq/cache），删除所有缓存文件和子目录 |
 | `dlqq_clear_mcp_log` | 清除MCP日志文件（.dlqq/log），保留目录结构 |
@@ -369,9 +376,9 @@ WiFi工具（Java原生实现），支持扫描周围WiFi网络、查看连接�
 
 ### 项目脚本工具 (129-142)
 
-脚本工具执行 `.dlqq/settings/settings.properties` 中配置的批处理脚本，用于自动化项目构建、芯片操作等流程。
+脚本工具执行 `<工作区>/.dlqq/settings/settings.properties` 中配置的批处理脚本，用于自动化项目构建、芯片操作等流程。
 
-**脚本配置说明**：首次使用前需通过 `dlqq_set_*_script` 工具设置脚本路径，或手动编辑 `.dlqq/settings/settings.properties` 文件。
+**脚本配置说明**：首次使用前需通过 `dlqq_set_*_script` 工具设置脚本路径，或手动编辑 `<工作区>/.dlqq/settings/settings.properties` 文件。
 
 #### 执行类工具
 
@@ -414,7 +421,7 @@ WiFi工具（Java原生实现），支持扫描周围WiFi网络、查看连接�
 - **不使用任何内置默认脚本**：所有脚本路径默认为空，未配置时工具会直接返回错误“未配置「xxx」脚本路径，需要先配置工具路径”，并给出对应的 `dlqq_set_*_script` 工具名
 - 执行类工具（`dlqq_build_project`、`dlqq_rebuild_project`、`dlqq_chip_erase`、`dlqq_chip_download`、`dlqq_erase_download`、`dlqq_build_erase_download`、`dlqq_rebuild_erase_download`、`dlqq_run_project`、`dlqq_debug_project`、`dlqq_build_run_project` 等）都遵循此规则
 - 首次使用前先调用对应的 `dlqq_set_*_script`，或用 `dlqq_set_mcp_properties` 直接写 `script.build` 等配置项
-- 脚本配置保存在 `.dlqq/settings/settings.properties` 文件中
+- 脚本配置保存在 `<工作区>/.dlqq/settings/settings.properties` 文件中
 - `response.max.size` 控制文件操作返回内容的最大字节数（默认25804约25KB，最大258048约252KB）
 
 ### 屏幕截图工具
@@ -799,6 +806,15 @@ claude mcp add --transport http dlqq-ai-mcp-server http://127.0.0.1:49129/mcp
 
 服务器支持两种传输方式，通过启动参数切换（各客户端的 HTTP 配置示例见上一节“⑧ 用 HTTP（Streamable HTTP）方式接入”）：
 
+通用启动参数：
+
+| 参数 | 说明 |
+|------|------|
+| `--transport http\|stdio` | 传输方式，默认 stdio |
+| `--port N` | HTTP 端口，默认 49129 |
+| `--path /mcp` | HTTP 路径，默认 `/mcp` |
+| `--workspace <dir>` | 工作区目录：所有工具的相对路径基于它解析（仅本次运行有效，不持久化） |
+
 #### STDIO（默认）
 
 ```bash
@@ -839,7 +855,7 @@ curl -X POST http://localhost:49129/mcp -H "Content-Type: application/json" \
 
 #### 部署与启动脚本（start-http.bat）
 
-发布时把 `start-http.bat`、`dlqq_ai_mcp_server.jar`、`jre\` 放在**同一目录**，双击 `start-http.bat` 即可启动 HTTP 服务：
+发布时把 `start-http.bat`、`dlqq_ai_mcp_server.jar`、`jre\` 放在**同一目录**，双击 `start-http.bat` 启动。脚本会**先要求输入工作区目录**（必须已存在的绝对目录；直接回车 = 使用当前目录），校验通过后才启动 HTTP 服务：
 
 ```text
 dlqq_ai_mcp_server\
@@ -855,7 +871,7 @@ dlqq_ai_mcp_server\
 
 ```bat
 @echo off
-setlocal
+setlocal EnableExtensions
 chcp 65001 >nul
 
 rem Deployment layout: this bat, dlqq_ai_mcp_server.jar and jre\ in the same folder.
@@ -872,15 +888,44 @@ if not exist "%JAR%" (
     exit /b 1
 )
 
+:ask_workspace
+set "WORKSPACE="
+echo.
+echo ============================================================
+echo  Workspace
+echo  Enter an existing absolute directory for the MCP workspace.
+echo  Press ENTER to use the current directory:
+echo    %CD%
+echo ============================================================
+set /p "WORKSPACE=Workspace path: "
+if not defined WORKSPACE goto use_cwd
+set "WORKSPACE=%WORKSPACE:"=%"
+if not defined WORKSPACE goto use_cwd
+if not exist "%WORKSPACE%\" (
+    echo [ERROR] Directory does not exist: %WORKSPACE%
+    echo.
+    goto ask_workspace
+)
+set "WS_ARG=--workspace "%WORKSPACE%""
+goto workspace_ready
+
+:use_cwd
+set "WORKSPACE=%CD%"
+set "WS_ARG="
+echo Using current directory as workspace.
+
+:workspace_ready
+echo.
 echo ============================================================
 echo  dlqq-ai-mcp-server  -  HTTP mode
-echo  Endpoint : http://localhost:49129/mcp
-echo  JAR      : %JAR%
-echo  Java     : %JAVA%
+echo  Endpoint  : http://localhost:49129/mcp
+echo  Workspace : %WORKSPACE%
+echo  JAR       : %JAR%
+echo  Java      : %JAVA%
 echo ============================================================
 echo.
 
-"%JAVA%" -Dfile.encoding=UTF-8 -jar "%JAR%" --transport http --port 49129 --path /mcp
+"%JAVA%" -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8 -jar "%JAR%" --transport http --port 49129 --path /mcp %WS_ARG%
 
 set "RC=%ERRORLEVEL%"
 echo.
@@ -888,6 +933,8 @@ echo Server stopped. Exit code: %RC%
 pause
 endlocal
 ```
+
+输入的工作区会作为 `--workspace` 参数传给服务；回车跳过时不传 `--workspace`，服务工作区默认为进程当前目录。工作区确定后，日志、缓存、配置都在 `<工作区>\.dlqq` 下。
 
 **端口占用处理**（Java 内实现，启动后在控制台交互）：
 
@@ -2127,7 +2174,7 @@ endlocal
 
 **返回**：`热加载测试标记: hot-reload-test-v4` 及说明文字
 
-#### dlqq_mcp_remove_tools / dlqq_mcp_refresh_tools / dlqq_mcp_reset_tools（动态工具管理）
+#### dlqq_mcp_remove_tools / dlqq_mcp_refresh_tools / dlqq_mcp_reset_tools / dlqq_mcp_run_tools（动态工具管理）
 
 这三个工具用于**运行时动态修改工具列表**，不需要重启服务端。
 
@@ -2136,14 +2183,49 @@ endlocal
 | `dlqq_mcp_remove_tools` | 移除（禁用）指定工具：`tools/list` 不再返回、`tools/call` 直接报“工具已被移除”；同时写入 `settings.properties` 的 `mcp.tools.excluded` | `tool_names`：数组（如 `["dlqq_capture_screen"]`）或逗号分隔字符串 |
 | `dlqq_mcp_refresh_tools` | 仅推送 `notifications/tools/list_changed`，客户端重新拉取列表 | 无 |
 | `dlqq_mcp_reset_tools` | 恢复全部被移除工具、清空 `mcp.tools.excluded`，并推送刷新通知 | 无 |
+| `dlqq_mcp_run_tools` | 按名称直接调用任意已注册工具，**绕过“已移除/客户端未加载”限制**；服务端未注册的工具无法调用 | `name`：工具名；`arguments`：参数对象（可选） |
 
-**持久化**：被移除的工具记录在 `.dlqq/settings/settings.properties` 的 `mcp.tools.excluded`（逗号分隔），服务端下次启动时会自动应用，保持“已移除”状态。
+**持久化**：被移除的工具记录在 `<工作区>/.dlqq/settings/settings.properties` 的 `mcp.tools.excluded`（逗号分隔），服务端下次启动时会自动应用，保持“已移除”状态。
 
-**保护规则**：`dlqq_mcp_remove_tools` / `dlqq_mcp_refresh_tools` / `dlqq_mcp_reset_tools` 三个管理工具不允许被移除，避免无法恢复。
+**连接时的通知策略**：服务端**不会**在客户端刚连接时立即推送 `notifications/tools/list_changed`。只有在收到 `initialize` / `notifications/initialized` 后，客户端在延时内（默认 **10 秒**，可用 JVM 参数 `-Dmcp.listChanged.delay.ms=5000` 调整）仍未请求 `tools/list`，才兜底推送一次；客户端期间发来任意消息都会取消推送，收到 `tools/list` 后不再推送。正常客户端（会主动拉取工具列表）不会收到该通知。
+
+**保护规则**：`dlqq_mcp_remove_tools` / `dlqq_mcp_refresh_tools` / `dlqq_mcp_reset_tools` / `dlqq_mcp_run_tools` 四个管理工具不允许被移除，避免无法恢复。
+
+**直接调用被移除的工具**：`dlqq_mcp_run_tools` 按名称直接执行服务端已注册的处理器，忽略“已移除/客户端未加载”状态；服务端未注册的工具无法调用，也不能调用自身。
 
 **刷新通道**：HTTP 模式下需要客户端已打开 SSE 长连接（`GET /mcp`，`Accept: text/event-stream`）才能立即刷新；没有 SSE 连接时移除仍然生效并持久化，客户端下次重连后生效。stdio 模式直接写 stdout。
 
-**实测**：移除 2 个工具后 `tools/list` 从 164 降到 162、SSE 客户端收到 `notifications/tools/list_changed`；重启服务端后仍为 162（日志：`被移除工具（持久化）: 1 个`）；`reset` 后恢复 164 并清空配置。
+**实测**：移除 2 个工具后 `tools/list` 从 164 降到 162、SSE 客户端收到 `notifications/tools/list_changed`；重启服务端后仍为 162（日志：`被移除工具（持久化）: 1 个`）；`reset` 后恢复 164 并清空配置；被移除的工具仍可通过 `dlqq_mcp_run_tools` 直接调用（绕过移除限制）。
+
+#### dlqq_workspace_set / dlqq_workspace_get / dlqq_workspace_reset / dlqq_workspace_permission_set（工作区目录与修改权限）
+
+工作区是所有工具**相对路径的基准目录**。默认是服务进程启动时的工作目录（部署目录），可通过启动参数 `--workspace <dir>` 固定，也可运行期用工具切换。
+
+**工作区路径不持久化**：`dlqq_workspace_set` 只影响本次运行，重启后需要重新用 `--workspace` 指定或再次设置（避免保存了错误路径导致后续无法正确设置工作区）。
+
+| 工具 | 作用 | 参数 |
+|------|------|------|
+| `dlqq_workspace_set` | 设置工作区目录（必须是已存在的绝对目录），立即生效，不持久化 | `path`：目录绝对路径 |
+| `dlqq_workspace_get` | 查看当前工作区、来源、启动参数、修改权限、权限配置文件与进程 CWD | 无 |
+| `dlqq_workspace_reset` | 回退到 `--workspace`（若指定）或进程 CWD，不修改权限配置 | 无 |
+| `dlqq_workspace_permission_set` | 设置工作区文件修改权限并持久化到工作区配置文件 | `mode`：`readonly` / `workspace` / `approval` / `full` |
+
+**修改权限**：持久化在**工作区内**的 `.dlqq/settings/settings.properties`（键 `workspace.write.mode`），切换工作区时会自动重新加载：
+
+| 模式 | 含义 | 行为 |
+|------|------|------|
+| `readonly` | 只读模式 | 禁止任何文件修改（创建/写入/追加/删除/移动/重命名/批量替换/BOM/图片输出/压缩输出等） |
+| `workspace` | 工作区修改（默认） | 只允许修改工作区内的文件，工作区外直接拒绝 |
+| `approval` | 工作区外审批 | 工作区内直接修改；工作区外弹确认框，用户确认后才执行（与旧行为一致） |
+| `full` | 完全权限 | 允许修改任意位置的文件，不再弹“项目目录外”确认框 |
+
+**优先级**：启动参数 `--workspace`（启动时） > 运行期 `dlqq_workspace_set` > 进程 CWD；权限则始终以当前工作区的配置文件为准（文件不存在时为 `workspace`）。
+
+**影响范围**：文件/目录/搜索/二进制/BOM/压缩/Office/图片/截图/对话框/命令执行等工具的相对路径，脚本执行的工作目录（`ProcessBuilder.directory`），BLE 脚本目录，以及 `.aiignore/.aiwriterules/.aireadrules` 的基准目录。
+
+**注意**：工作区内的 `.dlqq` 目录（日志、缓存、配置）整个随工作区移动（工作区默认 = 进程 CWD）；`<工作区>/.dlqq/settings/settings.properties` 保存修改权限和全部配置（`workspace.write.mode`、`script.*`、`response.max.size`、`mcp.tools.excluded` 等）。
+
+**实测**：`--workspace` 启动后相对路径创建的文件落在指定目录；`workspace` 模式写工作区外被拒绝；`readonly` 模式写工作区内也被拒绝；`approval` 模式工作区内直接写入、工作区外弹审批框；`full` 模式可写工作区外；权限写入工作区配置文件，重启（同一 `--workspace`）后继续生效；不带 `--workspace` 重启则回到进程 CWD 并使用其默认权限。
 
 ### 74. dlqq_clear_mcp_data
 
@@ -2195,7 +2277,7 @@ endlocal
 
 ### 77. dlqq_get_mcp_properties
 
-获取MCP配置属性列表或指定属性的值。配置存储在 `.dlqq/settings/settings.properties` 文件中。
+获取MCP配置属性列表或指定属性的值。配置存储在 `<工作区>/.dlqq/settings/settings.properties` 文件中。
 
 **参数**：
 - `key` (string, 可选): 属性键名。如果指定，只返回该属性的值；如果不指定，返回所有属性列表
@@ -2213,7 +2295,7 @@ endlocal
 
 ### 77. dlqq_set_mcp_properties
 
-设置MCP配置属性。配置保存到 `.dlqq/settings/settings.properties` 文件中。
+设置MCP配置属性。配置保存到 `<工作区>/.dlqq/settings/settings.properties` 文件中。
 
 **参数**：
 - `key` (string, 可选): 属性键名，例如：response.max.size、search.max.files、script.build
@@ -2799,7 +2881,7 @@ settings.json
 |------|------|
 | `dlqq_get_mcp_version` | 显示 `构建时间（代码内，真实值）`（编译进 class 的常量）和 `JAR清单构建时间（磁盘）`（磁盘 JAR 清单），用于判断新 JAR 是否已加载 |
 | `dlqq_test_hot_reload` | 返回代码中写死的标记字符串（当前 `hot-reload-test-v4`），改标记后重新构建即可验证代码是否更新 |
-| `dlqq_mcp_remove_tools` / `dlqq_mcp_refresh_tools` / `dlqq_mcp_reset_tools` | 运行时不重启服务端地移除/刷新/恢复工具列表（见“动态工具管理”），用于验证客户端实时刷新能力 |
+| `dlqq_mcp_remove_tools` / `dlqq_mcp_refresh_tools` / `dlqq_mcp_reset_tools` / `dlqq_mcp_run_tools` | 运行时不重启服务端地移除/刷新/恢复工具列表，或按名称直接调用任意已注册工具（见“动态工具管理”） |
 
 ### 标准更新流程（换 JAR 必须重启）
 
@@ -2824,7 +2906,7 @@ settings.json
 |------|---------|------|
 | 重启服务端后加载新代码 | ✅ | 必须停服务 → 换 JAR → 重启 |
 | 不重启进程替换 JAR | ❌ | JVM 不支持运行中重载已加载的类 |
-| 不重启服务端动态移除/恢复工具 | ✅ | `dlqq_mcp_remove_tools` / `dlqq_mcp_reset_tools`，状态持久化 |
+| 不重启服务端动态移除/恢复工具 | ✅ | `dlqq_mcp_remove_tools` / `dlqq_mcp_reset_tools`，状态持久化；被移除的工具仍可用 `dlqq_mcp_run_tools` 直接调用 |
 | 工具列表变化时客户端实时刷新 | ⚠️ 仅 SSE 存活时 | 推送后约 2ms 客户端重新 `tools/list`（实测） |
 | 重启服务端后客户端自动刷新工具列表 | ❌ | DSH 不重连 SSE、不重新初始化，必须重启 DSH |
 | 不重启客户端看到新增工具 | ❌ | 客户端工具列表是连接时缓存的 |

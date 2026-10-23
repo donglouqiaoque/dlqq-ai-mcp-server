@@ -15,6 +15,22 @@ import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.CallToolResult;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Capabilities;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.InitializeResult;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListPromptsResult;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListResourcesResult;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListToolsResult;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Prompt;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.PromptArgument;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Resource;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ServerInfo;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Tool;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolContent;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolInputSchema;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * 标准输入输出传输层实现
@@ -52,7 +68,7 @@ public class StdioTransport implements McpTransport {
 
         // 设置默认字符集
         try {
-            java.nio.charset.Charset.defaultCharset();
+            Charset.defaultCharset();
         } catch (Exception ignored) {
         }
     }
@@ -65,18 +81,18 @@ public class StdioTransport implements McpTransport {
     @Override
     public void start() throws IOException {
         running.set(true);
-        logger.info("[StdioTransport] 传输层启动中...");
+        logger.info("[StdioTransport] Transport starting...");
         logger.info("[StdioTransport] System.in available: {}", System.in.available());
-        logger.info("[StdioTransport] 编码设置: file.encoding={}, sun.stdout.encoding={}",
+        logger.info("[StdioTransport] Encoding: file.encoding={}, sun.stdout.encoding={}",
                 System.getProperty("file.encoding"), System.getProperty("sun.stdout.encoding"));
 
         // 启动读取线程
         executor.submit(this::readLoop);
-        logger.info("[StdioTransport] 读取线程已启动");
+        logger.info("[StdioTransport] Reader thread started");
 
         // 启动处理线程
         executor.submit(this::processLoop);
-        logger.info("[StdioTransport] 处理线程已启动");
+        logger.info("[StdioTransport] Processing thread started");
     }
     
     /**
@@ -99,10 +115,10 @@ public class StdioTransport implements McpTransport {
                 outputStream.write('\n');
                 outputStream.flush();
             }
-            logger.info("[StdioTransport] 已发送 notifications/tools/list_changed");
+            logger.info("[StdioTransport] Sent notifications/tools/list_changed");
             return true;
         } catch (IOException e) {
-            logger.error("[StdioTransport] 发送 notifications/tools/list_changed 失败: {}", e.getMessage());
+            logger.error("[StdioTransport] Failed to send notifications/tools/list_changed: {}", e.getMessage());
             return false;
         }
     }
@@ -126,7 +142,7 @@ public class StdioTransport implements McpTransport {
      * 修复：增加重试机制，防止因临时EOF或IOException导致server断开
      */
     private void readLoop() {
-        logger.info("[StdioTransport.readLoop] ========== 读取循环启动 ==========");
+        logger.info("[StdioTransport.readLoop] ========== Read loop started ==========");
         int errorCount = 0;
         final int MAX_ERROR_COUNT = 5;  // 最大连续错误次数
         int messageCount = 0;
@@ -137,7 +153,7 @@ public class StdioTransport implements McpTransport {
             try {
                 // 每30秒输出一次状态
                 if (System.currentTimeMillis() - lastStatusLog > 30000) {
-                    logger.info("[StdioTransport.readLoop] 状态 - 已读取消息: {}, 总字节: {}, 可用输入: {}, running: {}",
+                    logger.info("[StdioTransport.readLoop] Status - messages read: {}, total bytes: {}, available input: {}, running: {}",
                             messageCount, bytesReadTotal, inputStream.available(), running.get());
                     lastStatusLog = System.currentTimeMillis();
                 }
@@ -150,22 +166,22 @@ public class StdioTransport implements McpTransport {
                     bytesReadTotal += message.getBytes(StandardCharsets.UTF_8).length;
 
                     if (offered) {
-                        logger.info("[StdioTransport.readLoop] 消息已加入队列，当前队列大小: {}, 累计消息: {}",
+                        logger.info("[StdioTransport.readLoop] Message queued, queue size: {}, total messages: {}",
                                 messageQueue.size(), messageCount);
                     } else {
-                        logger.error("[StdioTransport.readLoop] 消息加入队列失败！队列可能已满");
+                        logger.error("[StdioTransport.readLoop] Failed to queue message! Queue may be full");
                     }
 
                     if (messageCount % 10 == 0) {
-                        logger.info("[StdioTransport.readLoop] 已处理 {} 条消息，总接收字节: {}", messageCount, bytesReadTotal);
+                        logger.info("[StdioTransport.readLoop] Processed {} messages, total bytes received: {}", messageCount, bytesReadTotal);
                     }
                 } else {
                     // EOF 或读取失败 - 可能是父进程暂时断开
                     errorCount++;
-                    logger.warn("[StdioTransport.readLoop] 读取到null (EOF?)，错误计数 {}/{}，可用输入: {}",
+                    logger.warn("[StdioTransport.readLoop] Read null (EOF?), error count {}/{}, available input: {}",
                             errorCount, MAX_ERROR_COUNT, inputStream.available());
                     if (errorCount >= MAX_ERROR_COUNT) {
-                        logger.error("[StdioTransport.readLoop] 连续 {} 次读取失败，退出循环", MAX_ERROR_COUNT);
+                        logger.error("[StdioTransport.readLoop] {} consecutive read failures, exiting loop", MAX_ERROR_COUNT);
                         break;
                     }
                     try {
@@ -177,11 +193,11 @@ public class StdioTransport implements McpTransport {
                 }
             } catch (IOException e) {
                 if (running.get()) {
-                    logger.error("[StdioTransport.readLoop] 读取stdin时出错: {}", e.getMessage(), e);
+                    logger.error("[StdioTransport.readLoop] Error reading stdin: {}", e.getMessage(), e);
                 }
                 errorCount++;
                 if (errorCount >= MAX_ERROR_COUNT) {
-                    logger.error("[StdioTransport.readLoop] 连续 {} 次IO错误，退出循环", MAX_ERROR_COUNT);
+                    logger.error("[StdioTransport.readLoop] {} consecutive IO errors, exiting loop", MAX_ERROR_COUNT);
                     break;
                 }
                 try {
@@ -192,7 +208,7 @@ public class StdioTransport implements McpTransport {
                 }
             }
         }
-        logger.info("[StdioTransport.readLoop] ========== 读取循环已退出，共处理 {} 条消息，总字节 {} ==========", messageCount, bytesReadTotal);
+        logger.info("[StdioTransport.readLoop] ========== Read loop exited, {} messages processed, {} bytes total ==========", messageCount, bytesReadTotal);
     }
 
     /**
@@ -412,7 +428,7 @@ public class StdioTransport implements McpTransport {
      * 处理循环
      */
     private void processLoop() {
-        logger.info("[StdioTransport.processLoop] 处理循环启动");
+        logger.info("[StdioTransport.processLoop] Processing loop started");
         int processedCount = 0;
         int emptyPollCount = 0;
         long lastStatusLog = System.currentTimeMillis();
@@ -422,7 +438,7 @@ public class StdioTransport implements McpTransport {
                 String message = messageQueue.poll(100, TimeUnit.MILLISECONDS);
                 if (message != null) {
                     emptyPollCount = 0; // 重置空轮询计数
-                    logger.info("[StdioTransport.processLoop] 从队列取出消息，队列剩余: {}, 已处理: {}",
+                    logger.info("[StdioTransport.processLoop] Took message from queue, remaining: {}, processed: {}",
                             messageQueue.size(), processedCount + 1);
                     processMessage(message);
                     processedCount++;
@@ -430,19 +446,19 @@ public class StdioTransport implements McpTransport {
                     emptyPollCount++;
                     // 每10秒输出一次状态（如果队列为空）
                     if (System.currentTimeMillis() - lastStatusLog > 10000) {
-                        logger.info("[StdioTransport.processLoop] 状态 - 已处理: {}, 空轮询: {}, 队列大小: {}, running: {}",
+                        logger.info("[StdioTransport.processLoop] Status - processed: {}, empty polls: {}, queue size: {}, running: {}",
                                 processedCount, emptyPollCount, messageQueue.size(), running.get());
                         lastStatusLog = System.currentTimeMillis();
                         emptyPollCount = 0;
                     }
                 }
             } catch (InterruptedException e) {
-                logger.warn("[StdioTransport.processLoop] 处理线程被中断");
+                logger.warn("[StdioTransport.processLoop] Processing thread interrupted");
                 Thread.currentThread().interrupt();
                 break;
             }
         }
-        logger.info("[StdioTransport.processLoop] 处理循环已退出，共处理 {} 条消息", processedCount);
+        logger.info("[StdioTransport.processLoop] Processing loop exited, {} messages processed", processedCount);
     }
 
     /**
@@ -528,52 +544,52 @@ public class StdioTransport implements McpTransport {
      * 处理消息
      */
     private void processMessage(String message) {
-        logger.info("[StdioTransport.processMessage] ========== 开始处理消息 ==========");
-        logger.info("[StdioTransport.processMessage] 收到消息: {}", message);
+        logger.info("[StdioTransport.processMessage] ========== Processing message ==========");
+        logger.info("[StdioTransport.processMessage] Received message: {}", message);
         long startTime = System.currentTimeMillis();
 
         try {
             // 预处理：修复AI直接传入的真实换行符（将字符串值内的\n和\r\n转为\\n转义）
             String preprocessedMessage = preprocessJsonNewlines(message);
             if (!preprocessedMessage.equals(message)) {
-                logger.info("[StdioTransport.processMessage] 已预处理换行符，原始长度={},预处理后长度={}", 
+                logger.info("[StdioTransport.processMessage] Preprocessed newlines, original length={}, processed length={}", 
                     message.length(), preprocessedMessage.length());
             }
 
             // 简化版JSON解析
             JsonRpcMessage.Request request = parseRequest(preprocessedMessage);
             if (request == null) {
-                logger.error("[StdioTransport.processMessage] 消息解析返回null");
+                logger.error("[StdioTransport.processMessage] Message parsing returned null");
                 sendErrorResponse(null, JsonRpcMessage.ERROR_PARSE_ERROR, "Failed to parse request");
                 return;
             }
-            logger.info("[StdioTransport.processMessage] 解析成功: id={}, method={}, isNotification={}",
+            logger.info("[StdioTransport.processMessage] Parsed: id={}, method={}, isNotification={}",
                     request.getId(), request.getMethod(), request.isNotification());
 
             if (messageHandler != null) {
-                logger.info("[StdioTransport.processMessage] 调用messageHandler处理请求...");
+                logger.info("[StdioTransport.processMessage] Calling messageHandler...");
                 try {
                     messageHandler.accept(request);
                     long elapsed = System.currentTimeMillis() - startTime;
-                    logger.info("[StdioTransport.processMessage] messageHandler处理完成，耗时 {}ms", elapsed);
+                    logger.info("[StdioTransport.processMessage] messageHandler completed, took {}ms", elapsed);
                 } catch (Exception handlerEx) {
-                    logger.error("[StdioTransport.processMessage] messageHandler执行时发生异常: {}", handlerEx.getMessage(), handlerEx);
+                    logger.error("[StdioTransport.processMessage] Exception in messageHandler: {}", handlerEx.getMessage(), handlerEx);
                     throw handlerEx;
                 }
             } else {
-                logger.warn("[StdioTransport.processMessage] messageHandler未设置，无法处理请求");
+                logger.warn("[StdioTransport.processMessage] messageHandler not set, cannot process request");
             }
         } catch (Exception e) {
-            logger.error("[StdioTransport.processMessage] 处理消息时出错: {}", e.getMessage(), e);
+            logger.error("[StdioTransport.processMessage] Error processing message: {}", e.getMessage(), e);
             try {
                 sendErrorResponse(null, JsonRpcMessage.ERROR_PARSE_ERROR,
                         "Parse error: " + e.getMessage());
             } catch (IOException ioException) {
-                logger.error("[StdioTransport.processMessage] 发送错误响应失败: {}", ioException.getMessage());
+                logger.error("[StdioTransport.processMessage] Failed to send error response: {}", ioException.getMessage());
             }
         } finally {
             long elapsed = System.currentTimeMillis() - startTime;
-            logger.info("[StdioTransport.processMessage] ========== 消息处理结束，总耗时 {}ms ==========", elapsed);
+            logger.info("[StdioTransport.processMessage] ========== Message processed, total {}ms ==========", elapsed);
         }
     }
 
@@ -606,7 +622,7 @@ public class StdioTransport implements McpTransport {
             // 提取 params
             Map<String, Object> params = (Map<String, Object>) map.get("params");
             if (params == null) {
-                params = new java.util.HashMap<>();
+                params = new HashMap<>();
             }
             debug("parseRequest: params=" + params);
 
@@ -616,7 +632,7 @@ public class StdioTransport implements McpTransport {
             request.setParams(params);
             return request;
         } catch (Exception e) {
-            logger.error("[StdioTransport] Gson解析JSON失败: " + e.getMessage() + ", JSON: " + json);
+            logger.error("[StdioTransport] Gson JSON parse failed: " + e.getMessage() + ", JSON: " + json);
             return null;
         }
     }
@@ -824,7 +840,7 @@ public class StdioTransport implements McpTransport {
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> parseJsonObject(String json) {
-        Map<String, Object> result = new java.util.HashMap<>();
+        Map<String, Object> result = new HashMap<>();
 
         if (!json.startsWith("{") || !json.endsWith("}")) {
             return result;
@@ -903,7 +919,7 @@ public class StdioTransport implements McpTransport {
      */
     @SuppressWarnings("unchecked")
     private List<Object> parseJsonArray(String json) {
-        List<Object> result = new java.util.ArrayList<>();
+        List<Object> result = new ArrayList<>();
 
         if (!json.startsWith("[") || !json.endsWith("]")) {
             return result;
@@ -1060,14 +1076,14 @@ public class StdioTransport implements McpTransport {
         byte[] jsonBytes = json.getBytes(StandardCharsets.UTF_8);
         int totalBytesToSend = jsonBytes.length + (useContentLength ? 0 : 1); // +1 for newline in non-ContentLength mode
 
-        logger.info("[StdioTransport.sendResponse] ========== 开始发送响应 ==========");
-        logger.info("[StdioTransport.sendResponse] 响应ID: {}, isError: {}", response.getId(), response.isError());
-        logger.info("[StdioTransport.sendResponse] JSON长度: {} 字节", jsonBytes.length);
-        logger.info("[StdioTransport.sendResponse] 使用ContentLength模式: {}", useContentLength);
+        logger.info("[StdioTransport.sendResponse] ========== Sending response ==========");
+        logger.info("[StdioTransport.sendResponse] Response ID: {}, isError: {}", response.getId(), response.isError());
+        logger.info("[StdioTransport.sendResponse] JSON length: {} bytes", jsonBytes.length);
+        logger.info("[StdioTransport.sendResponse] Using ContentLength mode: {}", useContentLength);
 
         // 记录响应内容摘要（前200字符）
         String jsonPreview = json.length() > 200 ? json.substring(0, 200) + "..." : json;
-        logger.info("[StdioTransport.sendResponse] 响应内容摘要: {}", jsonPreview);
+        logger.info("[StdioTransport.sendResponse] Response summary: {}", jsonPreview);
 
         synchronized (outputStream) {
             try {
@@ -1075,32 +1091,32 @@ public class StdioTransport implements McpTransport {
                     // 标准MCP协议：使用Content-Length头部
                     byte[] header = ("Content-Length: " + jsonBytes.length + "\n\n").getBytes(StandardCharsets.UTF_8);
                     outputStream.write(header);
-                    logger.info("[StdioTransport.sendResponse] Content-Length头部已写入: {} 字节", header.length);
+                    logger.info("[StdioTransport.sendResponse] Content-Length header written: {} bytes", header.length);
                 } else {
                     // 兼容模式：直接发送JSON（Qwen等客户端）
-                    logger.info("[StdioTransport.sendResponse] 使用纯JSON模式（无Content-Length）");
+                    logger.info("[StdioTransport.sendResponse] Using plain JSON mode (no Content-Length)");
                 }
 
                 // 写入JSON内容
                 outputStream.write(jsonBytes);
                 outputStream.write('\n');  // 每个消息后加换行符
-                logger.info("[StdioTransport.sendResponse] JSON内容和换行符已写入");
+                logger.info("[StdioTransport.sendResponse] JSON content and newline written");
 
                 // 强制刷新输出流
                 outputStream.flush();
-                logger.info("[StdioTransport.sendResponse] 输出流已flush");
+                logger.info("[StdioTransport.sendResponse] Output stream flushed");
 
                 // 检查System.out是否出错
                 if (System.out.checkError()) {
-                    logger.error("[StdioTransport.sendResponse] System.out检测到错误!");
+                    logger.error("[StdioTransport.sendResponse] System.out error detected!");
                 } else {
-                    logger.info("[StdioTransport.sendResponse] System.out状态正常");
+                    logger.info("[StdioTransport.sendResponse] System.out status OK");
                 }
 
-                logger.info("[StdioTransport.sendResponse] ========== 响应发送完成 ==========");
-                logger.info("[StdioTransport.sendResponse] 总发送字节数（估算）: {} 字节", totalBytesToSend);
+                logger.info("[StdioTransport.sendResponse] ========== Response sent ==========");
+                logger.info("[StdioTransport.sendResponse] Total bytes sent (estimated): {} bytes", totalBytesToSend);
             } catch (IOException e) {
-                logger.error("[StdioTransport.sendResponse] 发送响应时发生IO异常: {}", e.getMessage(), e);
+                logger.error("[StdioTransport.sendResponse] IO error while sending response: {}", e.getMessage(), e);
                 throw e;
             }
         }
@@ -1155,28 +1171,28 @@ public class StdioTransport implements McpTransport {
             return value.toString();
         } else if (value instanceof Map) {
             return serializeMap((Map<String, Object>) value);
-        } else if (value instanceof java.util.List) {
-            return serializeList((java.util.List<?>) value);
-        } else if (value instanceof com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.InitializeResult) {
-            return serializeInitializeResult((com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.InitializeResult) value);
-        } else if (value instanceof com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ServerInfo) {
-            return serializeServerInfo((com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ServerInfo) value);
-        } else if (value instanceof com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Capabilities) {
-            return serializeCapabilities((com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Capabilities) value);
-        } else if (value instanceof com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListToolsResult) {
-            return serializeListToolsResult((com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListToolsResult) value);
-        } else if (value instanceof com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListPromptsResult) {
-            return serializeListPromptsResult((com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListPromptsResult) value);
-        } else if (value instanceof com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListResourcesResult) {
-            return serializeListResourcesResult((com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListResourcesResult) value);
-        } else if (value instanceof com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Tool) {
-            return serializeTool((com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Tool) value);
-        } else if (value instanceof com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.CallToolResult) {
-            return serializeCallToolResult((com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.CallToolResult) value);
-        } else if (value instanceof com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolContent) {
-            return serializeToolContent((com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolContent) value);
-        } else if (value instanceof com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolInputSchema) {
-            return serializeToolInputSchema((com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolInputSchema) value);
+        } else if (value instanceof List) {
+            return serializeList((List<?>) value);
+        } else if (value instanceof InitializeResult) {
+            return serializeInitializeResult((InitializeResult) value);
+        } else if (value instanceof ServerInfo) {
+            return serializeServerInfo((ServerInfo) value);
+        } else if (value instanceof Capabilities) {
+            return serializeCapabilities((Capabilities) value);
+        } else if (value instanceof ListToolsResult) {
+            return serializeListToolsResult((ListToolsResult) value);
+        } else if (value instanceof ListPromptsResult) {
+            return serializeListPromptsResult((ListPromptsResult) value);
+        } else if (value instanceof ListResourcesResult) {
+            return serializeListResourcesResult((ListResourcesResult) value);
+        } else if (value instanceof Tool) {
+            return serializeTool((Tool) value);
+        } else if (value instanceof CallToolResult) {
+            return serializeCallToolResult((CallToolResult) value);
+        } else if (value instanceof ToolContent) {
+            return serializeToolContent((ToolContent) value);
+        } else if (value instanceof ToolInputSchema) {
+            return serializeToolInputSchema((ToolInputSchema) value);
         } else {
             return "\"" + escapeJson(value.toString()) + "\"";
         }
@@ -1185,7 +1201,7 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 InitializeResult
      */
-    private String serializeInitializeResult(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.InitializeResult result) {
+    private String serializeInitializeResult(InitializeResult result) {
         if (result == null) return "null";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
@@ -1199,7 +1215,7 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 ServerInfo
      */
-    private String serializeServerInfo(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ServerInfo info) {
+    private String serializeServerInfo(ServerInfo info) {
         if (info == null) return "null";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
@@ -1213,7 +1229,7 @@ public class StdioTransport implements McpTransport {
      * 序列化 Capabilities
      * MCP协议要求capabilities中的字段是对象格式，包含特定的子字段
      */
-    private String serializeCapabilities(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Capabilities caps) {
+    private String serializeCapabilities(Capabilities caps) {
         if (caps == null) return "null";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
@@ -1249,11 +1265,11 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 ListToolsResult
      */
-    private String serializeListToolsResult(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListToolsResult result) {
+    private String serializeListToolsResult(ListToolsResult result) {
         if (result == null || result.getTools() == null) return "{\"tools\":[]}";
         StringBuilder sb = new StringBuilder();
         sb.append("{\"tools\":[");
-        List<com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Tool> tools = result.getTools();
+        List<Tool> tools = result.getTools();
         for (int i = 0; i < tools.size(); i++) {
             if (i > 0) sb.append(",");
             sb.append(serializeTool(tools.get(i)));
@@ -1265,11 +1281,11 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 ListPromptsResult
      */
-    private String serializeListPromptsResult(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListPromptsResult result) {
+    private String serializeListPromptsResult(ListPromptsResult result) {
         if (result == null || result.getPrompts() == null) return "{\"prompts\":[]}";
         StringBuilder sb = new StringBuilder();
         sb.append("{\"prompts\":[");
-        List<com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Prompt> prompts = result.getPrompts();
+        List<Prompt> prompts = result.getPrompts();
         for (int i = 0; i < prompts.size(); i++) {
             if (i > 0) sb.append(",");
             sb.append(serializePrompt(prompts.get(i)));
@@ -1281,7 +1297,7 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 Prompt
      */
-    private String serializePrompt(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Prompt prompt) {
+    private String serializePrompt(Prompt prompt) {
         if (prompt == null) return "null";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
@@ -1297,7 +1313,7 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 PromptArgument列表
      */
-    private String serializePromptArguments(List<com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.PromptArgument> arguments) {
+    private String serializePromptArguments(List<PromptArgument> arguments) {
         if (arguments == null || arguments.isEmpty()) return "[]";
         StringBuilder sb = new StringBuilder();
         sb.append("[");
@@ -1312,7 +1328,7 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 PromptArgument
      */
-    private String serializePromptArgument(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.PromptArgument arg) {
+    private String serializePromptArgument(PromptArgument arg) {
         if (arg == null) return "null";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
@@ -1326,11 +1342,11 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 ListResourcesResult
      */
-    private String serializeListResourcesResult(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ListResourcesResult result) {
+    private String serializeListResourcesResult(ListResourcesResult result) {
         if (result == null || result.getResources() == null) return "{\"resources\":[]}";
         StringBuilder sb = new StringBuilder();
         sb.append("{\"resources\":[");
-        List<com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Resource> resources = result.getResources();
+        List<Resource> resources = result.getResources();
         for (int i = 0; i < resources.size(); i++) {
             if (i > 0) sb.append(",");
             sb.append(serializeResource(resources.get(i)));
@@ -1342,7 +1358,7 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 Resource
      */
-    private String serializeResource(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Resource resource) {
+    private String serializeResource(Resource resource) {
         if (resource == null) return "null";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
@@ -1361,7 +1377,7 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 Tool
      */
-    private String serializeTool(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.Tool tool) {
+    private String serializeTool(Tool tool) {
         if (tool == null) return "null";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
@@ -1375,7 +1391,7 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 ToolInputSchema
      */
-    private String serializeToolInputSchema(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolInputSchema schema) {
+    private String serializeToolInputSchema(ToolInputSchema schema) {
         if (schema == null) return "null";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
@@ -1393,13 +1409,13 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 CallToolResult
      */
-    private String serializeCallToolResult(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.CallToolResult result) {
+    private String serializeCallToolResult(CallToolResult result) {
         if (result == null) return "null";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
         sb.append("\"content\":[");
         if (result.getContent() != null) {
-            List<com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolContent> content = result.getContent();
+            List<ToolContent> content = result.getContent();
             for (int i = 0; i < content.size(); i++) {
                 if (i > 0) sb.append(",");
                 sb.append(serializeToolContent(content.get(i)));
@@ -1414,7 +1430,7 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化 ToolContent
      */
-    private String serializeToolContent(com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolContent content) {
+    private String serializeToolContent(ToolContent content) {
         if (content == null) return "null";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
@@ -1452,7 +1468,7 @@ public class StdioTransport implements McpTransport {
     /**
      * 序列化List
      */
-    private String serializeList(java.util.List<?> list) {
+    private String serializeList(List<?> list) {
         if (list == null || list.isEmpty()) {
             return "[]";
         }

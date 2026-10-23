@@ -22,6 +22,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.time.format.DateTimeFormatter;
+import java.time.LocalTime;
 
 /**
  * WiFi工具 - 扫描/连接WiFi网络（Java原生实现，通过系统命令操作）
@@ -222,7 +229,7 @@ public class WifiTools {
     // ==================== 日志 ====================
 
     private void log(String message) {
-        String timestamp = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+        String timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
         String line = "[" + timestamp + "] " + message;
         logBuffer.add(line);
         appendLog(line);
@@ -540,7 +547,7 @@ public class WifiTools {
         Process process = pb.start();
 
         // 读取原始字节，再按编码解码（Windows中文系统netsh输出为GBK）
-        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try (InputStream is = process.getInputStream()) {
             byte[] buffer = new byte[4096];
             int len;
@@ -570,11 +577,11 @@ public class WifiTools {
      */
     private String decodeBytes(byte[] raw) {
         try {
-            java.nio.charset.CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
-                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
-                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT);
-            return decoder.decode(java.nio.ByteBuffer.wrap(raw)).toString();
-        } catch (java.nio.charset.CharacterCodingException e) {
+            CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+            return decoder.decode(ByteBuffer.wrap(raw)).toString();
+        } catch (CharacterCodingException e) {
             // UTF-8解码失败，回退到系统代码页（中文系统为GBK）
             try {
                 return new String(raw, "GBK");

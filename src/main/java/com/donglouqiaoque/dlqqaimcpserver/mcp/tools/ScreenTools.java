@@ -4,6 +4,7 @@ import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.CallToolResult;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolContent;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolInputSchema;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.server.McpServer;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -17,6 +18,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Arrays;
 
 /**
  * 屏幕截图工具 - 获取桌面图像（Java原生实现，使用 java.awt.Robot）
@@ -61,7 +63,7 @@ public class ScreenTools {
         Map<String, Object> formatProp = new HashMap<>();
         formatProp.put("type", "string");
         formatProp.put("description", "图片格式（可选，png或jpg，默认png）");
-        formatProp.put("enum", java.util.Arrays.asList("png", "jpg"));
+        formatProp.put("enum", Arrays.asList("png", "jpg"));
         properties.put("format", formatProp);
 
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
@@ -81,10 +83,15 @@ public class ScreenTools {
 
                     Path target;
                     if (outputPath != null && !outputPath.trim().isEmpty()) {
-                        target = Paths.get(outputPath.trim());
+                        Path requested = Workspace.resolve(outputPath.trim());
+                        String permissionError = FileTools.checkWritePermission(requested.toString(), "屏幕截图输出");
+                        if (permissionError != null) {
+                            return error(permissionError);
+                        }
+                        target = requested;
                     } else {
                         // 默认保存到 .dlqq/cache 目录
-                        Path cacheDir = Paths.get(".dlqq", "cache");
+                        Path cacheDir = Workspace.getRoot().resolve(".dlqq/cache");
                         Files.createDirectories(cacheDir);
                         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
                         target = cacheDir.resolve("screenshot_" + timestamp + "." + format);

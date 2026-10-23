@@ -1,6 +1,7 @@
 package com.donglouqiaoque.dlqqaimcpserver.mcp.tools;
 
 import com.donglouqiaoque.dlqqaimcpserver.utils.FileUtils;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
 import net.lingala.zip4j.ZipFile;
 import net.lingala.zip4j.model.ZipParameters;
 import net.lingala.zip4j.model.enums.AesKeyStrength;
@@ -67,7 +68,7 @@ public class ZipTools {
         List<File> sourceFiles = new ArrayList<>();
         for (String sourcePath : sourcePaths) {
             String normalizedPath = FileUtils.normalizePath(sourcePath);
-            File sourceFile = new File(normalizedPath);
+            File sourceFile = Workspace.resolve(normalizedPath).toFile();
             if (!sourceFile.exists()) {
                 throw new IOException("源文件/目录不存在: " + sourcePath);
             }
@@ -87,7 +88,11 @@ public class ZipTools {
         Path outputFilePath;
         if (outputPath != null && !outputPath.trim().isEmpty()) {
             String normalizedOutput = FileUtils.normalizePath(outputPath);
-            outputFilePath = Paths.get(normalizedOutput);
+            outputFilePath = Workspace.resolve(normalizedOutput);
+            String permissionError = FileTools.checkWritePermission(outputFilePath.toString(), "ZIP 压缩输出");
+            if (permissionError != null) {
+                throw new IOException(permissionError);
+            }
         } else {
             // 默认输出到 .dlqq/cache 目录
             File firstSource = sourceFiles.get(0);
@@ -174,7 +179,7 @@ public class ZipTools {
 
         // 规范化路径
         String normalizedZipPath = FileUtils.normalizePath(zipPath);
-        Path zipFilePath = Paths.get(normalizedZipPath);
+        Path zipFilePath = Workspace.resolve(normalizedZipPath);
 
         if (!Files.exists(zipFilePath)) {
             throw new IOException("压缩文件不存在: " + zipPath);
@@ -195,7 +200,11 @@ public class ZipTools {
         Path outputPath;
         if (outputDir != null && !outputDir.trim().isEmpty()) {
             String normalizedOutput = FileUtils.normalizePath(outputDir);
-            outputPath = Paths.get(normalizedOutput);
+            outputPath = Workspace.resolve(normalizedOutput);
+            String permissionError = FileTools.checkWritePermission(outputPath.toString(), "ZIP 解压输出");
+            if (permissionError != null) {
+                throw new IOException(permissionError);
+            }
         } else {
             // 默认输出到 .dlqq/cache 目录下的同名文件夹
             String baseName = stripArchiveExt(fileName);
@@ -245,7 +254,7 @@ public class ZipTools {
         }
 
         String normalizedZipPath = FileUtils.normalizePath(zipPath);
-        Path zipFilePath = Paths.get(normalizedZipPath);
+        Path zipFilePath = Workspace.resolve(normalizedZipPath);
 
         if (!Files.exists(zipFilePath)) {
             throw new IOException("压缩文件不存在: " + zipPath);

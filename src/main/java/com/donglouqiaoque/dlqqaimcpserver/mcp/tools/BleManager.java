@@ -10,11 +10,15 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import java.net.InetSocketAddress;
+import java.net.SocketTimeoutException;
+import java.nio.file.attribute.DosFileAttributeView;
 
 /**
  * BLE管理器
@@ -423,7 +427,7 @@ public class BleManager {
     private File extractPythonScript() {
         try {
             // 获取工作目录
-            Path workDir = Paths.get(System.getProperty("user.dir"));
+            Path workDir = Workspace.getRoot();
 
             // 优先使用 .dlqq/script/python 目录
             Path dlqqPythonDir = workDir.resolve(".dlqq").resolve("script").resolve("python");
@@ -452,8 +456,8 @@ public class BleManager {
 
             // 尝试将 .dlqq 目录设置为隐藏（Windows），失败则忽略
             try {
-                java.nio.file.attribute.DosFileAttributeView dosView = Files.getFileAttributeView(
-                        dlqqDir, java.nio.file.attribute.DosFileAttributeView.class);
+                DosFileAttributeView dosView = Files.getFileAttributeView(
+                        dlqqDir, DosFileAttributeView.class);
                 if (dosView != null) {
                     dosView.setHidden(true);
                 }
@@ -490,7 +494,7 @@ public class BleManager {
 
         try (Socket socket = new Socket()) {
             // 设置连接超时和读取超时（10秒）
-            var socketAddress = new java.net.InetSocketAddress("127.0.0.1", servicePort);
+            var socketAddress = new InetSocketAddress("127.0.0.1", servicePort);
             socket.connect(socketAddress, 10000);  // 10秒连接超时
             socket.setSoTimeout(30000);  // 30秒读取超时（BLE操作可能需要较长时间）
             
@@ -517,7 +521,7 @@ public class BleManager {
                 }
             }
 
-        } catch (java.net.SocketTimeoutException e) {
+        } catch (SocketTimeoutException e) {
             System.err.println(getInstanceId() + " 发送命令超时 [" + type + "]: " + e.getMessage());
         } catch (Exception e) {
             System.err.println(getInstanceId() + " 发送命令失败 [" + type + "]: " + e.getMessage());

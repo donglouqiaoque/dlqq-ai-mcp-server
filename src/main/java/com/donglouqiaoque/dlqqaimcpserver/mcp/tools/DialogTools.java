@@ -7,6 +7,12 @@ import java.io.File;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
 
 /**
  * GUI对话框工具 - 提供图形界面交互功能
@@ -263,8 +269,8 @@ public class DialogTools {
                     String filePath = filePathField.getText();
                     if (filePath != null && !filePath.isEmpty()) {
                         try {
-                            fileContent.append(new String(java.nio.file.Files.readAllBytes(
-                                    java.nio.file.Paths.get(filePath)), java.nio.charset.StandardCharsets.UTF_8));
+                            fileContent.append(new String(Files.readAllBytes(
+                                    Workspace.resolve(filePath)), StandardCharsets.UTF_8));
                         } catch (Exception ex) {
                             fileContent.append("[读取文件失败: ").append(ex.getMessage()).append("]");
                         }
@@ -310,9 +316,9 @@ public class DialogTools {
                 setFontRecursively(frame, chineseFont);
 
                 // 添加窗口关闭监听器 - 关闭窗口等于取消
-                frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                frame.addWindowListener(new WindowAdapter() {
                     @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
+                    public void windowClosing(WindowEvent e) {
                         if (!future.isDone()) {
                             future.complete(new DialogResult(false, null, null, null));
                         }
@@ -510,9 +516,9 @@ public class DialogTools {
                 setFontRecursively(frame, chineseFont);
 
                 // 关闭窗口等于选择"否"
-                frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                frame.addWindowListener(new WindowAdapter() {
                     @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
+                    public void windowClosing(WindowEvent e) {
                         if (!future.isDone()) {
                             future.complete(false);
                         }

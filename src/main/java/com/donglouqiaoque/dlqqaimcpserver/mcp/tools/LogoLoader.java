@@ -3,6 +3,7 @@ package com.donglouqiaoque.dlqqaimcpserver.mcp.tools;
 import javax.imageio.ImageIO;
 import java.awt.Image;
 import java.io.InputStream;
+import java.awt.Window;
 
 /**
  * 工具窗口 LOGO 加载器。
@@ -36,7 +37,7 @@ final class LogoLoader {
     /**
      * 为窗口设置 LOGO 图标（失败时静默降级）。
      */
-    static void applyTo(java.awt.Window window, String toolName) {
+    static void applyTo(Window window, String toolName) {
         try {
             Image logo = load();
             if (logo != null) {

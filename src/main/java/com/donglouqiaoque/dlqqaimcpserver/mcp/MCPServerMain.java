@@ -9,22 +9,39 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.tools.McpTools;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.PrintStream;
+import java.nio.charset.Charset;
+import java.nio.file.attribute.DosFileAttributeView;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
 
 /**
  * MCP服务器入口
  */
 public class MCPServerMain {
 
-    // 在静态初始化块中先创建目录和设置 stderr 重定向（在 Logger 初始化之前）
-    static {
+    // Logger 在工作区确定后、日志目录创建完成后初始化
+    private static Logger logger;
+
+    /**
+     * 初始化日志目录与 stderr 重定向（`.dlqq` 跟随工作区）。
+     */
+    private static void initLogging() {
         try {
             // 生成当前时间字符串（格式：yyyy-MM-dd_HH-mm-ss），每次启动都创建新文件
-            String dateStr = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+            String dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
 
-            // 创建日志目录结构（必须在 Logger 初始化之前完成）
-            java.io.File logDir = new java.io.File(".dlqq/log");
-            java.io.File loggerDir = new java.io.File(logDir, "logger");
-            java.io.File stderrDir = new java.io.File(logDir, "stderr");
+            Path dlqqDir = Workspace.getRoot().resolve(".dlqq");
+            File logDir = dlqqDir.resolve("log").toFile();
+            File loggerDir = new File(logDir, "logger");
+            File stderrDir = new File(logDir, "stderr");
 
             if (!logDir.exists()) {
                 logDir.mkdirs();
@@ -36,52 +53,18 @@ public class MCPServerMain {
                 stderrDir.mkdirs();
             }
 
-            // 创建 settings 目录
-            java.io.File settingsDir = new java.io.File(logDir.getParentFile(), "settings");
-            if (!settingsDir.exists()) {
-                settingsDir.mkdirs();
-            }
-
-            // 创建默认的 settings.properties 文件
-            java.io.File settingsFile = new java.io.File(settingsDir, "settings.properties");
-            if (!settingsFile.exists()) {
-                try (java.io.FileWriter writer = new java.io.FileWriter(settingsFile)) {
-                    writer.write("# MCP Server Settings\n");
-                    writer.write("# ==================\n\n");
-                    writer.write("# Response size limits (bytes)\n");
-                    writer.write("response.max.size=25804\n\n");
-                    writer.write("# Project build scripts\n");
-                    writer.write("# Scripts for build/rebuild/erase/download/run/debug operations\n");
-                    writer.write("# 脚本路径为空表示未配置，执行时会提示需要先设置\n");
-                    writer.write("script.build=\n");
-                    writer.write("script.rebuild=\n");
-                    writer.write("script.chip.erase=\n");
-                    writer.write("script.chip.download=\n");
-                    writer.write("script.erase.download=\n");
-                    writer.write("script.build.erase.download=\n");
-                    writer.write("script.rebuild.erase.download=\n");
-                    writer.write("script.run=\n");
-                    writer.write("script.debug=\n");
-                    writer.write("script.build.run=\n");
-                    writer.write("script.build.debug=\n");
-                    writer.write("script.rebuild.run=\n");
-                    writer.write("script.rebuild.debug=\n");
-                }
-            }
-
             // 创建 .dlqq/.gitignore 文件，忽略该目录下的所有内容
-            java.io.File gitignoreFile = new java.io.File(logDir.getParentFile(), ".gitignore");
+            File gitignoreFile = new File(dlqqDir.toFile(), ".gitignore");
             if (!gitignoreFile.exists()) {
-                try (java.io.FileWriter writer = new java.io.FileWriter(gitignoreFile)) {
+                try (FileWriter writer = new FileWriter(gitignoreFile)) {
                     writer.write("*\n");
                 }
             }
 
             // 尝试将 .dlqq 目录设置为隐藏（Windows），失败则忽略
             try {
-                java.nio.file.Path dlqqPath = logDir.getParentFile().toPath();
-                java.nio.file.attribute.DosFileAttributeView dosView = java.nio.file.Files.getFileAttributeView(
-                        dlqqPath, java.nio.file.attribute.DosFileAttributeView.class);
+                DosFileAttributeView dosView = Files.getFileAttributeView(
+                        dlqqDir, DosFileAttributeView.class);
                 if (dosView != null) {
                     dosView.setHidden(true);
                 }
@@ -89,24 +72,26 @@ public class MCPServerMain {
                 // 设置隐藏失败，忽略
             }
 
-            // 设置 SimpleLogger 的日志文件路径（带日期）
-            String loggerFilePath = "./.dlqq/log/logger/" + dateStr + ".log";
-            System.setProperty("org.slf4j.simpleLogger.logFile", loggerFilePath);
+            // 设置 SimpleLogger 的日志文件路径（带日期，绝对路径，位于工作区）
+            File loggerFile = new File(loggerDir, dateStr + ".log");
+            System.setProperty("org.slf4j.simpleLogger.logFile", loggerFile.getAbsolutePath());
             // 设置为追加模式
             System.setProperty("org.slf4j.simpleLogger.append", "true");
 
             // 重定向 stderr 到带日期的文件
-            java.io.File stderrFile = new java.io.File(stderrDir, dateStr + ".log");
-            java.io.PrintStream stderrStream = new java.io.PrintStream(
-                new java.io.FileOutputStream(stderrFile, true), true, "UTF-8");
+            File stderrFile = new File(stderrDir, dateStr + ".log");
+            PrintStream stderrStream = new PrintStream(
+                new FileOutputStream(stderrFile, true), true, "UTF-8");
             System.setErr(stderrStream);
         } catch (Exception e) {
             // 如果重定向失败，保持默认的 stderr
         }
     }
 
-    // Logger 必须在目录创建之后初始化
-    private static final Logger logger = LoggerFactory.getLogger(MCPServerMain.class);
+    /** 当前工作区的日志目录（工作区/.dlqq/log）。 */
+    private static Path getLogDir() {
+        return Workspace.getRoot().resolve(".dlqq").resolve("log");
+    }
 
     // 全局变量用于健康检查
     private static volatile boolean isRunning = true;
@@ -117,32 +102,39 @@ public class MCPServerMain {
     private static boolean httpMode = false;
     private static int httpPort = 49129;
     private static String httpPath = "/mcp";
+    /** 启动参数指定的工作区目录（--workspace） */
+    private static String workspacePath = null;
 
     public static void main(String[] args) {
-        // 解析命令行参数（--transport http|stdio, --port N, --path /mcp）
+        // 解析命令行参数（--transport http|stdio, --port N, --path /mcp, --workspace <dir>）
         parseArgs(args);
+
+        // 初始化工作区：--workspace > 进程 CWD（工作区路径不持久化）
+        Workspace.init(workspacePath);
 
         // 设置UTF-8编码
         System.setProperty("file.encoding", "UTF-8");
         System.setProperty("sun.stdout.encoding", "UTF-8");
         System.setProperty("sun.stderr.encoding", "UTF-8");
 
-        // 确保 SimpleLogger 追加模式设置（必须在 LoggerFactory 首次使用前）
-        System.setProperty("org.slf4j.simpleLogger.append", "true");
+        // 初始化工作区下的日志目录（.dlqq 跟随工作区），并创建 Logger
+        initLogging();
+        logger = LoggerFactory.getLogger(MCPServerMain.class);
+
+        // 确保当前工作区的 settings.properties 存在（配置随工作区变化）
+        McpTools.ensureSettingsFile();
 
         // 重新初始化 stdout 的编码
         try {
-            System.setOut(new java.io.PrintStream(System.out, true, "UTF-8"));
+            System.setOut(new PrintStream(System.out, true, "UTF-8"));
         } catch (Exception ignored) {
         }
 
-        // 日志目录已在静态块中创建
-        // 注意： SimpleLogger 的日志文件路径在静态块中已设置，包含日期
-
         logger.info("MCP Server starting...");
         logger.info("Working directory: {}", System.getProperty("user.dir"));
-        logger.info("Default charset: {}", java.nio.charset.Charset.defaultCharset().name());
-        logger.info("Log directory: {}", new java.io.File(".dlqq/log").getAbsolutePath());
+        logger.info("Workspace: {} (source: {})", Workspace.getRoot(), Workspace.getSource());
+        logger.info("Default charset: {}", Charset.defaultCharset().name());
+        logger.info("Log directory: {}", getLogDir());
         
         try {
             startServer();
@@ -156,10 +148,10 @@ public class MCPServerMain {
             }
             
         } catch (IOException e) {
-            logger.error("MCP服务器启动失败: {}", e.getMessage(), e);
+            logger.error("MCP server failed to start: {}", e.getMessage(), e);
             System.exit(1);
         } catch (InterruptedException e) {
-            logger.warn("MCP服务器被中断");
+            logger.warn("MCP server interrupted");
             isRunning = false;
         } finally {
             cleanup();
@@ -168,7 +160,7 @@ public class MCPServerMain {
     
     /**
      * 解析命令行参数
-     * 支持: --transport http|stdio, --port N, --path /mcp
+     * 支持: --transport http|stdio, --port N, --path /mcp, --workspace <dir>
      */
     private static void parseArgs(String[] args) {
         for (int i = 0; i < args.length; i++) {
@@ -178,7 +170,7 @@ public class MCPServerMain {
                         String t = args[++i].toLowerCase();
                         httpMode = "http".equals(t);
                         if (!"http".equals(t) && !"stdio".equals(t)) {
-                            logger.warn("[MCPServerMain] 未知传输方式: {}，使用默认 stdio", t);
+                            logger.warn("[MCPServerMain] Unknown transport: {}, using default stdio", t);
                             httpMode = false;
                         }
                     }
@@ -188,7 +180,7 @@ public class MCPServerMain {
                         try {
                             httpPort = Integer.parseInt(args[++i]);
                         } catch (NumberFormatException e) {
-                            logger.warn("[MCPServerMain] 无效端口号: {}，使用默认 49129", args[i]);
+                            logger.warn("[MCPServerMain] Invalid port: {}, using default 49129", args[i]);
                         }
                     }
                     break;
@@ -198,6 +190,11 @@ public class MCPServerMain {
                         if (!httpPath.startsWith("/")) {
                             httpPath = "/" + httpPath;
                         }
+                    }
+                    break;
+                case "--workspace":
+                    if (i + 1 < args.length) {
+                        workspacePath = args[++i];
                     }
                     break;
                 default:
@@ -241,8 +238,8 @@ public class MCPServerMain {
 
         // 应用持久化的“被移除工具”列表（.dlqq/settings/settings.properties 的 mcp.tools.excluded）
         int excluded = server.applyExcludedTools(
-                com.donglouqiaoque.dlqqaimcpserver.mcp.tools.McpTools.getExcludedToolNames());
-        logger.info("被移除工具（持久化）: {} 个, 当前启用工具数: {}", excluded, server.getEnabledToolCount());
+                McpTools.getExcludedToolNames());
+        logger.info("Persisted removed tools: {}, enabled tools: {}", excluded, server.getEnabledToolCount());
 
         // 启动服务器
         server.start();
@@ -293,7 +290,7 @@ public class MCPServerMain {
             int checkCount = 0;
             long lastMemoryLog = System.currentTimeMillis();
 
-            logger.info("[HealthCheck] 健康检查线程启动，检查间隔={}ms", checkInterval);
+            logger.info("[HealthCheck] Health check thread started, interval={}ms", checkInterval);
 
             while (isRunning) {
                 try {
@@ -306,7 +303,7 @@ public class MCPServerMain {
                         long totalMemory = runtime.totalMemory() / 1024 / 1024;
                         long freeMemory = runtime.freeMemory() / 1024 / 1024;
                         long maxMemory = runtime.maxMemory() / 1024 / 1024;
-                        logger.info("[HealthCheck] JVM内存状态 - 总内存:{}MB, 可用:{}MB, 最大:{}MB, 已用:{}MB",
+                        logger.info("[HealthCheck] JVM memory - total:{}MB, free:{}MB, max:{}MB, used:{}MB",
                                 totalMemory, freeMemory, maxMemory, totalMemory - freeMemory);
                         lastMemoryLog = System.currentTimeMillis();
                     }
@@ -315,50 +312,50 @@ public class MCPServerMain {
                     if (transport != null) {
                         boolean transportRunning = transport.isRunning();
                         if (checkCount % 12 == 0) {  // 每分钟输出一次状态
-                            logger.info("[HealthCheck] 状态正常 - 运行检查次数={}, 传输层状态={}", checkCount, transportRunning ? "运行中" : "已停止");
+                            logger.info("[HealthCheck] Status OK - checks={}, transport={}", checkCount, transportRunning ? "running" : "stopped");
                         }
 
                         if (!transportRunning) {
-                            logger.warn("[HealthCheck] 传输层已停止运行!");
+                            logger.warn("[HealthCheck] Transport stopped!");
                             errorCount++;
 
                             if (errorCount >= MAX_ERROR_COUNT) {
-                                logger.error("[HealthCheck] 连续 {} 次检查失败，准备重启...", MAX_ERROR_COUNT);
+                                logger.error("[HealthCheck] {} consecutive check failures, restarting...", MAX_ERROR_COUNT);
                                 try {
                                     // 停止旧服务器
                                     if (server != null) {
-                                        logger.info("[HealthCheck] 停止旧服务器...");
+                                        logger.info("[HealthCheck] Stopping old server...");
                                         server.stop();
                                     }
                                     // 重新启动
-                                    logger.info("[HealthCheck] 正在重新启动服务器...");
+                                    logger.info("[HealthCheck] Restarting server...");
                                     startServer();
                                     errorCount = 0;
-                                    logger.info("[HealthCheck] 服务器重启成功");
+                                    logger.info("[HealthCheck] Server restarted successfully");
                                 } catch (IOException e) {
-                                    logger.error("[HealthCheck] 重启失败: {}", e.getMessage(), e);
+                                    logger.error("[HealthCheck] Restart failed: {}", e.getMessage(), e);
                                 }
                             }
                         } else {
                             if (errorCount > 0) {
-                                logger.info("[HealthCheck] 传输层恢复正常，重置错误计数");
+                                logger.info("[HealthCheck] Transport recovered, resetting error count");
                             }
                             errorCount = 0;  // 重置错误计数
                         }
                     } else {
-                        logger.warn("[HealthCheck] transport为null");
+                        logger.warn("[HealthCheck] transport is null");
                     }
                 } catch (InterruptedException e) {
-                    logger.warn("[HealthCheck] 健康检查线程被中断");
+                    logger.warn("[HealthCheck] Health check thread interrupted");
                     Thread.currentThread().interrupt();
                     break;
                 }
             }
-            logger.info("[HealthCheck] 健康检查线程已退出，总检查次数={}", checkCount);
+            logger.info("[HealthCheck] Health check thread exited, total checks={}", checkCount);
         });
         healthCheck.setDaemon(true);
         healthCheck.setName("MCP-HealthCheck");
         healthCheck.start();
-        logger.info("[HealthCheck] 健康检查线程已启动");
+        logger.info("[HealthCheck] Health check thread started");
     }
 }

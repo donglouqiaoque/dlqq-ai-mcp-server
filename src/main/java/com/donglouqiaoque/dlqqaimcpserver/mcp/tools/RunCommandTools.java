@@ -4,6 +4,7 @@ import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.CallToolResult;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolContent;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.ToolInputSchema;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.server.McpServer;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
 
 import javax.swing.*;
 import java.awt.*;
@@ -12,6 +13,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
 import java.util.concurrent.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.io.File;
 
 /**
  * 命令执行工具 - 执行命令行指令（需要用户审批）
@@ -73,6 +77,10 @@ public class RunCommandTools {
                     if (workingDir.isEmpty()) {
                         workingDir = null;
                     }
+                }
+                // 统一解析为绝对路径：弹窗显示和实际执行都用同一路径
+                if (workingDir != null) {
+                    workingDir = Workspace.resolve(workingDir).toString();
                 }
 
                 int timeout = DEFAULT_TIMEOUT;
@@ -204,9 +212,9 @@ public class RunCommandTools {
                 });
 
                 // 窗口被关闭（点X）时按取消处理
-                frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                frame.addWindowListener(new WindowAdapter() {
                     @Override
-                    public void windowClosed(java.awt.event.WindowEvent e) {
+                    public void windowClosed(WindowEvent e) {
                         latch.countDown();
                     }
                 });
@@ -257,7 +265,7 @@ public class RunCommandTools {
 
             // 设置工作目录
             if (workingDir != null && !workingDir.isEmpty()) {
-                java.io.File dir = new java.io.File(workingDir);
+                File dir = Workspace.resolve(workingDir).toFile();
                 if (dir.exists() && dir.isDirectory()) {
                     pb.directory(dir);
                 } else {

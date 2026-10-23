@@ -12,6 +12,23 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
+import java.net.URLDecoder;
+import java.nio.file.attribute.DosFileAttributeView;
+import java.nio.file.Files;
+import java.text.SimpleDateFormat;
+import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.jar.Attributes;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
+import java.util.List;
 
 /**
  * BLE工具 - 简化版
@@ -181,7 +198,7 @@ public class BleTools {
         }
 
         try (Socket socket = new Socket()) {
-            socket.connect(new java.net.InetSocketAddress("127.0.0.1", pythonPort), 5000);
+            socket.connect(new InetSocketAddress("127.0.0.1", pythonPort), 5000);
             socket.setSoTimeout(30000);
 
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
@@ -199,7 +216,7 @@ public class BleTools {
                         command.addProperty(key, (Number) value);
                     } else if (value instanceof Boolean) {
                         command.addProperty(key, (Boolean) value);
-                    } else if (value instanceof java.util.List) {
+                    } else if (value instanceof List) {
                         // 处理List类型（如List<Integer>字节数组）
                         command.add(key, gson.toJsonTree(value));
                     } else {
@@ -298,8 +315,8 @@ public class BleTools {
 
             // 尝试将 .dlqq 目录设置为隐藏（Windows），失败则忽略
             try {
-                java.nio.file.attribute.DosFileAttributeView dosView = java.nio.file.Files.getFileAttributeView(
-                        dlqqDir.toPath(), java.nio.file.attribute.DosFileAttributeView.class);
+                DosFileAttributeView dosView = Files.getFileAttributeView(
+                        dlqqDir.toPath(), DosFileAttributeView.class);
                 if (dosView != null) {
                     dosView.setHidden(true);
                 }
@@ -518,11 +535,11 @@ public class BleTools {
         return (result != null && result.get("success").getAsBoolean()) ? "写入成功" : "写入失败";
     }
 
-    public static String writeBleCharacteristicHex(int port, String serviceUuid, String charUuid, java.util.List<String> hexArray) {
+    public static String writeBleCharacteristicHex(int port, String serviceUuid, String charUuid, List<String> hexArray) {
         if (!isInstanceRunning(port)) return "错误：BLE工具未启动";
         StringBuilder hex = new StringBuilder();
         for (String h : hexArray) hex.append(h);
-        java.util.List<Integer> data = new java.util.ArrayList<>();
+        List<Integer> data = new ArrayList<>();
         for (int i = 0; i < hex.length(); i += 2) {
             data.add(Integer.parseInt(hex.substring(i, i + 2), 16));
         }
@@ -627,15 +644,15 @@ public class BleTools {
             // 获取当前类的JAR文件路径
             String classPath = BleTools.class.getProtectionDomain().getCodeSource().getLocation().getPath();
             // URL解码处理中文路径
-            classPath = java.net.URLDecoder.decode(classPath, "UTF-8");
+            classPath = URLDecoder.decode(classPath, "UTF-8");
             File jarFile = new File(classPath);
 
             if (jarFile.exists()) {
                 // 读取MANIFEST.MF
-                try (java.util.jar.JarFile jar = new java.util.jar.JarFile(jarFile)) {
-                    java.util.jar.Manifest manifest = jar.getManifest();
+                try (JarFile jar = new JarFile(jarFile)) {
+                    Manifest manifest = jar.getManifest();
                     if (manifest != null) {
-                        java.util.jar.Attributes mainAttrs = manifest.getMainAttributes();
+                        Attributes mainAttrs = manifest.getMainAttributes();
                         String version = mainAttrs.getValue("Implementation-Version");
 
                         // 获取构建时间
@@ -644,11 +661,11 @@ public class BleTools {
                         if (buildTimeAttr != null) {
                             try {
                                 // 将UTC时间转换为本地时间
-                                java.time.LocalDateTime utcTime = java.time.LocalDateTime.parse(buildTimeAttr,
-                                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                                java.time.ZonedDateTime utcZoned = utcTime.atZone(java.time.ZoneId.of("UTC"));
-                                java.time.ZonedDateTime localZoned = utcZoned.withZoneSameInstant(java.time.ZoneId.systemDefault());
-                                buildTime = localZoned.format(java.time.format.DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss"));
+                                LocalDateTime utcTime = LocalDateTime.parse(buildTimeAttr,
+                                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                                ZonedDateTime utcZoned = utcTime.atZone(ZoneId.of("UTC"));
+                                ZonedDateTime localZoned = utcZoned.withZoneSameInstant(ZoneId.systemDefault());
+                                buildTime = localZoned.format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss"));
                             } catch (Exception e) {
                                 // 如果解析失败，使用JAR文件修改时间
                             }
@@ -657,8 +674,8 @@ public class BleTools {
                         // 如果没有从MANIFEST获取到构建时间，使用JAR文件修改时间
                         if (buildTime == null) {
                             long lastModified = jarFile.lastModified();
-                            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy.MM.dd HH.mm.ss");
-                            buildTime = sdf.format(new java.util.Date(lastModified));
+                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy.MM.dd HH.mm.ss");
+                            buildTime = sdf.format(new Date(lastModified));
                         }
 
                         if (version != null) {
@@ -692,14 +709,14 @@ public class BleTools {
             Process checkProcess = checkPb.start();
 
             StringBuilder checkOutput = new StringBuilder();
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(checkProcess.getInputStream(), "UTF-8"))) {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(checkProcess.getInputStream(), "UTF-8"))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     checkOutput.append(line).append("\n");
                 }
             }
-            checkProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            checkProcess.waitFor(5, TimeUnit.SECONDS);
             result.append(checkOutput.toString()).append("\n");
 
             // 方法2: 检查蓝牙服务状态
@@ -718,14 +735,14 @@ public class BleTools {
             Process process2 = pb2.start();
 
             StringBuilder output2 = new StringBuilder();
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process2.getInputStream(), "UTF-8"))) {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process2.getInputStream(), "UTF-8"))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     output2.append(line).append("\n");
                 }
             }
-            process2.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            process2.waitFor(5, TimeUnit.SECONDS);
             result.append(output2.toString()).append("\n");
 
             // 方法3: 检查蓝牙网络适配器
@@ -744,14 +761,14 @@ public class BleTools {
             Process process3 = pb3.start();
 
             StringBuilder output3 = new StringBuilder();
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process3.getInputStream(), "UTF-8"))) {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process3.getInputStream(), "UTF-8"))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     output3.append(line).append("\n");
                 }
             }
-            process3.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            process3.waitFor(5, TimeUnit.SECONDS);
             result.append(output3.toString()).append("\n");
 
             result.append("\n=== 检查完成 ===\n");

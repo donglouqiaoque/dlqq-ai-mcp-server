@@ -21,6 +21,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.io.OutputStream;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.HashMap;
+import java.util.List;
 
 /**
  * MCP Streamable HTTP 传输层（基于 JDK 内置 HttpServer，无需额外依赖）。
@@ -64,14 +68,14 @@ public class HttpTransport implements McpTransport {
     private final ThreadLocal<JsonRpcMessage.Response> currentResponse = new ThreadLocal<>();
 
     /** 已建立的 SSE 长连接（GET + Accept: text/event-stream），用于服务端主动推送通知 */
-    private final java.util.List<SseClient> sseClients = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final List<SseClient> sseClients = new CopyOnWriteArrayList<>();
 
     /** 一个 SSE 客户端连接的输出流（写操作需持有 lock） */
     private static final class SseClient {
-        final java.io.OutputStream out;
+        final OutputStream out;
         final Object lock = new Object();
 
-        SseClient(java.io.OutputStream out) {
+        SseClient(OutputStream out) {
             this.out = out;
         }
     }
@@ -88,7 +92,7 @@ public class HttpTransport implements McpTransport {
     @Override
     public void start() throws IOException {
         if (running.get()) {
-            logger.warn("[HttpTransport] 传输层已在运行，忽略重复启动");
+            logger.warn("[HttpTransport] Transport already running, ignoring duplicate start");
             return;
         }
         try {
@@ -102,10 +106,10 @@ public class HttpTransport implements McpTransport {
             httpServer.setExecutor(executor);
             httpServer.start();
             running.set(true);
-            logger.info("[HttpTransport] Streamable HTTP 传输层已启动: http://localhost:{}{} (POST JSON-RPC)",
+            logger.info("[HttpTransport] Streamable HTTP transport started: http://localhost:{}{} (POST JSON-RPC)",
                     port, this.path);
         } catch (IOException e) {
-            logger.error("[HttpTransport] HTTP 服务器启动失败 (端口 {}): {}", port, e.getMessage());
+            logger.error("[HttpTransport] HTTP server failed to start (port {}): {}", port, e.getMessage());
             throw e;
         }
     }
@@ -135,7 +139,7 @@ public class HttpTransport implements McpTransport {
                 this.port = candidate;
                 return server;
             } catch (BindException e) {
-                logger.warn("[HttpTransport] 端口 {} 已被占用", candidate);
+                logger.warn("[HttpTransport] Port {} already in use", candidate);
                 int next = promptForPort(candidate, defaultPort);
                 if (next == ABORT) {
                     throw e;
@@ -232,7 +236,7 @@ public class HttpTransport implements McpTransport {
             executor.shutdownNow();
             executor = null;
         }
-        logger.info("[HttpTransport] HTTP 传输层已停止");
+        logger.info("[HttpTransport] HTTP transport stopped");
     }
 
     @Override
@@ -245,7 +249,7 @@ public class HttpTransport implements McpTransport {
         JsonRpcMessage.Response prev = currentResponse.get();
         if (prev != null) {
             // 同一请求发出多个响应（当前实现不产生），保留最后一个并记录警告
-            logger.warn("[HttpTransport] 同一请求多次调用 sendResponse，旧响应将被覆盖");
+            logger.warn("[HttpTransport] sendResponse called multiple times for the same request; old response will be overwritten");
         }
         currentResponse.set(response);
     }
@@ -281,7 +285,7 @@ public class HttpTransport implements McpTransport {
                     break;
             }
         } catch (Exception e) {
-            logger.error("[HttpTransport] 处理 HTTP 请求出错: {}", e.getMessage(), e);
+            logger.error("[HttpTransport] Error handling HTTP request: {}", e.getMessage(), e);
             try {
                 sendJson(exchange, 500, jsonRpcError(null, JsonRpcMessage.ERROR_INTERNAL_ERROR,
                         "Internal error: " + e.getMessage()));
@@ -307,7 +311,7 @@ public class HttpTransport implements McpTransport {
             sendJson(exchange, 400, jsonRpcError(null, JsonRpcMessage.ERROR_INVALID_REQUEST, "Empty request body"));
             return;
         }
-        logger.debug("[HttpTransport] 收到 POST 请求: {} 字节", body.length());
+        logger.debug("[HttpTransport] Received POST request: {} bytes", body.length());
 
         JsonRpcMessage.Request request = parseRequest(body);
         if (request == null) {
@@ -316,7 +320,7 @@ public class HttpTransport implements McpTransport {
             return;
         }
 
-        logger.info("[HttpTransport] 收到 JSON-RPC 请求: method={}, id={}, isNotification={}",
+        logger.info("[HttpTransport] Received JSON-RPC request: method={}, id={}, isNotification={}",
                 request.getMethod(), request.getId(), request.isNotification());
 
         Consumer<JsonRpcMessage.Request> handler = messageHandler;
@@ -330,7 +334,7 @@ public class HttpTransport implements McpTransport {
         try {
             handler.accept(request);
         } catch (Exception e) {
-            logger.error("[HttpTransport] 消息处理器抛出异常: {}", e.getMessage(), e);
+            logger.error("[HttpTransport] Message handler threw an exception: {}", e.getMessage(), e);
         }
 
         JsonRpcMessage.Response response = currentResponse.get();
@@ -338,7 +342,7 @@ public class HttpTransport implements McpTransport {
             if (request.isNotification()) {
                 // 通知：202 Accepted，无响应体
                 sendEmpty(exchange, 202);
-                logger.info("[HttpTransport] 通知已处理，返回 202 Accepted");
+                logger.info("[HttpTransport] Notification handled, returning 202 Accepted");
             } else {
                 sendJson(exchange, 500, jsonRpcError(request.getId(), JsonRpcMessage.ERROR_INTERNAL_ERROR,
                         "No response produced"));
@@ -347,13 +351,13 @@ public class HttpTransport implements McpTransport {
         }
 
         String json = gson.toJson(response);
-        logger.debug("[HttpTransport] 响应 JSON: {} 字节", json.length());
+        logger.debug("[HttpTransport] Response JSON: {} bytes", json.length());
         sendJson(exchange, 200, json);
     }
 
     private void handleGet(HttpExchange exchange) throws IOException {
         String accept = exchange.getRequestHeaders().getFirst("Accept");
-        logger.info("[HttpTransport] 收到 GET 请求, Accept={}", accept);
+        logger.info("[HttpTransport] Received GET request, Accept={}", accept);
         if (accept != null && accept.toLowerCase().contains("text/event-stream")) {
             openSseStream(exchange);
             return;
@@ -382,10 +386,10 @@ public class HttpTransport implements McpTransport {
         exchange.getResponseHeaders().set("Cache-Control", "no-cache");
         exchange.getResponseHeaders().set("Connection", "keep-alive");
         exchange.sendResponseHeaders(200, 0);
-        java.io.OutputStream out = exchange.getResponseBody();
+        OutputStream out = exchange.getResponseBody();
         SseClient client = new SseClient(out);
         sseClients.add(client);
-        logger.info("[HttpTransport] SSE 客户端已连接, 当前连接数={}", sseClients.size());
+        logger.info("[HttpTransport] SSE client connected, connections={}", sseClients.size());
         try {
             synchronized (client.lock) {
                 out.write(": connected\n\n".getBytes(StandardCharsets.UTF_8));
@@ -399,14 +403,14 @@ public class HttpTransport implements McpTransport {
                 }
             }
         } catch (IOException | InterruptedException e) {
-            logger.info("[HttpTransport] SSE 连接结束: {}", e.getMessage());
+            logger.info("[HttpTransport] SSE connection ended: {}", e.getMessage());
         } finally {
             sseClients.remove(client);
             try {
                 out.close();
             } catch (IOException ignored) {
             }
-            logger.info("[HttpTransport] SSE 客户端断开, 剩余连接数={}", sseClients.size());
+            logger.info("[HttpTransport] SSE client disconnected, remaining={}", sseClients.size());
         }
     }
 
@@ -416,7 +420,7 @@ public class HttpTransport implements McpTransport {
     @Override
     public boolean notifyToolsListChanged() {
         if (sseClients.isEmpty()) {
-            logger.info("[HttpTransport] 没有 SSE 连接，跳过 notifications/tools/list_changed");
+            logger.info("[HttpTransport] No SSE connections, skipping notifications/tools/list_changed");
             return false;
         }
         String message = "event: message\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}\n\n";
@@ -430,10 +434,10 @@ public class HttpTransport implements McpTransport {
                 sent++;
             } catch (IOException e) {
                 sseClients.remove(client);
-                logger.warn("[HttpTransport] 推送 SSE 失败，已移除连接: {}", e.getMessage());
+                logger.warn("[HttpTransport] Failed to push SSE, removed connection: {}", e.getMessage());
             }
         }
-        logger.info("[HttpTransport] 已向 {} 个 SSE 连接推送 notifications/tools/list_changed", sent);
+        logger.info("[HttpTransport] Pushed notifications/tools/list_changed to {} SSE connection(s)", sent);
         return sent > 0;
     }
 
@@ -456,7 +460,7 @@ public class HttpTransport implements McpTransport {
             }
             Map<String, Object> params = (Map<String, Object>) map.get("params");
             if (params == null) {
-                params = new java.util.HashMap<>();
+                params = new HashMap<>();
             }
             JsonRpcMessage.Request request = new JsonRpcMessage.Request();
             request.setId(id);
@@ -464,7 +468,7 @@ public class HttpTransport implements McpTransport {
             request.setParams(params);
             return request;
         } catch (Exception e) {
-            logger.error("[HttpTransport] JSON 解析失败: {}, JSON: {}", e.getMessage(), json);
+            logger.error("[HttpTransport] JSON parse failed: {}, JSON: {}", e.getMessage(), json);
             return null;
         }
     }

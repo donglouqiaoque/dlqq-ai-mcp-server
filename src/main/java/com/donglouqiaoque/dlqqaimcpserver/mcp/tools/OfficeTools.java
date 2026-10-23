@@ -1,6 +1,7 @@
 package com.donglouqiaoque.dlqqaimcpserver.mcp.tools;
 
 import com.donglouqiaoque.dlqqaimcpserver.utils.FileUtils;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -28,6 +29,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
+import org.apache.poi.hslf.usermodel.HSLFShape;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
 
 /**
  * Office文件处理工具
@@ -58,7 +62,7 @@ public class OfficeTools {
      */
     public static Map<String, Object> readOfficeFile(String filePath, Integer startPage, Integer endPage) throws IOException {
         filePath = FileUtils.normalizePath(filePath);
-        Path path = Paths.get(filePath);
+        Path path = Workspace.resolve(filePath);
 
         if (!Files.exists(path)) {
             throw new IOException("文件不存在: " + filePath);
@@ -135,7 +139,7 @@ public class OfficeTools {
      * 读取PDF文件（带超时保护，支持页码范围）
      */
     private static String readPdfFile(Path path, Integer startPage, Integer endPage) throws IOException {
-        logger.info("开始读取PDF文件: {}, 页码范围: {}-{}", path, 
+        logger.info("Reading PDF: {}, page range: {}-{}", path, 
             startPage != null ? startPage : "默认", 
             endPage != null ? endPage : "默认");
         
@@ -145,18 +149,18 @@ public class OfficeTools {
         
         try {
             String result = future.get(PDF_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            logger.info("PDF文件读取完成: {}", path);
+            logger.info("PDF read completed: {}", path);
             return result;
         } catch (TimeoutException e) {
             future.cancel(true);
-            logger.error("PDF处理超时（超过{}秒）: {}", PDF_TIMEOUT_SECONDS, path);
+            logger.error("PDF processing timed out (over {}s): {}", PDF_TIMEOUT_SECONDS, path);
             throw new IOException("PDF 处理超时（超过" + PDF_TIMEOUT_SECONDS + "秒），该文件可能包含复杂图形或表格。建议：1) 使用其他工具查看；2) 转换为图片后再读取；3) 提取纯文本版本。");
         } catch (InterruptedException e) {
             future.cancel(true);
-            logger.error("PDF处理被中断: {}", path, e);
+            logger.error("PDF processing interrupted: {}", path, e);
             throw new IOException("PDF 处理被中断: " + e.getMessage());
         } catch (ExecutionException e) {
-            logger.error("PDF处理异常: {}", path, e.getCause());
+            logger.error("PDF processing error: {}", path, e.getCause());
             throw new IOException("PDF 处理失败: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
         } finally {
             executor.shutdownNow();
@@ -175,7 +179,7 @@ public class OfficeTools {
             // stripper.setSortByPosition(true);
 
             int pageCount = document.getNumberOfPages();
-            logger.info("PDF总页数: {}", pageCount);
+            logger.info("PDF total pages: {}", pageCount);
             
             // 计算实际处理范围
             int actualStartPage = (startPage != null && startPage > 0) ? startPage : 1;
@@ -183,7 +187,7 @@ public class OfficeTools {
             
             // 应用最大页数限制
             if (actualEndPage - actualStartPage + 1 > MAX_PDF_PAGES) {
-                logger.warn("请求页数范围过大({}-{})，限制为{}页", actualStartPage, actualEndPage, MAX_PDF_PAGES);
+                logger.warn("Requested page range too large ({}-{}), limited to {} pages", actualStartPage, actualEndPage, MAX_PDF_PAGES);
                 actualEndPage = actualStartPage + MAX_PDF_PAGES - 1;
             }
             
@@ -206,9 +210,9 @@ public class OfficeTools {
             stripper.setStartPage(actualStartPage);
             stripper.setEndPage(actualEndPage);
             
-            logger.info("开始提取PDF文本（{}-{}页）...", actualStartPage, actualEndPage);
+            logger.info("Extracting PDF text (pages {}-{})...", actualStartPage, actualEndPage);
             String allText = stripper.getText(document);
-            logger.info("PDF文本提取完成");
+            logger.info("PDF text extraction completed");
             
             // 按页分割并处理
             String[] pages = allText.split("\f"); // PDF分页符
@@ -249,7 +253,7 @@ public class OfficeTools {
             
             // 限制最大段落数
             if (endIdx - startIdx + 1 > MAX_PDF_PAGES) {
-                logger.warn("DOC段落范围过大({}-{})，限制为{}段", startIdx + 1, endIdx + 1, MAX_PDF_PAGES);
+                logger.warn("Requested DOC paragraph range too large ({}-{}), limited to {} paragraphs", startIdx + 1, endIdx + 1, MAX_PDF_PAGES);
                 endIdx = startIdx + MAX_PDF_PAGES - 1;
             }
             
@@ -293,7 +297,7 @@ public class OfficeTools {
             
             // 限制最大段落数
             if (endIdx - startIdx + 1 > MAX_PDF_PAGES) {
-                logger.warn("DOCX段落范围过大({}-{})，限制为{}段", startIdx + 1, endIdx + 1, MAX_PDF_PAGES);
+                logger.warn("Requested DOCX paragraph range too large ({}-{}), limited to {} paragraphs", startIdx + 1, endIdx + 1, MAX_PDF_PAGES);
                 endIdx = startIdx + MAX_PDF_PAGES - 1;
             }
             
@@ -354,7 +358,7 @@ public class OfficeTools {
             
             // 限制最大Sheet数
             if (endSheet - startSheet + 1 > MAX_PDF_PAGES) {
-                logger.warn("Excel Sheet范围过大({}-{})，限制为{}个", startSheet + 1, endSheet + 1, MAX_PDF_PAGES);
+                logger.warn("Requested Excel sheet range too large ({}-{}), limited to {} sheets", startSheet + 1, endSheet + 1, MAX_PDF_PAGES);
                 endSheet = startSheet + MAX_PDF_PAGES - 1;
             }
             
@@ -483,7 +487,7 @@ public class OfficeTools {
                 
                 // 限制最大幻灯片数
                 if (endSlide - startSlide + 1 > MAX_PDF_PAGES) {
-                    logger.warn("PPTX幻灯片范围过大({}-{})，限制为{}张", startSlide + 1, endSlide + 1, MAX_PDF_PAGES);
+                    logger.warn("Requested PPTX slide range too large ({}-{}), limited to {} slides", startSlide + 1, endSlide + 1, MAX_PDF_PAGES);
                     endSlide = startSlide + MAX_PDF_PAGES - 1;
                 }
                 
@@ -535,7 +539,7 @@ public class OfficeTools {
                 
                 // 限制最大幻灯片数
                 if (endSlide - startSlide + 1 > MAX_PDF_PAGES) {
-                    logger.warn("PPT幻灯片范围过大({}-{})，限制为{}张", startSlide + 1, endSlide + 1, MAX_PDF_PAGES);
+                    logger.warn("Requested PPT slide range too large ({}-{}), limited to {} slides", startSlide + 1, endSlide + 1, MAX_PDF_PAGES);
                     endSlide = startSlide + MAX_PDF_PAGES - 1;
                 }
                 
@@ -557,7 +561,7 @@ public class OfficeTools {
 
                     // 提取文本
                     StringBuilder slideText = new StringBuilder();
-                    for (org.apache.poi.hslf.usermodel.HSLFShape shape : slide.getShapes()) {
+                    for (HSLFShape shape : slide.getShapes()) {
                         if (shape instanceof HSLFTextShape) {
                             String text = ((HSLFTextShape) shape).getText();
                             if (text != null && !text.trim().isEmpty()) {
@@ -658,7 +662,7 @@ public class OfficeTools {
      */
     public static Map<String, Object> convertOfficeFile(String sourcePath, String targetFormat, String outputPath, Integer startPage, Integer endPage) throws IOException {
         sourcePath = FileUtils.normalizePath(sourcePath);
-        Path source = Paths.get(sourcePath);
+        Path source = Workspace.resolve(sourcePath);
 
         if (!Files.exists(source)) {
             throw new IOException("源文件不存在: " + sourcePath);
@@ -695,7 +699,11 @@ public class OfficeTools {
         // 确定输出路径
         Path output;
         if (outputPath != null && !outputPath.trim().isEmpty()) {
-            output = Paths.get(FileUtils.normalizePath(outputPath));
+            output = Workspace.resolve(FileUtils.normalizePath(outputPath));
+            String permissionError = FileTools.checkWritePermission(output.toString(), "Office 转换输出");
+            if (permissionError != null) {
+                throw new IOException(permissionError);
+            }
         } else {
             // 生成默认输出文件名（包含范围信息）
             String baseName = fileName.substring(0, lastDot > 0 ? lastDot : fileName.length());
@@ -859,7 +867,7 @@ public class OfficeTools {
         String content = Files.readString(source, StandardCharsets.UTF_8);
 
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Sheet1");
+            Sheet sheet = workbook.createSheet("Sheet1");
 
             // 解析Markdown表格
             String[] lines = content.split("\\n");
@@ -871,7 +879,7 @@ public class OfficeTools {
                     if (line.contains("---")) continue;
 
                     String[] cells = line.split("\\|");
-                    org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowNum++);
+                    Row row = sheet.createRow(rowNum++);
                     int colNum = 0;
                     for (String cell : cells) {
                         cell = cell.trim();

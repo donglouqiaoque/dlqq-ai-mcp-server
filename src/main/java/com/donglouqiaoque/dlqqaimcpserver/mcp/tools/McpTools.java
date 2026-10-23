@@ -1,12 +1,31 @@
 package com.donglouqiaoque.dlqqaimcpserver.mcp.tools;
 
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.jar.*;
 import java.util.stream.Stream;
+import com.donglouqiaoque.dlqqaimcpserver.BuildInfo;
+import java.net.URLDecoder;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
+import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * MCP工具类
@@ -42,7 +61,7 @@ public class McpTools {
             // 获取当前类的JAR文件路径
             String classPath = McpTools.class.getProtectionDomain().getCodeSource().getLocation().getPath();
             // URL解码处理中文路径
-            classPath = java.net.URLDecoder.decode(classPath, "UTF-8");
+            classPath = URLDecoder.decode(classPath, "UTF-8");
             File jarFile = new File(classPath);
 
             sb.append("JAR文件路径: ").append(jarFile.getAbsolutePath()).append("\n");
@@ -57,7 +76,7 @@ public class McpTools {
                 sb.append("JAR文件大小: ").append(jarFile.length()).append(" bytes (").append(String.format("%.2f", jarFile.length() / 1024.0)).append(" KB)\n\n");
 
                 // 真实构建时间：编译期写入 class 文件的常量（运行中替换 JAR 不会改变）
-                String embeddedBuildTime = com.donglouqiaoque.dlqqaimcpserver.BuildInfo.BUILD_TIME;
+                String embeddedBuildTime = BuildInfo.BUILD_TIME;
                 sb.append("构建时间（代码内，真实值）: ").append(utcToLocal(embeddedBuildTime))
                   .append(" (UTC: ").append(embeddedBuildTime).append(")\n\n");
 
@@ -101,11 +120,11 @@ public class McpTools {
                         if (buildTimeAttr != null) {
                             try {
                                 // 将UTC时间转换为本地时间
-                                java.time.LocalDateTime utcTime = java.time.LocalDateTime.parse(buildTimeAttr,
-                                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                                java.time.ZonedDateTime utcZoned = utcTime.atZone(java.time.ZoneId.of("UTC"));
-                                java.time.ZonedDateTime localZoned = utcZoned.withZoneSameInstant(java.time.ZoneId.systemDefault());
-                                String localTimeStr = localZoned.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                                LocalDateTime utcTime = LocalDateTime.parse(buildTimeAttr,
+                                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                                ZonedDateTime utcZoned = utcTime.atZone(ZoneId.of("UTC"));
+                                ZonedDateTime localZoned = utcZoned.withZoneSameInstant(ZoneId.systemDefault());
+                                String localTimeStr = localZoned.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                                 sb.append("JAR清单构建时间（磁盘）: ").append(localTimeStr).append(" (UTC: ").append(buildTimeAttr).append(")\n");
                             } catch (Exception e) {
                                 sb.append("JAR清单构建时间（磁盘）: ").append(buildTimeAttr).append("\n");
@@ -125,6 +144,7 @@ public class McpTools {
             sb.append("Java路径: ").append(System.getProperty("java.home")).append("\n");
             sb.append("操作系统: ").append(System.getProperty("os.name")).append(" ").append(System.getProperty("os.version")).append("\n");
             sb.append("工作目录: ").append(System.getProperty("user.dir")).append("\n");
+            sb.append("工作区: ").append(Workspace.getRoot()).append("（来源: ").append(Workspace.getSource()).append("）\n");
 
         } catch (Exception e) {
             sb.append("\n✗ 获取版本信息时出错: ").append(e.getMessage()).append("\n");
@@ -139,11 +159,11 @@ public class McpTools {
      */
     private static String utcToLocal(String utcTime) {
         try {
-            java.time.LocalDateTime t = java.time.LocalDateTime.parse(utcTime,
-                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-            return t.atZone(java.time.ZoneId.of("UTC"))
-                    .withZoneSameInstant(java.time.ZoneId.systemDefault())
-                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            LocalDateTime t = LocalDateTime.parse(utcTime,
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            return t.atZone(ZoneId.of("UTC"))
+                    .withZoneSameInstant(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         } catch (Exception e) {
             return utcTime;
         }
@@ -171,7 +191,7 @@ public class McpTools {
      * @return 删除结果描述（始终返回成功，即使部分文件被占用）
      */
     public static String clearDlqqData() {
-        Path dlqqPath = Paths.get(".dlqq");
+        Path dlqqPath = Workspace.getRoot().resolve(".dlqq");
 
         if (!Files.exists(dlqqPath)) {
             return ".dlqq目录不存在，无需清除";
@@ -182,8 +202,8 @@ public class McpTools {
         }
 
         StringBuilder result = new StringBuilder();
-        java.util.List<String> deletedItems = new java.util.ArrayList<>();
-        java.util.List<String> busyFiles = new java.util.ArrayList<>();
+        List<String> deletedItems = new ArrayList<>();
+        List<String> busyFiles = new ArrayList<>();
 
         // 先尝试删除日志目录（因为这是最可能被占用的）
         Path logPath = dlqqPath.resolve("log");
@@ -252,8 +272,8 @@ public class McpTools {
         // 尝试删除script/python目录
         Path scriptPath = dlqqPath.resolve("script");
         if (Files.exists(scriptPath)) {
-            java.util.List<String> scriptDeleted = new java.util.ArrayList<>();
-            java.util.List<String> scriptBusy = new java.util.ArrayList<>();
+            List<String> scriptDeleted = new ArrayList<>();
+            List<String> scriptBusy = new ArrayList<>();
             deleteDirectoryRecursiveCollect(scriptPath, ".dlqq/script", scriptDeleted, scriptBusy);
             deletedItems.addAll(scriptDeleted);
             busyFiles.addAll(scriptBusy);
@@ -262,8 +282,8 @@ public class McpTools {
         // 尝试删除旧的python目录（向后兼容）
         Path pythonPath = dlqqPath.resolve("python");
         if (Files.exists(pythonPath)) {
-            java.util.List<String> pythonDeleted = new java.util.ArrayList<>();
-            java.util.List<String> pythonBusy = new java.util.ArrayList<>();
+            List<String> pythonDeleted = new ArrayList<>();
+            List<String> pythonBusy = new ArrayList<>();
             deleteDirectoryRecursiveCollect(pythonPath, ".dlqq/python", pythonDeleted, pythonBusy);
             deletedItems.addAll(pythonDeleted);
             busyFiles.addAll(pythonBusy);
@@ -272,8 +292,8 @@ public class McpTools {
         // 尝试删除settings目录
         Path settingsPath = dlqqPath.resolve("settings");
         if (Files.exists(settingsPath)) {
-            java.util.List<String> settingsDeleted = new java.util.ArrayList<>();
-            java.util.List<String> settingsBusy = new java.util.ArrayList<>();
+            List<String> settingsDeleted = new ArrayList<>();
+            List<String> settingsBusy = new ArrayList<>();
             deleteDirectoryRecursiveCollect(settingsPath, ".dlqq/settings", settingsDeleted, settingsBusy);
             deletedItems.addAll(settingsDeleted);
             busyFiles.addAll(settingsBusy);
@@ -318,8 +338,8 @@ public class McpTools {
      * 递归删除目录并收集结果
      */
     private static void deleteDirectoryRecursiveCollect(Path path, String relativePath,
-                                                        java.util.List<String> deletedItems,
-                                                        java.util.List<String> busyFiles) {
+                                                        List<String> deletedItems,
+                                                        List<String> busyFiles) {
         if (Files.isDirectory(path)) {
             try (Stream<Path> stream = Files.list(path)) {
                 for (Path child : stream.toList()) {
@@ -354,7 +374,7 @@ public class McpTools {
      * @return 配置值，如果不存在返回null
      */
     public static String getConfigFromSettings(String key) {
-        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        Path settingsPath = Workspace.getSettingsFile();
         if (!Files.exists(settingsPath)) {
             return null;
         }
@@ -379,6 +399,64 @@ public class McpTools {
         return null;
     }
 
+    /**
+     * 确保当前工作区的 settings.properties 存在；不存在时写入默认配置。
+     * 配置位置随工作区变化：<工作区>/.dlqq/settings/settings.properties
+     */
+    public static void ensureSettingsFile() {
+        Path settingsPath = Workspace.getSettingsFile();
+        if (Files.exists(settingsPath)) {
+            fixSettingsEncodingIfNeeded(settingsPath);
+            return;
+        }
+        try {
+            Path settingsDir = settingsPath.getParent();
+            if (settingsDir != null) {
+                Files.createDirectories(settingsDir);
+            }
+            try (BufferedWriter writer = Files.newBufferedWriter(settingsPath, StandardCharsets.UTF_8)) {
+                writer.write("# MCP Server Settings\n");
+                writer.write("# ==================\n\n");
+                List<String> keys = new ArrayList<>(DEFAULT_PROPERTIES.keySet());
+                Collections.sort(keys);
+                for (String key : keys) {
+                    writer.write(key + "=" + DEFAULT_PROPERTIES.get(key) + "\n");
+                }
+            }
+        } catch (IOException e) {
+            // 创建失败时忽略，读取端会回退到默认值
+        }
+    }
+
+    /**
+     * 兼容历史版本：旧文件可能是 GBK 编码（含中文注释），若检测到非法 UTF-8 则转成 UTF-8。
+     */
+    private static void fixSettingsEncodingIfNeeded(Path settingsPath) {
+        try {
+            byte[] bytes = Files.readAllBytes(settingsPath);
+            CharsetDecoder utf8Decoder = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT);
+            try {
+                utf8Decoder.decode(ByteBuffer.wrap(bytes));
+                return; // 已是合法 UTF-8
+            } catch (CharacterCodingException ignored) {
+                // 继续尝试 GBK
+            }
+            CharsetDecoder gbkDecoder = Charset.forName("GBK").newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT);
+            try {
+                String text = gbkDecoder.decode(ByteBuffer.wrap(bytes)).toString();
+                Files.write(settingsPath, text.getBytes(StandardCharsets.UTF_8));
+            } catch (CharacterCodingException ignored) {
+                // 两种编码都无法解析时保持原样
+            }
+        } catch (IOException ignored) {
+            // 读取失败时保持原样
+        }
+    }
+
     /** 动态工具管理：被移除工具列表在 settings.properties 中的键名 */
     public static final String EXCLUDED_TOOLS_KEY = "mcp.tools.excluded";
 
@@ -387,8 +465,8 @@ public class McpTools {
      *
      * @return 工具名列表；未配置时返回空列表
      */
-    public static java.util.List<String> getExcludedToolNames() {
-        java.util.List<String> names = new java.util.ArrayList<>();
+    public static List<String> getExcludedToolNames() {
+        List<String> names = new ArrayList<>();
         String value = getConfigFromSettings(EXCLUDED_TOOLS_KEY);
         if (value == null || value.trim().isEmpty()) {
             return names;
@@ -408,8 +486,8 @@ public class McpTools {
      * @param names 工具名集合；为空时写入空字符串（等同于清空）
      * @return 保存结果消息
      */
-    public static String saveExcludedToolNames(java.util.Collection<String> names) {
-        java.util.List<String> sorted = new java.util.ArrayList<>();
+    public static String saveExcludedToolNames(Collection<String> names) {
+        List<String> sorted = new ArrayList<>();
         if (names != null) {
             for (String name : names) {
                 if (name != null && !name.trim().isEmpty() && !sorted.contains(name.trim())) {
@@ -417,7 +495,7 @@ public class McpTools {
                 }
             }
         }
-        java.util.Collections.sort(sorted);
+        Collections.sort(sorted);
         return setProperty(EXCLUDED_TOOLS_KEY, String.join(",", sorted));
     }
 
@@ -453,7 +531,7 @@ public class McpTools {
      * @return 脚本路径，如果不存在返回null
      */
     private static String getScriptFromSettings(String key) {
-        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        Path settingsPath = Workspace.getSettingsFile();
         if (!Files.exists(settingsPath)) {
             return null;
         }
@@ -495,7 +573,7 @@ public class McpTools {
             return new ScriptResult(output, -1);
         }
 
-        File scriptFile = new File(scriptPath);
+        File scriptFile = Workspace.resolve(scriptPath).toFile();
         if (!scriptFile.exists()) {
             String output = "✗ 错误：脚本文件不存在\n" +
                    "路径: " + scriptFile.getAbsolutePath() + "\n" +
@@ -511,7 +589,7 @@ public class McpTools {
         int exitCode = -1;
         try {
             ProcessBuilder pb = new ProcessBuilder(scriptPath);
-            pb.directory(new File(System.getProperty("user.dir")));
+            pb.directory(Workspace.getRoot().toFile());
             pb.redirectErrorStream(true);
 
             Process process = pb.start();
@@ -603,7 +681,7 @@ public class McpTools {
      * @return 设置结果
      */
     private static String setScriptInSettings(String key, String value, String description) {
-        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        Path settingsPath = Workspace.getSettingsFile();
 
         // 检查settings目录是否存在
         Path settingsDir = settingsPath.getParent();
@@ -616,8 +694,8 @@ public class McpTools {
         }
 
         // 读取现有配置
-        java.util.Map<String, String> config = new java.util.LinkedHashMap<>();
-        java.util.List<String> lines = new java.util.ArrayList<>();
+        Map<String, String> config = new LinkedHashMap<>();
+        List<String> lines = new ArrayList<>();
 
         if (Files.exists(settingsPath)) {
             try (BufferedReader reader = Files.newBufferedReader(settingsPath, StandardCharsets.UTF_8)) {
@@ -741,7 +819,7 @@ public class McpTools {
      * @return 配置值，不存在返回null
      */
     public static String getSearchConfig(String key) {
-        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        Path settingsPath = Workspace.getSettingsFile();
         if (!Files.exists(settingsPath)) {
             return null;
         }
@@ -777,7 +855,7 @@ public class McpTools {
      */
     public static String setSearchConfig(String key, String value, String description) {
         // 复用 setScriptInSettings 的逻辑，但使用不同的描述前缀
-        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        Path settingsPath = Workspace.getSettingsFile();
 
         // 检查settings目录是否存在
         Path settingsDir = settingsPath.getParent();
@@ -790,8 +868,8 @@ public class McpTools {
         }
 
         // 读取现有配置
-        java.util.Map<String, String> config = new java.util.LinkedHashMap<>();
-        java.util.List<String> lines = new java.util.ArrayList<>();
+        Map<String, String> config = new LinkedHashMap<>();
+        List<String> lines = new ArrayList<>();
 
         if (Files.exists(settingsPath)) {
             try (BufferedReader reader = Files.newBufferedReader(settingsPath, StandardCharsets.UTF_8)) {
@@ -1317,7 +1395,7 @@ public class McpTools {
             return "✗ 错误：属性值不能为null";
         }
 
-        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        Path settingsPath = Workspace.getSettingsFile();
 
         // 检查settings目录是否存在
         Path settingsDir = settingsPath.getParent();
@@ -1434,7 +1512,7 @@ public class McpTools {
      * @return 所有属性的Map
      */
     public static Map<String, String> getAllProperties() {
-        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        Path settingsPath = Workspace.getSettingsFile();
         Map<String, String> config = new LinkedHashMap<>();
 
         if (!Files.exists(settingsPath)) {
@@ -1538,7 +1616,7 @@ public class McpTools {
      * @return 缓存目录Path
      */
     public static Path getCacheDir() {
-        return Paths.get(".dlqq/cache");
+        return Workspace.getRoot().resolve(".dlqq/cache");
     }
 
     /**
@@ -1571,7 +1649,7 @@ public class McpTools {
 
         int deletedCount = 0;
         int dirCount = 0;
-        java.util.List<String> busyFiles = new java.util.ArrayList<>();
+        List<String> busyFiles = new ArrayList<>();
 
         // 遍历cache目录下的所有文件和子目录
         try (Stream<Path> entries = Files.list(cachePath)) {
@@ -1643,7 +1721,7 @@ public class McpTools {
      * @return 删除结果描述
      */
     public static String clearLog() {
-        Path logPath = Paths.get(".dlqq/log");
+        Path logPath = Workspace.getRoot().resolve(".dlqq/log");
 
         if (!Files.exists(logPath)) {
             return "✓ 日志目录不存在，无需清除";
@@ -1654,7 +1732,7 @@ public class McpTools {
         }
 
         int deletedCount = 0;
-        java.util.List<String> busyFiles = new java.util.ArrayList<>();
+        List<String> busyFiles = new ArrayList<>();
 
         // 遍历log目录下的所有子目录
         try (Stream<Path> subDirs = Files.list(logPath)) {
@@ -1712,7 +1790,7 @@ public class McpTools {
     /**
      * 默认配置值
      */
-    private static final java.util.Map<String, String> DEFAULT_PROPERTIES = new java.util.HashMap<>() {{
+    private static final Map<String, String> DEFAULT_PROPERTIES = new HashMap<>() {{
         // 响应大小限制
         put("response.max.size", "25804");
 
@@ -1747,7 +1825,7 @@ public class McpTools {
      * @return 重置结果描述
      */
     public static String resetProperties(String key) {
-        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        Path settingsPath = Workspace.getSettingsFile();
 
         // 检查settings目录是否存在
         Path settingsDir = settingsPath.getParent();
@@ -1828,7 +1906,7 @@ public class McpTools {
             return "✗ 错误：属性键不能为空";
         }
 
-        Path settingsPath = Paths.get(".dlqq/settings/settings.properties");
+        Path settingsPath = Workspace.getSettingsFile();
         if (!Files.exists(settingsPath)) {
             return "✗ 错误：配置文件不存在: " + settingsPath.toAbsolutePath();
         }

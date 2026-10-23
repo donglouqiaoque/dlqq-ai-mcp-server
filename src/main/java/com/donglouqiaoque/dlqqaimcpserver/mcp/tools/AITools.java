@@ -2,9 +2,18 @@ package com.donglouqiaoque.dlqqaimcpserver.mcp.tools;
 
 import com.donglouqiaoque.dlqqaimcpserver.mcp.protocol.McpSchema.*;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.server.McpServer;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.function.Function;
+import java.util.List;
 
 /**
  * 工具注册中心 - 将各分组工具注册到 MCP 服务器（dlqq-ai-mcp-server）
@@ -113,6 +122,11 @@ public class AITools {
         registerMcpRemoveToolsTool(server);         // dlqq_mcp_remove_tools
         registerMcpRefreshToolsTool(server);        // dlqq_mcp_refresh_tools
         registerMcpResetToolsTool(server);          // dlqq_mcp_reset_tools
+        registerMcpRunToolsTool(server);            // dlqq_mcp_run_tools
+        registerWorkspaceSetTool(server);           // dlqq_workspace_set
+        registerWorkspaceGetTool(server);           // dlqq_workspace_get
+        registerWorkspaceResetTool(server);         // dlqq_workspace_reset
+        registerWorkspacePermissionTool(server);    // dlqq_workspace_permission_set
         registerCheckBluetoothTool(server);          // dlqq_check_bluetooth_open
 
         // ========== MCP数据管理工具 ==========
@@ -3332,9 +3346,9 @@ public class AITools {
                     try {
                         hexStr = hexStr.trim();
                         if (hexStr.startsWith("[")) {
-                            com.google.gson.JsonArray jsonArray = com.google.gson.JsonParser.parseString(hexStr).getAsJsonArray();
+                            JsonArray jsonArray = JsonParser.parseString(hexStr).getAsJsonArray();
                             hexArray = new ArrayList<>();
-                            for (com.google.gson.JsonElement elem : jsonArray) {
+                            for (JsonElement elem : jsonArray) {
                                 hexArray.add(elem.getAsString());
                             }
                         } else {
@@ -3933,7 +3947,7 @@ public class AITools {
             "动态移除（禁用）指定的 MCP 工具：立即对客户端不可见，并写入 .dlqq/settings/settings.properties 的 mcp.tools.excluded，下次启动仍然保持移除状态",
             inputSchema,
             arguments -> {
-                java.util.List<String> names = parseToolNames(arguments);
+                List<String> names = parseToolNames(arguments);
                 if (names.isEmpty()) {
                     return textResult("✗ 错误：请提供要移除的工具名（tool_names）");
                 }
@@ -3994,8 +4008,8 @@ public class AITools {
             "恢复所有被移除（禁用）的工具，清空 settings.properties 中的 mcp.tools.excluded，并发送 notifications/tools/list_changed",
             inputSchema,
             arguments -> {
-                java.util.List<String> restored = server.enableAllTools();
-                McpTools.saveExcludedToolNames(java.util.Collections.emptyList());
+                List<String> restored = server.enableAllTools();
+                McpTools.saveExcludedToolNames(Collections.emptyList());
                 boolean notified = server.notifyToolsListChanged();
 
                 StringBuilder sb = new StringBuilder();
@@ -4011,15 +4025,199 @@ public class AITools {
     }
 
     /**
+     * dlqq_mcp_run_tools - 按名称直接调用任意已注册工具（绕过运行时移除/客户端未加载限制）
+     */
+    private void registerMcpRunToolsTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> nameProp = new HashMap<>();
+        nameProp.put("type", "string");
+        nameProp.put("description", "要调用的工具名，例如 dlqq_get_current_time");
+        properties.put("name", nameProp);
+
+        Map<String, Object> argumentsProp = new HashMap<>();
+        argumentsProp.put("type", "object");
+        argumentsProp.put("description", "工具参数对象（可选），例如 {\"expression\":\"1+1\"}");
+        properties.put("arguments", argumentsProp);
+
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("name"));
+
+        server.addTool("dlqq_mcp_run_tools",
+            "按名称直接调用任意已注册的 MCP 工具：不受“已移除（dlqq_mcp_remove_tools）/客户端未加载”限制，可用于调用被移除或客户端看不到的工具；只登记了名称但服务端未注册的工具无法调用",
+            inputSchema,
+            arguments -> {
+                Object nameValue = arguments == null ? null : arguments.get("name");
+                String toolName = nameValue == null ? "" : String.valueOf(nameValue).trim();
+                if (toolName.isEmpty()) {
+                    return textResult("✗ 错误：请提供要调用的工具名（name）");
+                }
+                if ("dlqq_mcp_run_tools".equals(toolName)) {
+                    return textResult("✗ 错误：dlqq_mcp_run_tools 不能调用自身");
+                }
+
+                Map<String, Object> toolArguments = new LinkedHashMap<>();
+                Object rawArgs = arguments == null ? null : arguments.get("arguments");
+                if (rawArgs instanceof Map<?, ?> map) {
+                    for (Map.Entry<?, ?> entry : map.entrySet()) {
+                        toolArguments.put(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                }
+
+                try {
+                    CallToolResult result = server.invokeToolDirect(toolName, toolArguments);
+                    if (result == null) {
+                        return textResult("✗ 工具不存在或未注册: " + toolName + "（服务端没有该工具，无法调用）");
+                    }
+                    return result;
+                } catch (Exception e) {
+                    return textResult("✗ 调用工具失败: " + toolName + " -> " + e.getMessage());
+                }
+            }
+        );
+    }
+
+    /**
+     * dlqq_workspace_set - 设置工作区目录（相对路径的基准目录）
+     */
+    private void registerWorkspaceSetTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> pathProp = new HashMap<>();
+        pathProp.put("type", "string");
+        pathProp.put("description", "工作区目录（必须是已存在的绝对路径）");
+        properties.put("path", pathProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("path"));
+
+        server.addTool("dlqq_workspace_set",
+            "设置 MCP 服务器的工作区目录（必须是已存在的绝对目录）：之后所有工具的相对路径都基于该目录解析。工作区路径不持久化，仅本次运行有效；启动参数 --workspace 优先",
+            inputSchema,
+            arguments -> {
+                Object raw = arguments == null ? null : arguments.get("path");
+                String path = raw == null ? "" : String.valueOf(raw).trim();
+                if (path.isEmpty()) {
+                    return textResult("✗ 错误：请提供工作区目录（path）");
+                }
+                if (!Workspace.isValidDirectory(path)) {
+                    return textResult("✗ 设置失败：工作区必须是已存在的绝对目录: " + path);
+                }
+                Path target = Workspace.resolve(path);
+                boolean confirmed = DialogTools.showConfirmDialog(
+                        "修改工作区确认",
+                        "AI 请求修改 MCP 服务器的工作区：\n\n"
+                                + "当前工作区:\n" + Workspace.getRoot() + "\n\n"
+                                + "新工作区:\n" + target + "\n\n"
+                                + "工作区路径不持久化，仅本次运行有效。\n"
+                                + "是否允许修改？"
+                );
+                if (!confirmed) {
+                    return textResult("【操作已取消】用户拒绝了修改工作区\n当前工作区: " + Workspace.getRoot());
+                }
+                try {
+                    Workspace.setRoot(path);
+                } catch (IllegalArgumentException e) {
+                    return textResult("✗ 设置失败：" + e.getMessage());
+                }
+                return textResult("工作区已设置（仅本次运行有效，不持久化）\n===================\n\n"
+                        + "当前工作区: " + Workspace.getRoot() + "\n"
+                        + "来源: " + Workspace.getSource() + "\n"
+                        + "修改权限: " + Workspace.getPermissionLabel() + "\n"
+                        + "权限配置: " + Workspace.getPermissionFile());
+            }
+        );
+    }
+
+    /**
+     * dlqq_workspace_get - 查看当前工作区
+     */
+    private void registerWorkspaceGetTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_workspace_get",
+            "查看当前工作区目录、来源（启动参数 --workspace / 运行期设置 / 进程工作目录）、修改权限（readonly/workspace/approval/full）、权限配置文件与进程 CWD",
+            inputSchema,
+            arguments -> textResult("工作区信息\n===================\n\n"
+                    + "当前工作区: " + Workspace.getRoot() + "\n"
+                    + "来源: " + Workspace.getSource() + "\n"
+                    + "启动参数: " + (Workspace.getCliPath() == null ? "（未指定）" : Workspace.getCliPath()) + "\n"
+                    + "修改权限: " + Workspace.getPermissionLabel() + "\n"
+                    + "权限配置: " + Workspace.getPermissionFile() + "\n"
+                    + "进程工作目录: " + System.getProperty("user.dir"))
+        );
+    }
+
+    /**
+     * dlqq_workspace_reset - 清除持久化工作区并回退
+     */
+    private void registerWorkspaceResetTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_workspace_reset",
+            "回退到启动参数 --workspace（若指定）或进程工作目录；不修改工作区内的权限配置",
+            inputSchema,
+            arguments -> {
+                String target = Workspace.getCliPath() != null
+                        ? Workspace.getCliPath()
+                        : System.getProperty("user.dir");
+            boolean confirmed = DialogTools.showConfirmDialog(
+                    "重置工作区确认",
+                    "AI 请求重置 MCP 服务器的工作区：\n\n"
+                            + "当前工作区:\n" + Workspace.getRoot() + "\n\n"
+                            + "回退到:\n" + target + "\n\n"
+                            + "是否允许重置？"
+            );
+            if (!confirmed) {
+                return textResult("【操作已取消】用户拒绝了重置工作区\n当前工作区: " + Workspace.getRoot());
+            }
+            Workspace.resetToDefault();
+            return textResult("工作区已重置\n===================\n\n"
+                    + "当前工作区: " + Workspace.getRoot() + "\n"
+                    + "来源: " + Workspace.getSource() + "\n"
+                    + "修改权限: " + Workspace.getPermissionLabel());
+            }
+        );
+    }
+
+    /**
+     * dlqq_workspace_permission_set - 设置工作区文件修改权限（持久化到工作区配置）
+     */
+    private void registerWorkspacePermissionTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> modeProp = new HashMap<>();
+        modeProp.put("type", "string");
+        modeProp.put("description", "权限模式：readonly（只读）、workspace（仅工作区内修改）、approval（工作区外审批）、full（完全权限）");
+        properties.put("mode", modeProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("mode"));
+
+        server.addTool("dlqq_workspace_permission_set",
+            "设置当前工作区的文件修改权限，并持久化到工作区内的 " + Workspace.SETTINGS_RELATIVE_PATH
+                    + "（键 " + Workspace.PERMISSION_KEY + "）：readonly 只读、workspace 仅工作区内修改、approval 工作区外审批、full 完全权限",
+            inputSchema,
+            arguments -> {
+                Object raw = arguments == null ? null : arguments.get("mode");
+                String mode = raw == null ? "" : String.valueOf(raw).trim();
+                try {
+                    Workspace.setPermission(mode);
+                } catch (IllegalArgumentException e) {
+                    return textResult("✗ 设置失败：" + e.getMessage());
+                }
+                return textResult("工作区权限已设置\n===================\n\n"
+                        + "当前工作区: " + Workspace.getRoot() + "\n"
+                        + "修改权限: " + Workspace.getPermissionLabel() + "\n"
+                        + "权限配置: " + Workspace.getPermissionFile());
+            }
+        );
+    }
+
+    /**
      * 解析工具名参数：支持 JSON 数组或逗号分隔字符串。
      */
-    private java.util.List<String> parseToolNames(Map<String, Object> arguments) {
-        java.util.List<String> names = new java.util.ArrayList<>();
+    private List<String> parseToolNames(Map<String, Object> arguments) {
+        List<String> names = new ArrayList<>();
         if (arguments == null) {
             return names;
         }
         Object raw = arguments.get("tool_names");
-        if (raw instanceof java.util.List<?> list) {
+        if (raw instanceof List<?> list) {
             for (Object item : list) {
                 if (item != null && !String.valueOf(item).trim().isEmpty()) {
                     names.add(String.valueOf(item).trim());
@@ -4396,7 +4594,7 @@ public class AITools {
      * 通用注册脚本路径设置工具
      */
     private void registerSetScriptTool(McpServer server, String toolName, String description,
-                                       java.util.function.Function<String, String> setter) {
+                                       Function<String, String> setter) {
         Map<String, Object> properties = new HashMap<>();
 
         Map<String, Object> pathProp = new HashMap<>();
