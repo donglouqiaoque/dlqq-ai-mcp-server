@@ -7,8 +7,8 @@
 
 1. **语言与构建**：Java 17 + Maven。
 2. **工程定位**：面向各类 AI Agent 客户端（DeepSeek Harness、Qwen Code、Claude Code、Cursor、Cline 等）的 MCP 服务器（stdio 传输、JSON-RPC 2.0），入口 `com.donglouqiaoque.dlqqaimcpserver.mcp.MCPServerMain`。
-3. **脚本位置**：构建/发布脚本放工程根目录 `script\`；辅助脚本（如生成完整 JRE）放 `.ai_res\script\`。不要把 `.bat/.ps1/.sh` 放在这两处之外。
-4. **.bat 禁止中文**：`.bat` 文件中**不得出现任何中文字符**（注释、字符串、`echo` 输出一律用英文/ASCII）。
+3. **脚本位置**：构建/发布/部署脚本放工程根目录 `script\`（含 `build.bat`、`build_and_copy.bat`、`start-http.bat`、`make-jre.bat`）；临时脚本放 `.ai_res\script\`。不要把 `.bat/.ps1/.sh` 放在这两处之外。
+4. **.bat 必须使用英文**：`.bat` 文件**只能出现英文/ASCII 字符，不得出现任何中文**（注释、`echo`、提示语、变量说明一律用英文）。
    原因：cmd 默认代码页（GBK/936）与 UTF-8 混用会导致中文乱码，甚至影响批处理解析。
 5. **产物命名**：JAR 固定名为 **`dlqq_ai_mcp_server.jar`**（历史名 `dlqq_ai_tools.jar` 已弃用）。
 6. **改完代码必须构建**：每次修改代码后都要重新打包，并按下面的规则替换发布目录里的 JAR。
@@ -16,6 +16,7 @@
 8. **Release 版本按版本号分目录**：`release\V{版本号}\jar\dlqq_ai_mcp_server.jar`。
 9. **工具变更要同步文档**：增删或修改 MCP 工具后，必须同步更新 [README.md](README.md) 与本文的工具速查。
 10. **诊断日志**：`StdioTransport`、`McpServer`、`MCPServerMain` 有详细连接诊断日志，输出到 `./.dlqq/log/logger/` 与 `./.dlqq/log/stderr/`，按时间命名（每次启动新建）。
+11. **临时文件位置**：临时文件/中间产物**禁止放 C 盘系统临时目录**，统一放工程内 `.ai_res\<类型>\`，按类型分子目录（如 `.ai_res\doc\` 放文档/差异报告、`.ai_res\script\` 放脚本、`.ai_res\tmp\` 放其他中间产物），用完自行清理。
 
 ## 二、运行环境要求
 
@@ -26,7 +27,7 @@
   ```cmd
   "<JDK17>\bin\jlink" --module-path "<JDK17>\jmods" --add-modules ALL-MODULE-PATH --output "<目标目录>\jre" --strip-debug --no-man-pages --no-header-files
   ```
-- 本机现成脚本 `.ai_res\script\make-jre.bat`（`.ai_res` 已被 git 忽略，仅本地有效）：复制到 JDK 根目录（与 `bin`、`jmods` 同级）双击运行，输出 `<JDK>\jre`。
+- 本机现成脚本 `script\make-jre.bat`：复制到 JDK 根目录（与 `bin`、`jmods` 同级）双击运行，输出 `<JDK>\jre`；部署时把该 `jre\` 与 `start-http.bat`、JAR 放同一目录。
 - 生成时的 `WARNING: Using incubator modules: ...` 属正常现象（`ALL-MODULE-PATH` 含孵化器模块），退出码 0、镜像可用，忽略即可。
 
 ### Python（串口/BLE 图形工具）
@@ -36,7 +37,7 @@
 
 ## 三、MCP 客户端配置
 
-本服务是标准 **stdio MCP Server**，可接入任意 MCP 客户端；服务端在 `initialize` 响应里的名称是 **`dlqq-ai-mcp-server`**，`tools/call` 的工具名前缀仍是 `dlqq_`。
+本服务是标准 **MCP Server**，支持 **stdio**（默认）与 **Streamable HTTP** 两种传输，可接入任意 MCP 客户端；服务端在 `initialize` 响应里的名称是 **`dlqq-ai-mcp-server`**，`tools/call` 的工具名前缀仍是 `dlqq_`。
 
 ### DeepSeek Harness (DSH)
 
@@ -79,6 +80,41 @@
 
 各客户端配置文件位置（Qwen Code、Claude Code/Desktop、Cursor、VS Code、Cline/Roo Code、Windsurf）见 [README.md](README.md) 的“接入 AI Agent 客户端”一节。
 
+### HTTP（Streamable HTTP）方式
+
+先启动服务（一次启动可被多个客户端共用，服务端无鉴权、无会话状态）：
+
+```cmd
+java -jar dlqq_ai_mcp_server.jar --transport http --port 49129 --path /mcp
+```
+
+端点：`http://127.0.0.1:49129/mcp`。
+
+**DSH**（`~/.dsh/cordis.patch.yml`，`transport: streamable-http` + `url`）：
+
+```yaml
+- insert:
+    - id: dlqq-mcp-http
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: dlqq-ai-mcp-server
+        transport: streamable-http
+        url: http://127.0.0.1:49129/mcp
+```
+
+**其他客户端**只需把 stdio 的 `command/args` 换成 URL：
+
+| 客户端 | HTTP 关键字段 |
+|--------|----------------|
+| Qwen Code | `"httpUrl": "http://127.0.0.1:49129/mcp"`（旧版 SSE 用 `url`） |
+| Claude Code | `claude mcp add --transport http <name> <url>`；JSON 用 `"type": "http"` + `"url"` |
+| Cursor | `"url": "http://127.0.0.1:49129/mcp"` |
+| VS Code (Copilot) | `"servers"` 里 `"type": "http"` + `"url"` |
+| Cline / Roo Code | `"type": "streamableHttp"` + `"url"` |
+| Windsurf | `"serverUrl": "http://127.0.0.1:49129/mcp"` |
+
+完整示例见 [README.md](README.md) 的“⑧ 用 HTTP（Streamable HTTP）方式接入”。
+
 ## 四、构建与发布
 
 ### 配置文件 `script\config.properties`
@@ -99,6 +135,8 @@ use_debug=true
 |------|------|------|
 | `script\build.bat` | 仅执行 `mvn clean package -DskipTests -Drevision={version}` | `target\dlqq_ai_mcp_server.jar` |
 | `script\build_and_copy.bat` | 构建并复制到发布目录 | debug 或 release 目录 |
+| `script\start-http.bat` | 部署用 HTTP 启动脚本（与 `jre\`、JAR 同目录，默认端口 49129） | 常驻 HTTP 服务 |
+| `script\make-jre.bat` | 生成完整版 JRE（复制到 JDK 根目录执行，输出 `<JDK>\jre`） | `jre\`（约 130 MB） |
 
 **发布目录规则**
 
@@ -106,6 +144,19 @@ use_debug=true
 |------|------|----------|
 | Debug | `use_debug=true` | `debug\dlqq_ai_mcp_server.jar` |
 | Release | `use_debug=false` | `release\V{release_version}\jar\dlqq_ai_mcp_server.jar` |
+
+### HTTP 部署结构
+
+```text
+dlqq_ai_mcp_server\
+├── start-http.bat
+├── dlqq_ai_mcp_server.jar
+└── jre\                # 由 script\make-jre.bat 生成（完整版）
+    └── bin\java.exe
+```
+
+- 默认端口 **49129**；被占用时控制台提示输入新端口，输入的新端口仍被占用会继续提示；**直接回车 = 重试默认端口**；无交互控制台则以退出码 1 结束。
+- `jre\` 缺失时脚本回退到 PATH 上的 `java`（部署仍建议自带 `jre\`）。
 
 用法：
 
@@ -124,22 +175,25 @@ src/main/java/com/donglouqiaoque/dlqqaimcpserver/
 │   ├── MCPServerMain.java          # 入口：日志目录/UTF-8 初始化、启动、健康检查线程
 │   ├── protocol/                   # JsonRpcMessage、McpSchema
 │   ├── server/McpServer.java       # 请求分发 + 工具注册表 + getToolsInfo()
-│   ├── transport/                  # McpTransport 接口、StdioTransport（双线程+队列）
-│   └── tools/                      # AITools（注册中心）与各工具实现
+│   ├── transport/                  # McpTransport 接口、StdioTransport（stdio）、HttpTransport（Streamable HTTP）
+│   └── tools/                      # AITools（注册中心）与各工具实现（含 ImageTools、AboutPanel、LogoLoader、WindowsNativeUtils）
 ├── cli/                            # 命令行解析（历史保留，主程序不走这里）
 ├── config/ConfigManager.java       # 旧配置（~/.aitools，历史保留）
 └── utils/                          # FileUtils、AIRulesUtils、CalculatorUtils
 src/main/resources/
 ├── py/ble_tools.py                 # BLE 图形工具（Python + bleak，Java 通过 Socket 驱动）
-├── image/logo.ico
+├── image/logo.ico                  # 窗口图标（ICO，供 Python/BLE 使用）
+├── image/logo.png                  # 窗口图标（PNG，LogoLoader 使用）
 └── simplelogger.properties
 ```
+
+启动参数：`--transport http|stdio`、`--port N`（默认 49129）、`--path /mcp`；默认 stdio。
 
 运行期目录（首次启动自动创建，已被 `.gitignore` 忽略）：`.dlqq/log/{logger,stderr}`、`.dlqq/settings/settings.properties`、`.dlqq/cache`。
 
 ## 六、工具速查
 
-共 **159** 个工具（146 个常规工具 + 13 个 `dlqq_set_*_script`），实现见 `mcp/tools/`，逐个参数说明见 [README.md](README.md)。
+共 **164** 个工具（151 个常规工具 + 13 个 `dlqq_set_*_script`），实现见 `mcp/tools/`，逐个参数说明见 [README.md](README.md)。
 
 | 分组 | 数量 | 说明 |
 |------|------|------|
@@ -154,15 +208,20 @@ src/main/resources/
 | USB | 14 | usb4java，HID/CDC |
 | WiFi | 12 | netsh / nmcli，Java 原生 |
 | 鼠标 / 键盘 | 13 | `java.awt.Robot` 模拟 |
-| 屏幕截图 | 1 | `dlqq_capture_screen` |
+| 屏幕截图 | 1 | `dlqq_capture_screen`（含鼠标光标绘制） |
+| 图片转换 | 1 | `dlqq_convert_image`（SVG/PNG/JPG/GIF/BMP，Batik 渲染 SVG） |
 | 时间 | 1 | `dlqq_get_current_time` |
 | 计算器 | 3 | 数学 / 程序 / 函数 |
 | 命令执行 | 1 | `dlqq_run_command`（JFrame 人工确认） |
 | Office | 2 | 读取转 Markdown、格式转换 |
 | 压缩解压 | 2 | zip4j + commons-compress |
-| MCP 数据/属性 | 7 | 版本信息、属性读写、清理数据/缓存/日志 |
+| MCP 数据/属性 | 11 | 版本信息（含编译进代码的真实构建时间）、热加载测试、动态工具管理（移除/刷新/恢复）、属性读写、清理数据/缓存/日志 |
 | 项目脚本 | 15 | 构建/烧写/运行/调试 ＋ 脚本路径设置 |
 | 工具列表 | 1 | `dlqq_get_tool_list` |
+
+**动态工具管理**：`dlqq_mcp_remove_tools`（移除并持久化）、`dlqq_mcp_refresh_tools`（仅推送 `notifications/tools/list_changed`）、`dlqq_mcp_reset_tools`（恢复全部并清空配置）。排除项存于 `.dlqq/settings/settings.properties` 的 `mcp.tools.excluded`（逗号分隔），服务端重启后仍保持移除状态；这三个管理工具受保护，不允许被移除。HTTP 模式下立即刷新需要客户端已打开 SSE 长连接。
+
+**脚本工具规则**：`dlqq_build_project` / `dlqq_rebuild_project` / `dlqq_chip_*` / `dlqq_*erase_download` / `dlqq_run_project` / `dlqq_debug_project` 等**没有任何内置默认脚本路径**；未配置时直接报错“需要先配置工具路径”，并提示对应的 `dlqq_set_*_script`。配置写入 `.dlqq/settings/settings.properties` 的 `script.*` 项。
 
 ## 七、AI 规则文件
 
@@ -175,12 +234,63 @@ src/main/resources/
 语法为 Gitignore 风格（`*.log`、`build/`、`/config.txt`、`!important.log`、`**/*.tmp`）。
 生效范围：工程内严格遵守；工程外弹 JFrame 由用户确认；单文件操作不受规则约束。
 
-## 八、已知限制
+## 八、热加载与动态工具逻辑（重要）
+
+### 结论
+
+- JVM 不支持运行中重载已加载的类：**换 JAR 必须重启服务端进程**。
+- 重启服务端会断开 SSE 长连接；HTTP 客户端（DSH，协议 2025-11-25）断开后**不会**自动重连 SSE、也不会重新 `initialize`/`tools/list`，所以客户端工具列表仍是旧的，新增/删除的工具对客户端不可见，**必须重启客户端**。
+- `notifications/tools/list_changed` 只在 SSE 存活时有效：服务端不重启、工具集变化时，推送后客户端约 2ms 重新 `tools/list`（已实测）。
+
+### 两个判断工具
+
+| 工具 | 说明 |
+|------|------|
+| `dlqq_get_mcp_version` | `构建时间（代码内，真实值）` 来自 `BuildInfo.BUILD_TIME`（templating-maven-plugin 编译期注入），替换 JAR 不重启不会变；`JAR清单构建时间（磁盘）` 读磁盘清单，替换后会变。两者不一致 = JAR 已换、进程仍跑旧代码 |
+| `dlqq_test_hot_reload` | 返回写死的 `HOT_RELOAD_TEST_MARK`（当前 v4），改标记重新构建可验证代码更新 |
+
+### SSE 与重启（机制）
+
+- HTTP 模式：客户端 `GET /mcp` + `Accept: text/event-stream` 建立 SSE；`HttpTransport.sseClients` 保存连接，`notifyToolsListChanged()` 遍历推送。
+- 重启 = 旧进程退出 + 新进程重新 listen：旧 TCP 连接被内核关闭、连接列表清空；新进程无法继承旧连接（TCP 连接属于旧进程的 socket）。
+- DSH 实测：服务端重启后不重连 SSE、不 `initialize`，只在调用时发 POST `tools/call` → 无推送通道（`notifyToolsListChanged()` 返回 false）。
+
+### 验证流程
+
+1. 构建新 JAR，记录 `BuildInfo.BUILD_TIME`；
+2. 停 HTTP 服务，确认端口释放；
+3. 覆盖部署目录 JAR；
+4. 重启服务；
+5. 调 `dlqq_get_mcp_version`：代码内时间 == 磁盘清单时间 == 新值 → 已加载；代码内仍为旧值 → 未生效；
+6. 如果涉及工具增删/改名/schema 变化，重启客户端后再确认工具列表。
+
+### 动态工具管理（不重启服务端的替代）
+
+- `dlqq_mcp_remove_tools` / `dlqq_mcp_refresh_tools` / `dlqq_mcp_reset_tools`：运行时禁用/恢复已注册工具，持久化到 `mcp.tools.excluded`，SSE 存活时客户端实时刷新。
+- 限制：只能隐藏/恢复**已注册**的工具，不能加载新代码；三个管理工具受保护不可移除。
+
+## 九、已知限制
 
 - **PDF/TLS/zipfs 等**：依赖**完整版 JRE**；精简 jlink 镜像缺模块时会报错（历史 `Could not initialize class org.apache.pdfbox.io.IOUtils` 即此类）。完整 JRE 生成方式见“二、运行环境要求”。
 - **硬件相关工具**（串口/BLE/USB）在没有对应硬件时只能验证窗口与管理类接口，收发的端到端链路需实机验证。
 - **PDF 写入**：工具侧不支持（`dlqq_convert_office_file` 目标格式不含 PDF），需先转 DOCX 再用外部工具导出。
 
-## 九、参考资料
+## 十、参考资料
 
-- Qwen Code MCP 配置教程：<https://qwenlm.github.io/qwen-code-docs/zh/users/features/mcp/>
+### MCP 协议
+
+- MCP 官方文档：<https://modelcontextprotocol.io/>
+- MCP 规范（含 Streamable HTTP 传输定义）：<https://modelcontextprotocol.io/specification/2026-07-28>
+
+### 各 Agent 客户端接入文档
+
+| 客户端 | 官方文档 | 本项目配置文件 |
+|--------|----------|----------------|
+| **DeepSeek Harness (DSH)** | 见本文“三、MCP 客户端配置”（插件 `@deepseek-ai/dsh-mcp-client`） | `C:\Users\<用户名>\.dsh\cordis.patch.yml` |
+| Qwen Code | <https://qwenlm.github.io/qwen-code-docs/zh/users/features/mcp/> | `settings.json` |
+| Claude Code | <https://code.claude.com/docs/en/mcp> | `.mcp.json` / `claude mcp add` |
+| Cline | <https://docs.cline.bot/mcp/mcp-overview> | `cline_mcp_settings.json` |
+| Cursor | <https://cursor.com/docs/mcp> | `.cursor\mcp.json` |
+| VS Code (GitHub Copilot) | <https://code.visualstudio.com/docs/agent-customization/mcp-servers> | `.vscode\mcp.json`（`servers` + `type`） |
+
+> 以上链接均为 2026-10 实测可访问；若后续客户端改版导致失效，以各客户端官网文档导航为准。

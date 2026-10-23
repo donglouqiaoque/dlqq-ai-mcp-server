@@ -18,6 +18,8 @@
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.build.timestamp.format>yyyy-MM-dd HH:mm:ss</maven.build.timestamp.format>
+        <!-- 供 templating 过滤使用（maven.build.timestamp 不能直接在模板里解析） -->
+        <build.timestamp>${maven.build.timestamp}</build.timestamp>
         <revision>255.0.0</revision>
     </properties>
 
@@ -71,6 +73,18 @@
             <groupId>com.twelvemonkeys.imageio</groupId>
             <artifactId>imageio-bmp</artifactId>
             <version>3.9.4</version>
+        </dependency>
+
+        <!-- Apache Batik - SVG 渲染（图片格式转换：SVG → PNG/JPG/GIF/BMP） -->
+        <dependency>
+            <groupId>org.apache.xmlgraphics</groupId>
+            <artifactId>batik-transcoder</artifactId>
+            <version>1.17</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.xmlgraphics</groupId>
+            <artifactId>batik-codec</artifactId>
+            <version>1.17</version>
         </dependency>
 
         <!-- Apache POI - Office文件处理 -->
@@ -134,6 +148,21 @@
 
     <build>
         <plugins>
+            <!-- 生成编译期构建信息：BuildInfo.java（真实构建时间编译进 class，供版本工具使用） -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>templating-maven-plugin</artifactId>
+                <version>3.0.0</version>
+                <executions>
+                    <execution>
+                        <id>filter-build-info</id>
+                        <goals>
+                            <goal>filter-sources</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- 编译插件 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

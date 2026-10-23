@@ -76,12 +76,33 @@ public class MouseTools {
         }
     }
 
+    /**
+     * 获取鼠标当前位置。
+     * 优先使用 Java 的 MouseInfo；失败时回退到 Windows 原生 GetCursorPos（JNA），
+     * 都失败才返回 (0, 0)。
+     */
     private static Point currentPosition() {
         try {
-            return MouseInfo.getPointerInfo().getLocation();
-        } catch (Exception e) {
-            return new Point(0, 0);
+            PointerInfo info = MouseInfo.getPointerInfo();
+            if (info != null && info.getLocation() != null) {
+                return info.getLocation();
+            }
+        } catch (Exception ignored) {
+            // 继续尝试原生方式
         }
+        Point nativePos = WindowsNativeUtils.getCursorPos();
+        if (nativePos != null) {
+            return nativePos;
+        }
+        return new Point(0, 0);
+    }
+
+    /**
+     * 格式化当前鼠标坐标，用于拼接在工具返回结果中
+     */
+    private static String currentPositionText() {
+        Point p = currentPosition();
+        return "当前鼠标坐标: (" + p.x + ", " + p.y + ")";
     }
 
     public static void registerTools(McpServer server) {
@@ -101,10 +122,10 @@ public class MouseTools {
         ToolInputSchema schema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_mouse_get_position",
-            "获取鼠标当前在屏幕上的位置坐标 (x, y)。",
+            "获取鼠标当前在屏幕上的位置坐标 (x, y)。返回当前鼠标的坐标和屏幕分辨率。",
             schema,
             args -> {
-                if (getRobot() == null) return err("无法初始化Robot（可能不支持图形环境）");
+                // 获取坐标不依赖 Robot（Robot 在无图形环境下可能初始化失败）
                 Point p = currentPosition();
                 return ok("鼠标当前位置: x=" + p.x + ", y=" + p.y + " (屏幕分辨率: " +
                     Toolkit.getDefaultToolkit().getScreenSize().width + "x" +
@@ -152,7 +173,9 @@ public class MouseTools {
                     targetY = Math.max(0, Math.min(screen.height - 1, targetY));
 
                     r.mouseMove(targetX, targetY);
-                    return ok("鼠标已移动到: x=" + targetX + ", y=" + targetY);
+                    Point now = currentPosition();
+                    return ok("鼠标已移动到: x=" + targetX + ", y=" + targetY + "，" +
+                        "当前鼠标坐标: (" + now.x + ", " + now.y + ")");
                 } catch (NumberFormatException e) {
                     return err("坐标参数必须是整数: " + e.getMessage());
                 } catch (Exception e) {
@@ -203,7 +226,8 @@ public class MouseTools {
                         }
                     }
                     String btnName = args.get("button") == null ? "左键" : String.valueOf(args.get("button"));
-                    return ok("已点击 " + btnName + " " + clicks + " 次，位置: (" + p.x + ", " + p.y + ")");
+                    return ok("已点击 " + btnName + " " + clicks + " 次，位置: (" + p.x + ", " + p.y + ")，" +
+                        currentPositionText());
                 } catch (NumberFormatException e) {
                     return err("参数必须是整数: " + e.getMessage());
                 } catch (Exception e) {
@@ -238,7 +262,8 @@ public class MouseTools {
                     if (args.get("y") != null) p.y = toInt(args.get("y"));
                     r.mouseMove(p.x, p.y);
                     r.mousePress(parseButtonMask((String) args.get("button")));
-                    return ok("已按下 " + (args.get("button") == null ? "左键" : args.get("button")) + "，位置: (" + p.x + ", " + p.y + ")");
+                    return ok("已按下 " + (args.get("button") == null ? "左键" : args.get("button")) + "，位置: (" + p.x + ", " + p.y + ")，" +
+                        currentPositionText());
                 } catch (Exception e) {
                     return err("按下失败: " + e.getMessage());
                 }
@@ -263,7 +288,8 @@ public class MouseTools {
                 if (r == null) return err("无法初始化Robot（可能不支持图形环境）");
                 try {
                     r.mouseRelease(parseButtonMask((String) args.get("button")));
-                    return ok("已释放 " + (args.get("button") == null ? "左键" : args.get("button")));
+                    return ok("已释放 " + (args.get("button") == null ? "左键" : args.get("button")) + "，" +
+                        currentPositionText());
                 } catch (Exception e) {
                     return err("释放失败: " + e.getMessage());
                 }
@@ -299,7 +325,8 @@ public class MouseTools {
                     }
                     if (amount == 0) return err("滚动量不能为0");
                     r.mouseWheel(amount);
-                    return ok("已滚动滚轮 " + (amount > 0 ? "向上 " + amount + " 格" : "向下 " + (-amount) + " 格"));
+                    return ok("已滚动滚轮 " + (amount > 0 ? "向上 " + amount + " 格" : "向下 " + (-amount) + " 格") + "，" +
+                        currentPositionText());
                 } catch (NumberFormatException e) {
                     return err("amount必须是整数: " + e.getMessage());
                 } catch (Exception e) {
@@ -358,7 +385,8 @@ public class MouseTools {
                         r.delay(delayPerStep);
                     }
                     r.mouseRelease(buttonMask);
-                    return ok("拖拽完成: (" + start.x + ", " + start.y + ") → (" + endX + ", " + endY + ")");
+                    return ok("拖拽完成: (" + start.x + ", " + start.y + ") → (" + endX + ", " + endY + ")，" +
+                        currentPositionText());
                 } catch (NumberFormatException e) {
                     return err("参数必须是整数: " + e.getMessage());
                 } catch (Exception e) {

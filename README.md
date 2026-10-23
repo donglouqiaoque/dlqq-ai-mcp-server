@@ -12,14 +12,15 @@
 - **BLE蓝牙** - 蓝牙低功耗设备的扫描、连接、数据读写工具（Python bleak + Socket）
 - **USB通信** - HID/CDC 设备的扫描、连接与收发（usb4java）
 - **WiFi工具** - 扫描、连接、断开 WiFi（netsh / nmcli）
-- **键鼠/截图** - `java.awt.Robot` 模拟鼠标键盘、截取桌面图像
+- **键鼠/截图** - `java.awt.Robot` 模拟鼠标键盘、截取桌面图像（截图会绘制真实鼠标光标）
+- **图片转换** - SVG/PNG/JPG/GIF/BMP 互转（SVG 由 Apache Batik 渲染）
 - **Office/压缩** - Office 转 Markdown、格式转换；ZIP(带密码) 与多格式解压
 - **计算器/命令/脚本** - 数学与程序计算、人工确认的命令执行、项目脚本编排
-- **MCP服务器** - 完整支持MCP协议，可作为各类 AI Agent 的本地工具服务器
+- **MCP服务器** - 完整支持MCP协议，可作为各类 AI Agent 的本地工具服务器；支持 stdio 与 Streamable HTTP 两种传输
 
 ## 工具列表
 
-本MCP服务器提供 **159** 个工具（146 个常规工具 + 13 个 `dlqq_set_*_script` 脚本路径设置工具）。
+本MCP服务器提供 **164** 个工具（151 个常规工具 + 13 个 `dlqq_set_*_script` 脚本路径设置工具）。
 > 说明：分组标题中的序号为历史遗留编号，实际工具数以各分组表格为准。
 
 产物 JAR 名为 **`dlqq_ai_mcp_server.jar`**（早期版本叫 `dlqq_ai_tools.jar`）。
@@ -141,7 +142,11 @@
 
 | 工具名称 | 描述 |
 |---------|------|
-| `dlqq_get_mcp_version` | 获取MCP服务器版本信息、JAR文件修改时间和构建信息 |
+| `dlqq_get_mcp_version` | 获取MCP服务器版本信息、**真实构建时间（编译进代码）**、JAR 信息与运行时信息 |
+| `dlqq_test_hot_reload` | 热加载测试：返回代码中写死的标记字符串，验证替换 JAR 后是否真的加载了新代码 |
+| `dlqq_mcp_remove_tools` | 动态移除（禁用）指定工具，立即隐藏并持久化到 `mcp.tools.excluded`，下次启动仍保持移除 |
+| `dlqq_mcp_refresh_tools` | 仅发送 `notifications/tools/list_changed`，让客户端重新拉取工具列表（不改工具集） |
+| `dlqq_mcp_reset_tools` | 恢复所有被移除的工具、清空 `mcp.tools.excluded`，并发送刷新通知 |
 | `dlqq_clear_mcp_data` | 清除MCP数据目录（.dlqq），包括日志、Python脚本等 |
 | `dlqq_clear_mcp_cache` | 清除MCP缓存目录（.dlqq/cache），删除所有缓存文件和子目录 |
 | `dlqq_clear_mcp_log` | 清除MCP日志文件（.dlqq/log），保留目录结构 |
@@ -160,14 +165,15 @@
 
 | 工具名称 | 描述 |
 |---------|------|
-| `dlqq_zip` | 压缩文件或目录为ZIP格式，支持多文件压缩、密码保护、压缩级别设置（1-9） |
-| `dlqq_unzip` | 解压多种压缩格式（ZIP/7Z/TAR/GZ/BZ2/XZ/RAR/CPIO/AR等），ZIP支持密码保护 |
+| `dlqq_zip` | 压缩文件或目录为ZIP格式，支持多文件压缩、密码保护、压缩级别设置（1-9），默认输出到 `.dlqq/cache` |
+| `dlqq_unzip` | 解压多种压缩格式（ZIP/7Z/TAR/GZ/BZ2/XZ/RAR/CPIO/AR等），ZIP支持密码保护，默认解压到 `.dlqq/cache` |
 
 **说明**：
 - 压缩格式：仅支持 ZIP（AES-256 加密，压缩级别 1-9，默认 5）
 - **解压格式**：zip、7z、tar、tar.gz、tgz、tar.bz2、tar.xz、gz、bz2、xz、rar、jar、war、cpio、ar
 - 密码仅适用于ZIP格式（7z/rar加密暂不支持）
 - 多文件压缩：`source_paths` 参数支持多个文件/目录路径
+- **默认输出目录**：未指定 `output_path` / `output_dir` 时，统一保存到 `.dlqq/cache`
 
 ### BOM控制工具 (83-84)
 
@@ -405,7 +411,9 @@ WiFi工具（Java原生实现），支持扫描周围WiFi网络、查看连接�
 | `dlqq_set_mcp_properties` | 设置MCP配置属性（含response.max.size，默认25804字节，最大258048） |
 
 **说明**：
-- 所有脚本路径默认空，首次执行会提示需要先使用 `dlqq_set_*_script` 工具设置
+- **不使用任何内置默认脚本**：所有脚本路径默认为空，未配置时工具会直接返回错误“未配置「xxx」脚本路径，需要先配置工具路径”，并给出对应的 `dlqq_set_*_script` 工具名
+- 执行类工具（`dlqq_build_project`、`dlqq_rebuild_project`、`dlqq_chip_erase`、`dlqq_chip_download`、`dlqq_erase_download`、`dlqq_build_erase_download`、`dlqq_rebuild_erase_download`、`dlqq_run_project`、`dlqq_debug_project`、`dlqq_build_run_project` 等）都遵循此规则
+- 首次使用前先调用对应的 `dlqq_set_*_script`，或用 `dlqq_set_mcp_properties` 直接写 `script.build` 等配置项
 - 脚本配置保存在 `.dlqq/settings/settings.properties` 文件中
 - `response.max.size` 控制文件操作返回内容的最大字节数（默认25804约25KB，最大258048约252KB）
 
@@ -420,6 +428,28 @@ WiFi工具（Java原生实现），支持扫描周围WiFi网络、查看连接�
 **参数**：
 - `output_path` (string, 可选): 输出文件路径（默认 `.dlqq/cache/screenshot_时间戳.png`）
 - `x` / `y` / `width` / `height` (integer, 可选): 截取区域，默认整个屏幕
+
+**说明**：
+- **截图包含鼠标光标**：通过 JNA 调用 Windows `GetCursorInfo` / `GetIconInfo` / `GetDIBits` 获取真实光标位图（含热点、alpha 通道、单色光标），按 alpha 混合绘制到截图中；非 Windows 平台或光标被隐藏时自动跳过
+- 返回结果中包含「鼠标光标: 已绘制到截图中 / 未绘制」状态
+- 默认保存到 `.dlqq/cache` 目录下带时间戳的文件
+
+### 图片工具
+
+| 工具名称 | 描述 |
+|---------|------|
+| `dlqq_convert_image` | 图片格式转换，支持 SVG/PNG/JPG/GIF/BMP 互转 |
+
+**参数**：
+- `source_path` (string, 必需): 源图片路径
+- `target_format` (string, 必需): 目标格式 `svg` / `png` / `jpg` / `gif` / `bmp`
+- `output_path` (string, 可选): 输出路径（默认 `.dlqq/cache` 下带时间戳的文件）
+- `quality` (integer, 可选): JPG 质量 1-100，默认 90
+
+**说明**：
+- **SVG → 光栅**（png/jpg/gif/bmp）：通过 Apache Batik 渲染后写出
+- **光栅 → 光栅**：ImageIO 直接转换；JPG 自动白底填充（不支持透明）
+- **光栅 → SVG**：以 data URI 嵌入位图生成 SVG，**非矢量化**，仅便于统一成 SVG 容器
 
 ### 工具列表查询工具
 
@@ -513,7 +543,7 @@ mvn clean package -DskipTests -Drevision=255.0.0
 
 ### 2. 接入 AI Agent 客户端
 
-本服务是标准 **stdio MCP Server**（JSON-RPC 2.0），不绑定某个客户端，任何支持 MCP 的 Agent 工具都能接入。下面按常用客户端给出配置，**DeepSeek Harness 放在第一位**。
+本服务是标准 **MCP Server**（JSON-RPC 2.0），支持 **stdio**（默认）与 **Streamable HTTP** 两种传输，不绑定某个客户端，任何支持 MCP 的 Agent 工具都能接入。下面按常用客户端给出配置，**DeepSeek Harness 放在第一位**；①~⑦ 为 stdio 配置，⑧ 为各客户端的 HTTP 配置。
 
 > 示例中的 JAR 路径请替换为本机真实路径：Debug 包是 `debug\dlqq_ai_mcp_server.jar`，Release 包是 `release\V1.0.0\jar\dlqq_ai_mcp_server.jar`。
 
@@ -655,12 +685,223 @@ Claude Desktop 使用 `claude_desktop_config.json`（Windows：`%APPDATA%\Claude
 }
 ```
 
+#### ⑧ 用 HTTP（Streamable HTTP）方式接入
+
+先以 HTTP 模式启动服务（一次启动，可被多个客户端共用）：
+
+```bash
+java -jar dlqq_ai_mcp_server.jar --transport http --port 49129 --path /mcp
+```
+
+端点：`http://127.0.0.1:49129/mcp`（端口/路径按启动参数调整；服务端无鉴权、无会话状态，各客户端直接填 URL 即可）。
+
+**DeepSeek Harness (DSH)** — `~/.dsh/cordis.patch.yml`（`transport: streamable-http` + `url`）：
+
+```yaml
+- insert:
+    - id: dlqq-mcp-http
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: dlqq-ai-mcp-server
+        transport: streamable-http
+        url: http://127.0.0.1:49129/mcp
+```
+
+**Qwen Code** — `settings.json`（Streamable HTTP 用 `httpUrl`；旧版 SSE 用 `url`）：
+
+```json
+{
+  "mcpServers": {
+    "dlqq-ai-mcp-server": {
+      "httpUrl": "http://127.0.0.1:49129/mcp"
+    }
+  }
+}
+```
+
+**Claude Code** — 命令行：
+
+```bash
+claude mcp add --transport http dlqq-ai-mcp-server http://127.0.0.1:49129/mcp
+```
+
+或写进 `.mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "dlqq-ai-mcp-server": {
+      "type": "http",
+      "url": "http://127.0.0.1:49129/mcp"
+    }
+  }
+}
+```
+
+**Cursor** — `.cursor/mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "dlqq-ai-mcp-server": {
+      "url": "http://127.0.0.1:49129/mcp"
+    }
+  }
+}
+```
+
+**VS Code (GitHub Copilot)** — `.vscode/mcp.json`（注意是 `servers` + `type`）：
+
+```json
+{
+  "servers": {
+    "dlqq-ai-mcp-server": {
+      "type": "http",
+      "url": "http://127.0.0.1:49129/mcp"
+    }
+  }
+}
+```
+
+**Cline / Roo Code** — `cline_mcp_settings.json`：
+
+```json
+{
+  "mcpServers": {
+    "dlqq-ai-mcp-server": {
+      "type": "streamableHttp",
+      "url": "http://127.0.0.1:49129/mcp"
+    }
+  }
+}
+```
+
+**Windsurf** — `mcp_config.json`（远程服务器用 `serverUrl`）：
+
+```json
+{
+  "mcpServers": {
+    "dlqq-ai-mcp-server": {
+      "serverUrl": "http://127.0.0.1:49129/mcp"
+    }
+  }
+}
+```
+
 #### 通用提示
 
-- 传输方式统一为 **stdio**，不占用端口，也不需要网络。
+- ①~⑦ 为 **stdio** 方式（客户端拉起进程，不占端口、不需要网络）；⑧ 为 **HTTP** 方式（先手动起服务，多客户端可共用）。
 - 编码：务必带 `-Dfile.encoding=UTF-8`（或设 `JAVA_TOOL_OPTIONS`），否则中文路径/内容可能乱码。
 - 启动耗时约 1~2 秒，客户端 `timeout` 建议 ≥ 30 秒。
 - 验证是否打通：让 Agent 调用 `dlqq_get_mcp_version`（返回版本与构建时间），或 `dlqq_get_tool_list`（列出全部工具）。
+
+### 3. 传输方式（STDIO / HTTP）
+
+服务器支持两种传输方式，通过启动参数切换（各客户端的 HTTP 配置示例见上一节“⑧ 用 HTTP（Streamable HTTP）方式接入”）：
+
+#### STDIO（默认）
+
+```bash
+java -jar dlqq_ai_mcp_server.jar
+```
+
+客户端以子进程方式启动服务器，通过标准输入/输出通信，适用于上面所有 Agent 客户端。
+
+#### HTTP（Streamable HTTP）
+
+```bash
+java -jar dlqq_ai_mcp_server.jar --transport http --port 49129 --path /mcp
+```
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--transport http` | 启用 HTTP 传输（`stdio` 为默认） | stdio |
+| `--port N` | HTTP 监听端口 | 49129 |
+| `--path /mcp` | MCP 端点路径 | /mcp |
+
+**协议说明**：
+- 客户端 `POST http://localhost:49129/mcp` 发送 JSON-RPC 请求，返回 JSON 响应
+- 通知（无 `id` 的请求）返回 `202 Accepted`
+- `GET /mcp` 返回服务健康状态（可用于探活）
+- `DELETE /mcp` 用于终止会话
+- 支持 CORS（`Access-Control-Allow-Origin: *`），可直接用浏览器/curl 调试
+
+**验证**：
+
+```bash
+# 健康检查
+curl http://localhost:49129/mcp
+
+# initialize
+curl -X POST http://localhost:49129/mcp -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+```
+
+#### 部署与启动脚本（start-http.bat）
+
+发布时把 `start-http.bat`、`dlqq_ai_mcp_server.jar`、`jre\` 放在**同一目录**，双击 `start-http.bat` 即可启动 HTTP 服务：
+
+```text
+dlqq_ai_mcp_server\
+├── start-http.bat
+├── dlqq_ai_mcp_server.jar
+└── jre\
+    ├── bin\java.exe
+    ├── lib\
+    └── ...
+```
+
+`script\start-http.bat` 内容（默认端口 **49129**，ASCII 编写，无中文）：
+
+```bat
+@echo off
+setlocal
+chcp 65001 >nul
+
+rem Deployment layout: this bat, dlqq_ai_mcp_server.jar and jre\ in the same folder.
+set "APP_DIR=%~dp0"
+set "JAR=%APP_DIR%dlqq_ai_mcp_server.jar"
+set "JAVA=%APP_DIR%jre\bin\java.exe"
+if not exist "%JAVA%" set "JAVA=java"
+
+if not exist "%JAR%" (
+    echo [ERROR] dlqq_ai_mcp_server.jar not found:
+    echo         %JAR%
+    echo [ERROR] Keep start-http.bat, dlqq_ai_mcp_server.jar and jre\ in the same folder.
+    pause
+    exit /b 1
+)
+
+echo ============================================================
+echo  dlqq-ai-mcp-server  -  HTTP mode
+echo  Endpoint : http://localhost:49129/mcp
+echo  JAR      : %JAR%
+echo  Java     : %JAVA%
+echo ============================================================
+echo.
+
+"%JAVA%" -Dfile.encoding=UTF-8 -jar "%JAR%" --transport http --port 49129 --path /mcp
+
+set "RC=%ERRORLEVEL%"
+echo.
+echo Server stopped. Exit code: %RC%
+pause
+endlocal
+```
+
+**端口占用处理**（Java 内实现，启动后在控制台交互）：
+
+| 情况 | 行为 |
+|------|------|
+| 49129 空闲 | 直接监听，控制台输出 `[HTTP] MCP server is running: http://localhost:49129/mcp` |
+| 49129 被占用 | 提示 `[HTTP] Port 49129 is already in use.`，要求输入新端口（1-65535） |
+| 输入的新端口也被占用 | 提示 `Port X is still in use`，继续要求重新输入 |
+| **直接回车** | 重新尝试默认端口 49129；若仍被占用则继续提示 |
+| 无交互控制台（被服务/计划任务拉起） | 打印提示后以退出码 1 结束，可用 `--port` 或环境方式重新指定 |
+
+端口参数：`--port` 默认 **49129**（与脚本一致）；如需换端口，改脚本里的 `--port 49129`，或在启动参数中指定 `--port N`。
+
+> `jre\` 可用 `script\make-jre.bat` 生成：把该脚本复制到 JDK 根目录（与 `bin`、`jmods` 同级）双击运行，会输出完整版 `<JDK>\jre`（`ALL-MODULE-PATH`，约 130 MB），再复制到部署目录即可。
 
 ## 工具详细说明
 
@@ -1855,7 +2096,7 @@ Claude Desktop 使用 `claude_desktop_config.json`（Windows：`%APPDATA%\Claude
 
 ### 73. dlqq_get_mcp_version
 
-获取MCP服务器版本信息、JAR文件修改时间和构建信息。
+获取MCP服务器版本信息、**真实构建时间**（编译期写入 class 文件的常量）、JAR 信息与运行时信息。
 
 **参数**：无
 
@@ -1864,7 +2105,45 @@ Claude Desktop 使用 `claude_desktop_config.json`（Windows：`%APPDATA%\Claude
 {}
 ```
 
-**返回**：版本号、构建时间、JAR文件路径等信息
+**返回**：
+- `构建时间（代码内，真实值）`：编译进代码的构建时间，**不受替换 JAR 影响**，反映当前进程实际运行的代码版本
+- `JAR清单构建时间（磁盘）`：磁盘上 JAR 包清单里的构建时间（替换 JAR 后会变化）
+- 版本号、JAR 文件路径/大小/修改时间、Java 运行时信息
+
+> 判断热加载：两者一致说明进程运行的正是磁盘上的 jar；代码内时间更旧则说明 jar 已被替换但未重启，新代码未生效。
+
+#### dlqq_test_hot_reload（热加载测试）
+
+返回 `McpTools.HOT_RELOAD_TEST_MARK` 这个编译期写死的字符串（当前值 `hot-reload-test-v4`）。
+
+**用途**：修改该字符串 → 重新构建 → 覆盖部署目录的 jar；**不重启**再调用仍返回旧值，**重启后**返回新值，可直观验证“是否真的加载了新代码”。
+
+**参数**：无
+
+**示例**：
+```json
+{}
+```
+
+**返回**：`热加载测试标记: hot-reload-test-v4` 及说明文字
+
+#### dlqq_mcp_remove_tools / dlqq_mcp_refresh_tools / dlqq_mcp_reset_tools（动态工具管理）
+
+这三个工具用于**运行时动态修改工具列表**，不需要重启服务端。
+
+| 工具 | 作用 | 参数 |
+|------|------|------|
+| `dlqq_mcp_remove_tools` | 移除（禁用）指定工具：`tools/list` 不再返回、`tools/call` 直接报“工具已被移除”；同时写入 `settings.properties` 的 `mcp.tools.excluded` | `tool_names`：数组（如 `["dlqq_capture_screen"]`）或逗号分隔字符串 |
+| `dlqq_mcp_refresh_tools` | 仅推送 `notifications/tools/list_changed`，客户端重新拉取列表 | 无 |
+| `dlqq_mcp_reset_tools` | 恢复全部被移除工具、清空 `mcp.tools.excluded`，并推送刷新通知 | 无 |
+
+**持久化**：被移除的工具记录在 `.dlqq/settings/settings.properties` 的 `mcp.tools.excluded`（逗号分隔），服务端下次启动时会自动应用，保持“已移除”状态。
+
+**保护规则**：`dlqq_mcp_remove_tools` / `dlqq_mcp_refresh_tools` / `dlqq_mcp_reset_tools` 三个管理工具不允许被移除，避免无法恢复。
+
+**刷新通道**：HTTP 模式下需要客户端已打开 SSE 长连接（`GET /mcp`，`Accept: text/event-stream`）才能立即刷新；没有 SSE 连接时移除仍然生效并持久化，客户端下次重连后生效。stdio 模式直接写 stdout。
+
+**实测**：移除 2 个工具后 `tools/list` 从 164 降到 162、SSE 客户端收到 `notifications/tools/list_changed`；重启服务端后仍为 162（日志：`被移除工具（持久化）: 1 个`）；`reset` 后恢复 164 并清空配置。
 
 ### 74. dlqq_clear_mcp_data
 
@@ -2132,6 +2411,7 @@ Claude Desktop 使用 `claude_desktop_config.json`（Windows：`%APPDATA%\Claude
   - Python bleak库（BLE蓝牙通信，经 `ble_tools.py` + Socket）
   - Apache POI 5.2.5（Office文件处理：DOC/DOCX/XLS/XLSX/PPT/PPTX）
   - Apache PDFBox 3.0.1（PDF文件处理）
+  - Apache Batik 1.17（SVG 渲染，图片格式转换）
   - zip4j（ZIP压缩/AES加密）
   - Apache Commons Compress 1.25 + XZ（7z/tar/gz/bz2/xz/rar/cpio/ar 解压）
   - Gson（JSON 序列化）
@@ -2159,16 +2439,21 @@ src/main/java/com/donglouqiaoque/dlqqaimcpserver/
 │   │   ├── WifiTools.java         # WiFi工具
 │   │   ├── MouseTools.java        # 鼠标模拟
 │   │   ├── KeyboardTools.java     # 键盘模拟
-│   │   ├── ScreenTools.java       # 屏幕截图
+│   │   ├── ScreenTools.java       # 屏幕截图（含鼠标光标绘制）
+│   │   ├── ImageTools.java        # 图片格式转换（SVG/PNG/JPG/GIF/BMP）
 │   │   ├── TimeTools.java         # 时间工具
 │   │   ├── OfficeTools.java       # Office读取/转换
 │   │   ├── ZipTools.java          # 压缩/解压
 │   │   ├── CalculatorTools.java   # 计算器
 │   │   ├── RunCommandTools.java   # 命令执行（人工确认）
+│   │   ├── AboutPanel.java        # GUI 关于/作者信息栏（共用）
+│   │   ├── LogoLoader.java        # 窗口图标加载（logo.png）
+│   │   ├── WindowsNativeUtils.java# Windows 原生能力（光标位图等，JNA）
 │   │   └── McpTools.java          # MCP数据/属性/版本/项目脚本
 │   └── transport/
 │       ├── McpTransport.java      # 传输层接口
-│       └── StdioTransport.java    # stdio传输实现
+│       ├── StdioTransport.java    # stdio传输实现
+│       └── HttpTransport.java     # Streamable HTTP 传输实现
 ├── cli/                           # 命令行解析（历史保留）
 ├── config/
 │   └── ConfigManager.java         # 旧配置管理器
@@ -2505,6 +2790,50 @@ settings.json
 - Windows 使用 `cmd /c` 执行，Linux/Mac 使用 `sh -c` 执行
 - 命令超时后会强制终止进程
 - 返回结果包含：命令、工作目录、退出码、状态、输出内容
+
+## 热加载（更新 JAR）说明
+
+### 相关工具
+
+| 工具 | 作用 |
+|------|------|
+| `dlqq_get_mcp_version` | 显示 `构建时间（代码内，真实值）`（编译进 class 的常量）和 `JAR清单构建时间（磁盘）`（磁盘 JAR 清单），用于判断新 JAR 是否已加载 |
+| `dlqq_test_hot_reload` | 返回代码中写死的标记字符串（当前 `hot-reload-test-v4`），改标记后重新构建即可验证代码是否更新 |
+| `dlqq_mcp_remove_tools` / `dlqq_mcp_refresh_tools` / `dlqq_mcp_reset_tools` | 运行时不重启服务端地移除/刷新/恢复工具列表（见“动态工具管理”），用于验证客户端实时刷新能力 |
+
+### 标准更新流程（换 JAR 必须重启）
+
+1. 构建新 JAR（`script\build_and_copy.bat`），记录 `BuildInfo.BUILD_TIME`；
+2. **停掉旧 HTTP 服务**，确认端口释放（`netstat` 无 LISTENING）；
+3. 复制新 JAR 覆盖部署目录；
+4. 重启 HTTP 服务（`start-http.bat`）；
+5. 调 `dlqq_get_mcp_version` 查看：
+   - `构建时间（代码内，真实值）` 与 `JAR清单构建时间（磁盘）` 一致、且为新的构建时间 → 新代码已加载；
+   - 代码内时间仍是旧的、磁盘清单已是新的 → JAR 换了但进程没重启（未生效）；
+6. 新增/删除/修改了工具时，还需**重启客户端（DSH）**，原因见下。
+
+### 原理
+
+- **类加载**：JVM 启动时加载 JAR 中的类，运行期间不会因为磁盘上的 JAR 被替换而重新加载；因此换 JAR 必须重启进程。`dlqq_get_mcp_version` 的“代码内真实值”来自编译期常量，替换 JAR 不会变，能可靠反映“当前进程跑的代码版本”；“磁盘清单”只反映磁盘文件。
+- **SSE 长连接**：HTTP 模式下客户端通过 `GET /mcp` + `Accept: text/event-stream` 建立 SSE 长连接，服务端记录连接并在其上推送 `notifications/tools/list_changed`。重启服务端会关闭旧进程的 TCP 连接、清空连接列表；新进程无法继承旧连接。
+- **客户端行为**（DSH，协议 2025-11-25，实测）：服务端重启后 DSH 不会重连 SSE、也不会重新 `initialize`/`tools/list`，只在调用工具时发 POST `tools/call`。因此重启后服务端没有可用的推送通道，客户端工具列表仍是旧的。
+
+### 范围与限制
+
+| 能力 | 是否支持 | 说明 |
+|------|---------|------|
+| 重启服务端后加载新代码 | ✅ | 必须停服务 → 换 JAR → 重启 |
+| 不重启进程替换 JAR | ❌ | JVM 不支持运行中重载已加载的类 |
+| 不重启服务端动态移除/恢复工具 | ✅ | `dlqq_mcp_remove_tools` / `dlqq_mcp_reset_tools`，状态持久化 |
+| 工具列表变化时客户端实时刷新 | ⚠️ 仅 SSE 存活时 | 推送后约 2ms 客户端重新 `tools/list`（实测） |
+| 重启服务端后客户端自动刷新工具列表 | ❌ | DSH 不重连 SSE、不重新初始化，必须重启 DSH |
+| 不重启客户端看到新增工具 | ❌ | 客户端工具列表是连接时缓存的 |
+
+### 为什么“服务端主动通知”救不了换 JAR
+
+通知只能沿**已建立的 SSE 连接**推送；换 JAR 需要重启进程，SSE 必然断开，重启后客户端又不重建连接，所以没有接收方。通知机制适用于“服务端不重启、工具集变化”的场景（如动态工具管理），不能替代“换代码必须重启”的约束。
+
+> 结论：换 JAR 的标准操作是 **停服务 → 覆盖 JAR → 重启服务 → 重启客户端**；只改工具内部实现（名称/参数/描述不变）时，客户端可不重启。
 
 ## 已知限制
 

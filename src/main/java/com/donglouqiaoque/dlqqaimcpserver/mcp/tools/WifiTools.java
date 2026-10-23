@@ -8,11 +8,14 @@ import com.donglouqiaoque.dlqqaimcpserver.mcp.server.McpServer;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -131,6 +134,9 @@ public class WifiTools {
         guiWindow.setSize(720, 520);
         guiWindow.setLocationRelativeTo(null);
 
+        // Set window icon
+        LogoLoader.applyTo(guiWindow, "WiFi工具");
+
         JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
@@ -175,6 +181,9 @@ public class WifiTools {
         JScrollPane logScroll = new JScrollPane(logArea);
         logScroll.setPreferredSize(new Dimension(0, 140));
         mainPanel.add(logScroll, BorderLayout.SOUTH);
+
+        // 作者信息栏（作者 + 版本号 + 联系作者链接）
+        mainPanel.add(AboutPanel.create(guiWindow), BorderLayout.PAGE_END);
 
         guiWindow.setContentPane(mainPanel);
         guiWindow.setVisible(true);

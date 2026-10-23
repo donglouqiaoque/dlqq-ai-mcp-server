@@ -1297,19 +1297,8 @@ public class UartTools {
         guiWindow.setSize(800, 600);
         guiWindow.setLocationRelativeTo(null);
 
-        // Set window icon
-        try {
-            java.net.URL iconUrl = getClass().getResource("/image/logo.ico");
-            if (iconUrl != null) {
-                guiWindow.setIconImage(ImageIO.read(iconUrl));
-                System.err.println("窗口图标已设置: " + iconUrl);
-            } else {
-                System.err.println("警告: 未找到图标资源 /image/logo.ico");
-            }
-        } catch (Exception e) {
-            System.err.println("设置窗口图标失败: " + e.getMessage());
-            e.printStackTrace();
-        }
+        // Set window icon（使用 PNG 资源，JDK ImageIO 不支持 ICO 格式）
+        LogoLoader.applyTo(guiWindow, "串口工具");
 
         JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -1591,55 +1580,8 @@ public class UartTools {
 
         mainPanel.add(bottomPanel, BorderLayout.SOUTH);
 
-        // 作者信息栏
-        JPanel authorPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 2));
-        authorPanel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
-        authorPanel.setBackground(new Color(240, 240, 240));
-
-        // 作者
-        JLabel authorLabel = new JLabel("作者：鸫楼桥鹊");
-        authorLabel.setFont(new Font("Microsoft YaHei", Font.PLAIN, 11));
-        authorLabel.setForeground(Color.DARK_GRAY);
-        authorPanel.add(authorLabel);
-
-        // 版本号（从config.properties读取）
-        String version = getAppVersion();
-        String versionText = "无法获取".equals(version) ? "无法获取" : "V" + version;
-        JLabel versionLabel = new JLabel("版本：" + versionText);
-        versionLabel.setFont(new Font("Consolas", Font.PLAIN, 11));
-        versionLabel.setForeground(Color.DARK_GRAY);
-        authorPanel.add(versionLabel);
-
-        // 联系作者（可点击链接）
-        JLabel linkLabel = new JLabel("<html><u>联系作者：www.donglouqiaoque.com</u></html>");
-        linkLabel.setFont(new Font("Microsoft YaHei", Font.PLAIN, 11));
-        linkLabel.setForeground(new Color(0, 102, 204));
-        linkLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        linkLabel.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                try {
-                    if (Desktop.isDesktopSupported()) {
-                        Desktop.getDesktop().browse(new URI("http://www.donglouqiaoque.com"));
-                    }
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(guiWindow, "无法打开浏览器：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
-                }
-            }
-
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                linkLabel.setForeground(new Color(0, 51, 153));
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                linkLabel.setForeground(new Color(0, 102, 204));
-            }
-        });
-        authorPanel.add(linkLabel);
-
-        mainPanel.add(authorPanel, BorderLayout.PAGE_END);
+        // 作者信息栏（作者 + 版本号 + 联系作者链接）
+        mainPanel.add(AboutPanel.create(guiWindow), BorderLayout.PAGE_END);
 
         guiWindow.add(mainPanel);
 
@@ -1706,61 +1648,6 @@ public class UartTools {
                 }
             }
         }
-    }
-
-    /**
-     * 获取应用版本号和构建时间
-     * 格式：Vx.x.x（xxx.xx.xx xx.xx.xx）
-     */
-    private static String getAppVersion() {
-        try {
-            // 获取当前类的JAR文件路径
-            String classPath = UartTools.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-            // URL解码处理中文路径
-            classPath = java.net.URLDecoder.decode(classPath, "UTF-8");
-            File jarFile = new File(classPath);
-
-            if (jarFile.exists()) {
-                // 读取MANIFEST.MF
-                try (JarFile jar = new JarFile(jarFile)) {
-                    Manifest manifest = jar.getManifest();
-                    if (manifest != null) {
-                        Attributes mainAttrs = manifest.getMainAttributes();
-                        String version = mainAttrs.getValue("Implementation-Version");
-
-                        // 获取构建时间
-                        String buildTime = null;
-                        String buildTimeAttr = mainAttrs.getValue("Build-Time");
-                        if (buildTimeAttr != null) {
-                            try {
-                                // 将UTC时间转换为本地时间
-                                java.time.LocalDateTime utcTime = java.time.LocalDateTime.parse(buildTimeAttr,
-                                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                                java.time.ZonedDateTime utcZoned = utcTime.atZone(java.time.ZoneId.of("UTC"));
-                                java.time.ZonedDateTime localZoned = utcZoned.withZoneSameInstant(java.time.ZoneId.systemDefault());
-                                buildTime = localZoned.format(java.time.format.DateTimeFormatter.ofPattern("yyyy.MM.dd HH.mm.ss"));
-                            } catch (Exception e) {
-                                // 如果解析失败，使用JAR文件修改时间
-                            }
-                        }
-
-                        // 如果没有从MANIFEST获取到构建时间，使用JAR文件修改时间
-                        if (buildTime == null) {
-                            long lastModified = jarFile.lastModified();
-                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy.MM.dd HH.mm.ss");
-                            buildTime = sdf.format(new Date(lastModified));
-                        }
-
-                        if (version != null) {
-                            return version + "（" + buildTime + "）";
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // 出错时返回无法获取
-        }
-        return "无法获取";
     }
 
     /**

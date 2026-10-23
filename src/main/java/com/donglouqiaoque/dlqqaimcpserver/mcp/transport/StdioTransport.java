@@ -87,6 +87,26 @@ public class StdioTransport implements McpTransport {
         return running.get() && !executor.isShutdown() && !executor.isTerminated();
     }
 
+    /**
+     * 通过 stdout 发送 notifications/tools/list_changed 通知。
+     */
+    @Override
+    public boolean notifyToolsListChanged() {
+        String notification = "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}";
+        try {
+            synchronized (outputStream) {
+                outputStream.write(notification.getBytes(StandardCharsets.UTF_8));
+                outputStream.write('\n');
+                outputStream.flush();
+            }
+            logger.info("[StdioTransport] 已发送 notifications/tools/list_changed");
+            return true;
+        } catch (IOException e) {
+            logger.error("[StdioTransport] 发送 notifications/tools/list_changed 失败: {}", e.getMessage());
+            return false;
+        }
+    }
+
     @Override
     public void stop() throws IOException {
         running.set(false);

@@ -8,6 +8,7 @@ import com.donglouqiaoque.dlqqaimcpserver.mcp.server.McpServer;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -109,9 +110,12 @@ public class ScreenTools {
                             "（屏幕范围: " + captureRect + "）");
                     }
 
-                    // 截图
+                    // 截图（Robot 截取的图像不包含鼠标光标）
                     Robot robot = new Robot();
                     BufferedImage image = robot.createScreenCapture(rect);
+
+                    // 将当前鼠标光标绘制到截图上（Windows 平台通过 JNA 获取真实光标位图）
+                    boolean cursorDrawn = WindowsNativeUtils.drawCursor(image, rect);
 
                     // 保存
                     boolean written = ImageIO.write(image, format, target.toFile());
@@ -132,6 +136,7 @@ public class ScreenTools {
                     sb.append("文件大小: ").append(fileSize).append(" 字节 (")
                       .append(String.format("%.1f", fileSize / 1024.0)).append(" KB)\n");
                     sb.append("屏幕总尺寸: ").append(captureRect.width).append(" x ").append(captureRect.height).append("\n");
+                    sb.append("鼠标光标: ").append(cursorDrawn ? "已绘制到截图中" : "未绘制（光标不在截取区域内、被隐藏或平台不支持）").append("\n");
                     sb.append("\n提示: 可使用 dlqq_read_bin_file 读取图片内容，或告知用户查看该文件。");
 
                     return ok(sb.toString());

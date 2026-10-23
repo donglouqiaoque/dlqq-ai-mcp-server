@@ -44,6 +44,140 @@ public class McpServer {
     }
 
     /**
+     * 通知客户端工具列表已变化（notifications/tools/list_changed）。
+     *
+     * @return true 表示通知已通过至少一个通道发送
+     */
+    public boolean notifyToolsListChanged() {
+        boolean sent = transport.notifyToolsListChanged();
+        logger.info("[McpServer] 发送 notifications/tools/list_changed, 结果={}", sent);
+        return sent;
+    }
+
+    /**
+     * 动态工具管理：被移除（禁用）的工具集合。
+     * 工具本身仍保留在 toolHandlers 中，便于 reset 时恢复。
+     */
+    private final Set<String> disabledTools = ConcurrentHashMap.newKeySet();
+
+    /** 不允许被移除的管理工具（否则无法恢复） */
+    private static final Set<String> PROTECTED_TOOLS = Set.of(
+            "dlqq_mcp_remove_tools",
+            "dlqq_mcp_refresh_tools",
+            "dlqq_mcp_reset_tools");
+
+    /**
+     * 动态工具变更结果。
+     */
+    public static class ToolChangeResult {
+        /** 本次实际移除/恢复的工具 */
+        public final List<String> applied = new ArrayList<>();
+        /** 不存在或未启用的工具 */
+        public final List<String> unknown = new ArrayList<>();
+        /** 受保护、不允许移除的管理工具 */
+        public final List<String> protectedNames = new ArrayList<>();
+        /** 变更后处于启用状态的工具数量 */
+        public int enabledCount;
+        /** 变更后处于移除状态的工具数量 */
+        public int disabledCount;
+    }
+
+    /**
+     * 是否存在指定工具（含已被移除的工具）。
+     */
+    public boolean hasTool(String name) {
+        return toolHandlers.containsKey(name);
+    }
+
+    /**
+     * 当前被移除（禁用）的工具列表。
+     */
+    public Set<String> getDisabledTools() {
+        return new java.util.LinkedHashSet<>(disabledTools);
+    }
+
+    /**
+     * 当前启用（对客户端可见）的工具数量。
+     */
+    public int getEnabledToolCount() {
+        return toolHandlers.size() - disabledTools.size();
+    }
+
+    /**
+     * 启动时应用持久化的排除列表（.dlqq/settings/settings.properties 的 mcp.tools.excluded）。
+     *
+     * @param names 要移除的工具名
+     * @return 实际生效的数量
+     */
+    public int applyExcludedTools(Collection<String> names) {
+        int applied = 0;
+        if (names == null) {
+            return 0;
+        }
+        for (String name : names) {
+            if (name == null || name.trim().isEmpty()) {
+                continue;
+            }
+            String toolName = name.trim();
+            if (PROTECTED_TOOLS.contains(toolName) || !toolHandlers.containsKey(toolName)) {
+                logger.warn("[McpServer] 启动时忽略无效的排除工具: {}", toolName);
+                continue;
+            }
+            if (disabledTools.add(toolName)) {
+                applied++;
+            }
+        }
+        logger.info("[McpServer] 启动时应用排除工具 {} 个, 当前启用工具数={}", applied, getEnabledToolCount());
+        return applied;
+    }
+
+    /**
+     * 运行时移除工具（仅禁用，不删除注册信息，便于 reset 恢复）。
+     */
+    public ToolChangeResult disableTools(Collection<String> names) {
+        ToolChangeResult result = new ToolChangeResult();
+        if (names != null) {
+            for (String name : names) {
+                if (name == null || name.trim().isEmpty()) {
+                    continue;
+                }
+                String toolName = name.trim();
+                if (PROTECTED_TOOLS.contains(toolName)) {
+                    result.protectedNames.add(toolName);
+                } else if (!toolHandlers.containsKey(toolName)) {
+                    result.unknown.add(toolName);
+                } else if (disabledTools.add(toolName)) {
+                    result.applied.add(toolName);
+                }
+            }
+        }
+        result.enabledCount = getEnabledToolCount();
+        result.disabledCount = disabledTools.size();
+        logger.info("[McpServer] 移除工具: 生效={}, 未知={}, 受保护={}, 当前启用数={}",
+                result.applied, result.unknown, result.protectedNames, result.enabledCount);
+        return result;
+    }
+
+    /**
+     * 恢复所有被移除的工具。
+     *
+     * @return 实际恢复的工具名
+     */
+    public List<String> enableAllTools() {
+        List<String> restored = new ArrayList<>(disabledTools);
+        disabledTools.clear();
+        logger.info("[McpServer] 恢复全部被移除工具: {}", restored);
+        return restored;
+    }
+
+    /**
+     * 指定工具当前是否被移除。
+     */
+    public boolean isToolDisabled(String name) {
+        return disabledTools.contains(name);
+    }
+
+    /**
      * 注册默认的处理程序
      */
     private void registerDefaultHandlers() {
@@ -152,7 +286,7 @@ public class McpServer {
         this.initialized = true;
 
         logger.info("[McpServer.handleInitialize] 客户端协议版本: {}", this.clientProtocolVersion);
-        logger.info("[McpServer.handleInitialize] 注册的工具数量: {}", toolHandlers.size());
+        logger.info("[McpServer.handleInitialize] 注册的工具数量: {}", getEnabledToolCount());
         logger.info("[McpServer.handleInitialize] 注册的资源数量: {}", resourceHandlers.size());
         logger.info("[McpServer.handleInitialize] 注册的提示数量: {}", promptHandlers.size());
 
@@ -189,6 +323,9 @@ public class McpServer {
         logger.info("[McpServer.handleToolsList] 正在构建工具列表，handler数量: {}", toolHandlers.size());
 
         for (Map.Entry<String, ToolHandler> entry : toolHandlers.entrySet()) {
+            if (disabledTools.contains(entry.getKey())) {
+                continue;
+            }
             ToolHandler handler = entry.getValue();
             Tool tool = new Tool();
             tool.setName(entry.getKey());
@@ -197,7 +334,8 @@ public class McpServer {
             tools.add(tool);
         }
 
-        logger.info("[McpServer.handleToolsList] 工具列表构建完成，共 {} 个工具", tools.size());
+        logger.info("[McpServer.handleToolsList] 工具列表构建完成，共 {} 个工具（已移除 {} 个）",
+                tools.size(), disabledTools.size());
 
         ListToolsResult result = new ListToolsResult(tools);
         logger.info("[McpServer.handleToolsList] ListToolsResult对象已创建");
@@ -225,8 +363,13 @@ public class McpServer {
 
         ToolHandler handler = toolHandlers.get(toolName);
         if (handler == null) {
-            sendErrorResponse(request.getId(), JsonRpcMessage.ERROR_INVALID_PARAMS, 
+            sendErrorResponse(request.getId(), JsonRpcMessage.ERROR_INVALID_PARAMS,
                     "Tool not found: " + toolName);
+            return;
+        }
+        if (disabledTools.contains(toolName)) {
+            sendErrorResponse(request.getId(), JsonRpcMessage.ERROR_INVALID_PARAMS,
+                    "工具已被移除: " + toolName + "（可用 dlqq_mcp_reset_tools 恢复）");
             return;
         }
 
@@ -373,6 +516,9 @@ public class McpServer {
         String keyword = (filter == null || filter.trim().isEmpty()) ? null : filter.trim().toLowerCase();
         int count = 0;
         for (String name : names) {
+            if (disabledTools.contains(name)) {
+                continue;
+            }
             if (keyword != null && !name.toLowerCase().contains(keyword)) {
                 continue;
             }
@@ -388,7 +534,13 @@ public class McpServer {
         }
         result.append(": ").append(count).append(" 个");
         if (keyword == null) {
-            result.append(" / 总计 ").append(toolHandlers.size()).append(" 个");
+            result.append(" / 总计 ").append(getEnabledToolCount()).append(" 个");
+        }
+        if (!disabledTools.isEmpty()) {
+            List<String> disabled = new ArrayList<>(disabledTools);
+            Collections.sort(disabled);
+            result.append("（已移除 ").append(disabled.size()).append(" 个: ")
+                  .append(String.join(", ", disabled)).append("）");
         }
         result.append("\n");
         result.append("===================\n\n");

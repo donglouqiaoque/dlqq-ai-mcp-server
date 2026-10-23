@@ -341,15 +341,18 @@ public class BleTools {
                 }
                 String iconPath = imageDir + File.separator + "logo.ico";
                 File iconFile = new File(iconPath);
-                try (InputStream is = getClass().getResourceAsStream("/image/logo.ico");
-                     FileOutputStream fos = new FileOutputStream(iconFile)) {
+                try (InputStream is = getClass().getResourceAsStream("/image/logo.ico")) {
                     if (is != null) {
-                        byte[] buffer = new byte[1024];
-                        int len;
-                        while ((len = is.read(buffer)) > 0) {
-                            fos.write(buffer, 0, len);
+                        try (FileOutputStream fos = new FileOutputStream(iconFile)) {
+                            byte[] buffer = new byte[1024];
+                            int len;
+                            while ((len = is.read(buffer)) > 0) {
+                                fos.write(buffer, 0, len);
+                            }
                         }
                         System.err.println("已释放 logo.ico 到: " + iconPath);
+                    } else {
+                        System.err.println("警告: jar 中未找到 /image/logo.ico 资源，跳过释放");
                     }
                 } catch (Exception e) {
                     System.err.println("释放图标文件失败: " + e.getMessage());

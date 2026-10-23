@@ -923,6 +923,9 @@ public class UsbTools {
         guiWindow.setLocationRelativeTo(null);
         guiWindow.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 
+        // Set window icon
+        LogoLoader.applyTo(guiWindow, "USB工具");
+
         // 主面板
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -992,6 +995,9 @@ public class UsbTools {
         mainPanel.add(controlPanel, BorderLayout.NORTH);
         mainPanel.add(scrollPane, BorderLayout.CENTER);
         mainPanel.add(statusPanel, BorderLayout.SOUTH);
+
+        // 作者信息栏（作者 + 版本号 + 联系作者链接）
+        mainPanel.add(AboutPanel.create(guiWindow), BorderLayout.PAGE_END);
 
         guiWindow.add(mainPanel);
 

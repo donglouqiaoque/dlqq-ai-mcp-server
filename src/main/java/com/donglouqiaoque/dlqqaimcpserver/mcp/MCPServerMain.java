@@ -2,6 +2,8 @@ package com.donglouqiaoque.dlqqaimcpserver.mcp;
 
 import com.donglouqiaoque.dlqqaimcpserver.mcp.server.McpServer;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.tools.AITools;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.transport.HttpTransport;
+import com.donglouqiaoque.dlqqaimcpserver.mcp.transport.McpTransport;
 import com.donglouqiaoque.dlqqaimcpserver.mcp.transport.StdioTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,10 +110,18 @@ public class MCPServerMain {
 
     // 全局变量用于健康检查
     private static volatile boolean isRunning = true;
-    private static StdioTransport transport;
+    private static McpTransport transport;
     private static McpServer server;
 
+    // 传输方式配置（默认 stdio）
+    private static boolean httpMode = false;
+    private static int httpPort = 49129;
+    private static String httpPath = "/mcp";
+
     public static void main(String[] args) {
+        // 解析命令行参数（--transport http|stdio, --port N, --path /mcp）
+        parseArgs(args);
+
         // 设置UTF-8编码
         System.setProperty("file.encoding", "UTF-8");
         System.setProperty("sun.stdout.encoding", "UTF-8");
@@ -157,12 +167,60 @@ public class MCPServerMain {
     }
     
     /**
+     * 解析命令行参数
+     * 支持: --transport http|stdio, --port N, --path /mcp
+     */
+    private static void parseArgs(String[] args) {
+        for (int i = 0; i < args.length; i++) {
+            switch (args[i]) {
+                case "--transport":
+                    if (i + 1 < args.length) {
+                        String t = args[++i].toLowerCase();
+                        httpMode = "http".equals(t);
+                        if (!"http".equals(t) && !"stdio".equals(t)) {
+                            logger.warn("[MCPServerMain] 未知传输方式: {}，使用默认 stdio", t);
+                            httpMode = false;
+                        }
+                    }
+                    break;
+                case "--port":
+                    if (i + 1 < args.length) {
+                        try {
+                            httpPort = Integer.parseInt(args[++i]);
+                        } catch (NumberFormatException e) {
+                            logger.warn("[MCPServerMain] 无效端口号: {}，使用默认 49129", args[i]);
+                        }
+                    }
+                    break;
+                case "--path":
+                    if (i + 1 < args.length) {
+                        httpPath = args[++i];
+                        if (!httpPath.startsWith("/")) {
+                            httpPath = "/" + httpPath;
+                        }
+                    }
+                    break;
+                default:
+                    // 忽略未知参数
+                    break;
+            }
+        }
+    }
+
+    /**
      * 启动MCP服务器
      */
     private static void startServer() throws IOException {
-        // 创建传输层（stdio）
-        transport = new StdioTransport();
-        logger.debug("Transport created");
+        // 创建传输层（stdio 或 http）
+        HttpTransport httpTransport = null;
+        if (httpMode) {
+            httpTransport = new HttpTransport(httpPort, httpPath);
+            transport = httpTransport;
+            logger.info("Transport created: HTTP (port={}, path={})", httpPort, httpPath);
+        } else {
+            transport = new StdioTransport();
+            logger.info("Transport created: STDIO");
+        }
 
         // 创建MCP服务器
         String version = MCPServerMain.class.getPackage().getImplementationVersion();
@@ -181,12 +239,28 @@ public class MCPServerMain {
         aiTools.registerTools(server);
         logger.debug("Tools registered");
 
+        // 应用持久化的“被移除工具”列表（.dlqq/settings/settings.properties 的 mcp.tools.excluded）
+        int excluded = server.applyExcludedTools(
+                com.donglouqiaoque.dlqqaimcpserver.mcp.tools.McpTools.getExcludedToolNames());
+        logger.info("被移除工具（持久化）: {} 个, 当前启用工具数: {}", excluded, server.getEnabledToolCount());
+
         // 启动服务器
         server.start();
         logger.info("========================================");
         logger.info("MCP Server started successfully!");
         logger.info("Server name: dlqq-ai-mcp-server");
         logger.info("Server version: {}", version);
+        if (httpMode) {
+            int actualPort = httpTransport != null ? httpTransport.getPort() : httpPort;
+            logger.info("Transport: HTTP (Streamable HTTP)");
+            logger.info("Endpoint: http://localhost:{}{}", actualPort, httpPath);
+            // 双击 bat / 控制台启动时给出可见提示（端口可能因冲突被用户改过）
+            System.out.println("[HTTP] MCP server is running: http://localhost:" + actualPort + httpPath);
+            System.out.println("[HTTP] Press Ctrl+C to stop.");
+            System.out.flush();
+        } else {
+            logger.info("Transport: STDIO");
+        }
         logger.info("Waiting for requests...");
         logger.info("========================================");
     }

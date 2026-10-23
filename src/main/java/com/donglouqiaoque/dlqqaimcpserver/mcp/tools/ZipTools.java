@@ -89,19 +89,17 @@ public class ZipTools {
             String normalizedOutput = FileUtils.normalizePath(outputPath);
             outputFilePath = Paths.get(normalizedOutput);
         } else {
-            // 默认输出到第一个源文件所在目录
+            // 默认输出到 .dlqq/cache 目录
             File firstSource = sourceFiles.get(0);
             String baseName = firstSource.getName();
-            if (firstSource.isDirectory()) {
-                baseName = firstSource.getName();
-            } else {
-                baseName = firstSource.getName();
+            if (!firstSource.isDirectory()) {
                 int lastDot = baseName.lastIndexOf('.');
                 if (lastDot > 0) {
                     baseName = baseName.substring(0, lastDot);
                 }
             }
-            outputFilePath = Paths.get(firstSource.getParent(), baseName + ".zip");
+            Path cacheDir = McpTools.ensureCacheDir();
+            outputFilePath = cacheDir.resolve(baseName + ".zip");
         }
 
         // 确保输出目录存在
@@ -199,9 +197,10 @@ public class ZipTools {
             String normalizedOutput = FileUtils.normalizePath(outputDir);
             outputPath = Paths.get(normalizedOutput);
         } else {
-            // 默认输出到压缩文件所在目录下的同名文件夹
+            // 默认输出到 .dlqq/cache 目录下的同名文件夹
             String baseName = stripArchiveExt(fileName);
-            outputPath = zipFilePath.getParent().resolve(baseName);
+            Path cacheDir = McpTools.ensureCacheDir();
+            outputPath = cacheDir.resolve(baseName);
         }
 
         // 确保输出目录存在

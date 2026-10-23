@@ -56,6 +56,11 @@ public class McpTools {
                 sb.append("JAR文件修改时间: ").append(buildTime).append("\n");
                 sb.append("JAR文件大小: ").append(jarFile.length()).append(" bytes (").append(String.format("%.2f", jarFile.length() / 1024.0)).append(" KB)\n\n");
 
+                // 真实构建时间：编译期写入 class 文件的常量（运行中替换 JAR 不会改变）
+                String embeddedBuildTime = com.donglouqiaoque.dlqqaimcpserver.BuildInfo.BUILD_TIME;
+                sb.append("构建时间（代码内，真实值）: ").append(utcToLocal(embeddedBuildTime))
+                  .append(" (UTC: ").append(embeddedBuildTime).append(")\n\n");
+
                 // 读取MANIFEST.MF
                 try (JarFile jar = new JarFile(jarFile)) {
                     Manifest manifest = jar.getManifest();
@@ -101,9 +106,9 @@ public class McpTools {
                                 java.time.ZonedDateTime utcZoned = utcTime.atZone(java.time.ZoneId.of("UTC"));
                                 java.time.ZonedDateTime localZoned = utcZoned.withZoneSameInstant(java.time.ZoneId.systemDefault());
                                 String localTimeStr = localZoned.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                                sb.append("构建时间: ").append(localTimeStr).append(" (UTC: ").append(buildTimeAttr).append(")\n");
+                                sb.append("JAR清单构建时间（磁盘）: ").append(localTimeStr).append(" (UTC: ").append(buildTimeAttr).append(")\n");
                             } catch (Exception e) {
-                                sb.append("构建时间: ").append(buildTimeAttr).append("\n");
+                                sb.append("JAR清单构建时间（磁盘）: ").append(buildTimeAttr).append("\n");
                             }
                         }
                     } else {
@@ -127,6 +132,37 @@ public class McpTools {
         }
 
         return sb.toString();
+    }
+
+    /**
+     * 把 UTC 时间字符串（yyyy-MM-dd HH:mm:ss）转换为本地时间字符串。
+     */
+    private static String utcToLocal(String utcTime) {
+        try {
+            java.time.LocalDateTime t = java.time.LocalDateTime.parse(utcTime,
+                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            return t.atZone(java.time.ZoneId.of("UTC"))
+                    .withZoneSameInstant(java.time.ZoneId.systemDefault())
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        } catch (Exception e) {
+            return utcTime;
+        }
+    }
+
+    /**
+     * 热加载测试标记：编译期写死在代码里，修改后重新构建即可验证“替换 JAR 是否真的加载了新代码”。
+     */
+    public static final String HOT_RELOAD_TEST_MARK = "hot-reload-test-v4";
+
+    /**
+     * 热加载测试：返回代码中写死的标记字符串。
+     * 该值编译在 class 文件中，替换 JAR 后不重启仍返回旧值；重启后返回新值。
+     *
+     * @return 热加载测试结果
+     */
+    public static String testHotReload() {
+        return "热加载测试标记: " + HOT_RELOAD_TEST_MARK + "\n"
+                + "返回内容已修改（v4），用于观察客户端是否自动更新工具列表。\n";
     }
 
     /**
@@ -343,6 +379,48 @@ public class McpTools {
         return null;
     }
 
+    /** 动态工具管理：被移除工具列表在 settings.properties 中的键名 */
+    public static final String EXCLUDED_TOOLS_KEY = "mcp.tools.excluded";
+
+    /**
+     * 读取被移除（排除）的工具名列表（逗号分隔，已去空）。
+     *
+     * @return 工具名列表；未配置时返回空列表
+     */
+    public static java.util.List<String> getExcludedToolNames() {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        String value = getConfigFromSettings(EXCLUDED_TOOLS_KEY);
+        if (value == null || value.trim().isEmpty()) {
+            return names;
+        }
+        for (String part : value.split(",")) {
+            String name = part.trim();
+            if (!name.isEmpty() && !names.contains(name)) {
+                names.add(name);
+            }
+        }
+        return names;
+    }
+
+    /**
+     * 保存被移除（排除）的工具名列表到 settings.properties。
+     *
+     * @param names 工具名集合；为空时写入空字符串（等同于清空）
+     * @return 保存结果消息
+     */
+    public static String saveExcludedToolNames(java.util.Collection<String> names) {
+        java.util.List<String> sorted = new java.util.ArrayList<>();
+        if (names != null) {
+            for (String name : names) {
+                if (name != null && !name.trim().isEmpty() && !sorted.contains(name.trim())) {
+                    sorted.add(name.trim());
+                }
+            }
+        }
+        java.util.Collections.sort(sorted);
+        return setProperty(EXCLUDED_TOOLS_KEY, String.join(",", sorted));
+    }
+
     // 最大返回内容限制（API限制 258048 字节）
     public static final int MAX_RESPONSE_SIZE = 258048; // 约252KB，API上限
     public static final int DEFAULT_RESPONSE_SIZE = 25804; // 默认1/10 API上限（约25KB）
@@ -409,7 +487,7 @@ public class McpTools {
      */
     private static ScriptResult executeScript(String scriptPath, String operationName, String configKey) {
         if (scriptPath == null || scriptPath.isEmpty()) {
-            String output = "✗ 错误：未配置" + operationName + "脚本路径\n\n" +
+            String output = "✗ 错误：未配置「" + operationName + "」脚本路径，需要先配置工具路径。\n\n" +
                    "请先使用以下工具设置脚本路径：\n" +
                    "  dlqq_set_" + configKey + "_script\n\n" +
                    "或在 .dlqq/settings/settings.properties 中手动设置：\n" +
@@ -809,14 +887,14 @@ public class McpTools {
         String downloadScript = getScriptFromSettings("script.chip.download");
 
         if (eraseScript == null || eraseScript.isEmpty()) {
-            return "✗ 错误：未配置擦除脚本路径\n\n" +
+            return "✗ 错误：未配置擦除脚本路径，需要先配置工具路径。\n\n" +
                    "组合脚本 script.erase.download 和单独脚本 script.chip.erase 都未配置\n" +
                    "请先使用 dlqq_set_chip_erase_script 设置擦除脚本\n" +
                    "或使用 dlqq_set_erase_download_script 设置组合脚本";
         }
 
         if (downloadScript == null || downloadScript.isEmpty()) {
-            return "✗ 错误：未配置下载脚本路径\n\n" +
+            return "✗ 错误：未配置下载脚本路径，需要先配置工具路径。\n\n" +
                    "组合脚本 script.erase.download 和单独脚本 script.chip.download 都未配置\n" +
                    "请先使用 dlqq_set_chip_download_script 设置下载脚本\n" +
                    "或使用 dlqq_set_erase_download_script 设置组合脚本";
@@ -891,7 +969,7 @@ public class McpTools {
         }
 
         if (missingScripts.length() > 0) {
-            return "✗ 错误：缺少必要的脚本配置\n\n" +
+            return "✗ 错误：缺少必要的脚本配置，需要先配置工具路径。\n\n" +
                    "组合脚本 script.build.erase.download 未配置，且以下单独脚本也未配置：\n" +
                    missingScripts.toString() + "\n" +
                    "请先使用相应的 dlqq_set_*_script 工具设置脚本\n" +
@@ -981,7 +1059,7 @@ public class McpTools {
         }
 
         if (missingScripts.length() > 0) {
-            return "✗ 错误：缺少必要的脚本配置\n\n" +
+            return "✗ 错误：缺少必要的脚本配置，需要先配置工具路径。\n\n" +
                    "组合脚本 script.rebuild.erase.download 未配置，且以下单独脚本也未配置：\n" +
                    missingScripts.toString() + "\n" +
                    "请先使用相应的 dlqq_set_*_script 工具设置脚本\n" +
@@ -1643,6 +1721,9 @@ public class McpTools {
         put("search.max.file.size", String.valueOf(10 * 1024 * 1024)); // 10MB
         put("search.max.results", "50");
         put("search.text.extensions", ".java,.c,.cpp,.h,.hpp,.cs,.py,.js,.ts,.html,.css,.json,.xml,.yaml,.yml,.md,.txt,.sh,.bat,.properties,.gradle,.ini");
+
+        // 动态工具管理（被移除的工具名，逗号分隔）
+        put("mcp.tools.excluded", "");
 
         // 脚本配置（默认为空，需要用户自行设置）
         put("script.build", "");

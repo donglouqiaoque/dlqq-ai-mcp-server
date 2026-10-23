@@ -109,6 +109,10 @@ public class AITools {
 
         // ========== 系统信息工具 ==========
         registerGetMcpVersionTool(server);          // dlqq_get_mcp_version
+        registerTestHotReloadTool(server);          // dlqq_test_hot_reload
+        registerMcpRemoveToolsTool(server);         // dlqq_mcp_remove_tools
+        registerMcpRefreshToolsTool(server);        // dlqq_mcp_refresh_tools
+        registerMcpResetToolsTool(server);          // dlqq_mcp_reset_tools
         registerCheckBluetoothTool(server);          // dlqq_check_bluetooth_open
 
         // ========== MCP数据管理工具 ==========
@@ -198,6 +202,9 @@ public class AITools {
 
         // ========== 屏幕截图工具 ==========
         ScreenTools.registerTools(server);          // dlqq_capture_screen
+
+        // ========== 图片工具 ==========
+        ImageTools.registerTools(server);           // dlqq_convert_image
 
         // ========== 工具列表查询工具 ==========
         registerGetToolListTool(server);            // dlqq_get_tool_list
@@ -3884,13 +3891,148 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_get_mcp_version",
-            "获取MCP服务器的版本信息、JAR文件修改时间和构建信息，用于确认代码是否已更新",
+            "获取MCP服务器的版本信息、真实构建时间（编译进代码）、JAR文件信息与运行时信息，用于确认代码是否已更新",
             inputSchema,
             arguments -> {
                 String result = McpTools.getMcpVersion();
                 return textResult(result);
             }
         );
+    }
+
+    /**
+     * dlqq_test_hot_reload - 热加载测试：返回代码中写死的标记字符串
+     */
+    private void registerTestHotReloadTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_test_hot_reload",
+            "热加载测试：返回代码中写死的标记字符串。替换 JAR 后不重启仍返回旧值，重启后返回新值，用于验证新代码是否已加载",
+            inputSchema,
+            arguments -> {
+                String result = McpTools.testHotReload();
+                return textResult(result);
+            }
+        );
+    }
+
+    /**
+     * dlqq_mcp_remove_tools - 动态移除（禁用）指定 MCP 工具，并持久化到 settings.properties
+     */
+    private void registerMcpRemoveToolsTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> toolNamesProp = new HashMap<>();
+        toolNamesProp.put("type", "array");
+        toolNamesProp.put("items", Collections.singletonMap("type", "string"));
+        toolNamesProp.put("description", "要移除的工具名列表，如 [\"dlqq_capture_screen\",\"dlqq_convert_image\"]；也支持逗号分隔字符串");
+        properties.put("tool_names", toolNamesProp);
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.singletonList("tool_names"));
+
+        server.addTool("dlqq_mcp_remove_tools",
+            "动态移除（禁用）指定的 MCP 工具：立即对客户端不可见，并写入 .dlqq/settings/settings.properties 的 mcp.tools.excluded，下次启动仍然保持移除状态",
+            inputSchema,
+            arguments -> {
+                java.util.List<String> names = parseToolNames(arguments);
+                if (names.isEmpty()) {
+                    return textResult("✗ 错误：请提供要移除的工具名（tool_names）");
+                }
+                McpServer.ToolChangeResult result = server.disableTools(names);
+                McpTools.saveExcludedToolNames(server.getDisabledTools());
+                boolean notified = server.notifyToolsListChanged();
+
+                StringBuilder sb = new StringBuilder();
+                sb.append("动态移除工具结果\n");
+                sb.append("===================\n\n");
+                sb.append("本次移除: ").append(result.applied.isEmpty() ? "（无）" : String.join(", ", result.applied)).append("\n");
+                if (!result.unknown.isEmpty()) {
+                    sb.append("不存在的工具: ").append(String.join(", ", result.unknown)).append("\n");
+                }
+                if (!result.protectedNames.isEmpty()) {
+                    sb.append("受保护不可移除: ").append(String.join(", ", result.protectedNames)).append("\n");
+                }
+                sb.append("当前启用工具: ").append(result.enabledCount).append(" 个\n");
+                sb.append("当前已移除工具: ").append(result.disabledCount).append(" 个");
+                if (result.disabledCount > 0) {
+                    sb.append("（").append(String.join(", ", server.getDisabledTools())).append("）");
+                }
+                sb.append("\n");
+                sb.append("已持久化到 settings.properties: ").append(McpTools.EXCLUDED_TOOLS_KEY).append("\n");
+                sb.append("客户端刷新通知: ").append(notified ? "已发送" : "未发送（无 SSE 连接，客户端下次重连后生效）");
+                return textResult(sb.toString());
+            }
+        );
+    }
+
+    /**
+     * dlqq_mcp_refresh_tools - 仅刷新（发送 notifications/tools/list_changed）
+     */
+    private void registerMcpRefreshToolsTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_mcp_refresh_tools",
+            "仅向客户端发送 notifications/tools/list_changed，让客户端重新拉取工具列表（不改变工具集，HTTP 模式需要客户端已打开 SSE）",
+            inputSchema,
+            arguments -> {
+                boolean notified = server.notifyToolsListChanged();
+                return textResult("刷新通知: " + (notified ? "已发送" : "未发送（无 SSE 连接）")
+                        + "\n当前启用工具: " + server.getEnabledToolCount() + " 个"
+                        + "\n当前已移除工具: " + server.getDisabledTools().size() + " 个");
+            }
+        );
+    }
+
+    /**
+     * dlqq_mcp_reset_tools - 恢复所有被移除的工具并刷新
+     */
+    private void registerMcpResetToolsTool(McpServer server) {
+        Map<String, Object> properties = new HashMap<>();
+        ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
+
+        server.addTool("dlqq_mcp_reset_tools",
+            "恢复所有被移除（禁用）的工具，清空 settings.properties 中的 mcp.tools.excluded，并发送 notifications/tools/list_changed",
+            inputSchema,
+            arguments -> {
+                java.util.List<String> restored = server.enableAllTools();
+                McpTools.saveExcludedToolNames(java.util.Collections.emptyList());
+                boolean notified = server.notifyToolsListChanged();
+
+                StringBuilder sb = new StringBuilder();
+                sb.append("恢复被移除工具结果\n");
+                sb.append("===================\n\n");
+                sb.append("本次恢复: ").append(restored.isEmpty() ? "（无，所有工具本来就是启用状态）" : String.join(", ", restored)).append("\n");
+                sb.append("当前启用工具: ").append(server.getEnabledToolCount()).append(" 个\n");
+                sb.append("已清空 settings.properties: ").append(McpTools.EXCLUDED_TOOLS_KEY).append("\n");
+                sb.append("客户端刷新通知: ").append(notified ? "已发送" : "未发送（无 SSE 连接，客户端下次重连后生效）");
+                return textResult(sb.toString());
+            }
+        );
+    }
+
+    /**
+     * 解析工具名参数：支持 JSON 数组或逗号分隔字符串。
+     */
+    private java.util.List<String> parseToolNames(Map<String, Object> arguments) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        if (arguments == null) {
+            return names;
+        }
+        Object raw = arguments.get("tool_names");
+        if (raw instanceof java.util.List<?> list) {
+            for (Object item : list) {
+                if (item != null && !String.valueOf(item).trim().isEmpty()) {
+                    names.add(String.valueOf(item).trim());
+                }
+            }
+        } else if (raw != null) {
+            for (String part : String.valueOf(raw).split(",")) {
+                if (!part.trim().isEmpty()) {
+                    names.add(part.trim());
+                }
+            }
+        }
+        return names;
     }
 
     /**
@@ -3953,7 +4095,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_build_project",
-            "构建项目。执行settings.properties中script.build定义的脚本。默认执行script/build.bat。",
+            "构建项目。执行settings.properties中script.build定义的脚本；未配置时返回错误并提示先设置脚本路径。",
             inputSchema,
             arguments -> {
                 String result = McpTools.buildProject();
@@ -3981,7 +4123,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_chip_erase",
-            "擦除芯片。执行settings.properties中script.chip.erase定义的脚本。默认执行util/flash/erase.bat。",
+            "擦除芯片。执行settings.properties中script.chip.erase定义的脚本；未配置时返回错误并提示先设置脚本路径。",
             inputSchema,
             arguments -> {
                 String result = McpTools.chipErase();
@@ -3995,7 +4137,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_chip_download",
-            "下载固件到芯片。执行settings.properties中script.chip.download定义的脚本。默认执行util/flash/download.bat。",
+            "下载固件到芯片。执行settings.properties中script.chip.download定义的脚本；未配置时返回错误并提示先设置脚本路径。",
             inputSchema,
             arguments -> {
                 String result = McpTools.chipDownload();
@@ -4011,7 +4153,7 @@ public class AITools {
         ToolInputSchema inputSchema = new ToolInputSchema(properties, Collections.emptyList());
 
         server.addTool("dlqq_erase_download",
-            "擦除芯片并下载固件。执行settings.properties中script.erase.download定义的脚本。默认执行util/flash/erase_download.bat。",
+            "擦除芯片并下载固件。执行settings.properties中script.erase.download定义的脚本；未配置时返回错误并提示先设置脚本路径。",
             inputSchema,
             arguments -> {
                 String result = McpTools.eraseDownload();
@@ -4600,7 +4742,7 @@ public class AITools {
 
         Map<String, Object> outputProp = new HashMap<>();
         outputProp.put("type", "string");
-        outputProp.put("description", "输出压缩文件路径（可选，默认在源目录生成）");
+        outputProp.put("description", "输出压缩文件路径（可选，默认保存到 .dlqq/cache 目录）");
         properties.put("output_path", outputProp);
 
         Map<String, Object> formatProp = new HashMap<>();
@@ -4624,7 +4766,7 @@ public class AITools {
         server.addTool("dlqq_zip",
             "压缩文件或目录为ZIP格式。支持多文件/目录压缩、密码保护、压缩级别设置。"
             + "支持的格式：zip。可设置1-9级压缩级别，数值越大压缩率越高但速度越慢。"
-            + "默认输出到源文件所在目录。",
+            + "默认输出到 .dlqq/cache 目录。",
             inputSchema,
             arguments -> {
                 @SuppressWarnings("unchecked")
@@ -4673,7 +4815,7 @@ public class AITools {
 
         Map<String, Object> outputDirProp = new HashMap<>();
         outputDirProp.put("type", "string");
-        outputDirProp.put("description", "解压输出目录（可选，默认为ZIP文件所在目录下的同名文件夹）");
+        outputDirProp.put("description", "解压输出目录（可选，默认解压到 .dlqq/cache 目录下的同名文件夹）");
         properties.put("output_dir", outputDirProp);
 
         Map<String, Object> passwordProp = new HashMap<>();
@@ -4685,7 +4827,7 @@ public class AITools {
 
         server.addTool("dlqq_unzip",
             "解压ZIP文件。支持密码保护的ZIP文件解压。"
-            + "默认解压到ZIP文件所在目录下的同名文件夹中。"
+            + "默认解压到 .dlqq/cache 目录下的同名文件夹中。"
             + "可以查看ZIP文件内容后再决定是否需要解压。",
             inputSchema,
             arguments -> {
