@@ -497,12 +497,12 @@ WiFi工具（Java原生实现），支持扫描周围WiFi网络、查看连接�
 
 #### Java运行环境
 
-- **需要 Java 17 或更高版本**
+- **需要 Java 25 或更高版本**
 - **必须使用完整版 JRE**：精简的 jlink 运行时只含部分模块，缺少 `jdk.crypto.ec`、`jdk.zipfs`、`java.net.http` 等，可能在 PDF、TLS、zip 文件系统等场景报错
 - 用 JDK 生成完整 JRE（`ALL-MODULE-PATH` 会把 JDK 的全部模块打进镜像，约 130 MB）：
 
 ```cmd
-"<JDK17>\bin\jlink" --module-path "<JDK17>\jmods" --add-modules ALL-MODULE-PATH --output "<目标目录>\jre" --strip-debug --no-man-pages --no-header-files
+"<JDK25>\bin\jlink" --module-path "<JDK25>\jmods" --add-modules ALL-MODULE-PATH --output "<目标目录>\jre" --strip-debug --no-man-pages --no-header-files
 ```
 
 - 也可以把同一条命令存成 `.bat` 放到 JDK 根目录（与 `bin`、`jmods` 同级），用 `%~dp0` 自动定位：
@@ -513,8 +513,8 @@ pause
 ```
 
 - 生成后把 `<目标目录>\jre\bin\java` 作为客户端的 `command` 即可（详见下文各客户端配置）
-- 也可以直接用完整 JDK 运行，无需单独生成 JRE：`"<JDK17>\bin\java" -Dfile.encoding=UTF-8 -jar dlqq_ai_mcp_server.jar`
-- **执行时出现警告属正常现象**：`WARNING: Using incubator modules: jdk.incubator.vector, jdk.incubator.foreign`（JDK 24 只有 `jdk.incubator.vector`）只是提示 `ALL-MODULE-PATH` 把 JDK 自带的孵化器模块也打包进了镜像，这些 API 尚属实验性；jlink 退出码仍为 0，生成结果可正常使用，**忽略即可**。
+- 也可以直接用完整 JDK 运行，无需单独生成 JRE：`"<JDK25>\bin\java" -Dfile.encoding=UTF-8 -jar dlqq_ai_mcp_server.jar`
+- **执行时出现警告属正常现象**：`WARNING: Using incubator modules: jdk.incubator.vector`（JDK 25 自带且仅含 `jdk.incubator.vector`）只是提示 `ALL-MODULE-PATH` 把 JDK 自带的孵化器模块也打包进了镜像，这些 API 尚属实验性；jlink 退出码仍为 0，生成结果可正常使用，**忽略即可**。
 
 #### Python运行环境（用于串口/BLE工具）
 
@@ -523,7 +523,7 @@ pause
 
 ### 1. 编译与打包
 
-需要 Java 17+ 与 Maven。
+需要 Java 25+ 与 Maven。
 
 ```cmd
 REM 只构建，产物在 target\ 下
@@ -576,7 +576,7 @@ DSH 在用户目录的 `cordis.patch.yml`（Windows：`C:\Users\<用户名>\.dsh
 
 说明：
 - `id` 在文件内唯一即可；`serverName` 就是会话中显示的服务器名。
-- `command: java` 要求 java 在 PATH 中；也可以写绝对路径并加引号，例如 `command: 'D:\Soft\Java\jdk-17\bin\java.exe'`。
+- `command: java` 要求 java 在 PATH 中；也可以写绝对路径并加引号，例如 `command: 'D:\Soft\Java\jdk-25\bin\java.exe'`。
 - 保存后重启 DeepSeek Harness，新会话即可通过 `tools/list` 看到全部 `dlqq_*` 工具。
 
 #### ② Qwen Code
@@ -2483,7 +2483,7 @@ endlocal
 
 ## 技术栈
 
-- **Java 17+**（必需，须使用完整版 JRE，见“运行环境要求”）
+- **Java 25+**（必需，须使用完整版 JRE，见“运行环境要求”）
 - **Python 3.8+**（串口/BLE 工具必需，需自行安装）
 - MCP协议（Model Context Protocol）
 - Maven构建工具

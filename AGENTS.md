@@ -5,7 +5,7 @@
 
 ## 一、硬性规则（必须遵守）
 
-1. **语言与构建**：Java 17 + Maven。
+1. **语言与构建**：Java 25 + Maven。
 2. **工程定位**：面向各类 AI Agent 客户端（DeepSeek Harness、Qwen Code、Claude Code、Cursor、Cline 等）的 MCP 服务器（stdio 传输、JSON-RPC 2.0），入口 `com.donglouqiaoque.dlqqaimcpserver.mcp.MCPServerMain`。
 3. **脚本位置**：构建/发布/部署脚本放工程根目录 `script\`（含 `build.bat`、`build_and_copy.bat`、`start-http.bat`、`make-jre.bat`）；临时脚本放本地临时工作目录（约定见 `AIRES.md`）。不要把 `.bat/.ps1/.sh` 放在这两处之外。
 4. **.bat 必须使用英文**：`.bat` 文件**只能出现英文/ASCII 字符，不得出现任何中文**（注释、`echo`、提示语、变量说明一律用英文）。
@@ -28,10 +28,10 @@
 
 ### Java
 
-- **Java 17 或更高版本**；**必须使用完整版 JRE**：精简 jlink 镜像缺 `jdk.crypto.ec`、`jdk.zipfs`、`java.net.http` 等模块，可能在 PDF、TLS、zipfs 场景报错。
+- **Java 25 或更高版本**；**必须使用完整版 JRE**：精简 jlink 镜像缺 `jdk.crypto.ec`、`jdk.zipfs`、`java.net.http` 等模块，可能在 PDF、TLS、zipfs 场景报错。
 - 生成完整 JRE（`ALL-MODULE-PATH` 包含 JDK 全部模块，约 130 MB）：
   ```cmd
-  "<JDK17>\bin\jlink" --module-path "<JDK17>\jmods" --add-modules ALL-MODULE-PATH --output "<目标目录>\jre" --strip-debug --no-man-pages --no-header-files
+  "<JDK25>\bin\jlink" --module-path "<JDK25>\jmods" --add-modules ALL-MODULE-PATH --output "<目标目录>\jre" --strip-debug --no-man-pages --no-header-files
   ```
 - 本机现成脚本 `script\make-jre.bat`：复制到 JDK 根目录（与 `bin`、`jmods` 同级）双击运行，输出 `<JDK>\jre`；部署时把该 `jre\` 与 `start-http.bat`、JAR 放同一目录。
 - 生成时的 `WARNING: Using incubator modules: ...` 属正常现象（`ALL-MODULE-PATH` 含孵化器模块），退出码 0、镜像可用，忽略即可。

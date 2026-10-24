@@ -4,7 +4,7 @@ A **Model Context Protocol (MCP) server** written in Java. It provides local too
 
 - **Transport**: stdio (default) and Streamable HTTP
 - **Tools**: 169 (156 regular tools + 13 `dlqq_set_*_script` helpers)
-- **Runtime**: Java 17+ (**full JRE required**, see below)
+- **Runtime**: Java 25+ (**full JRE required**, see below)
 - **JAR name**: `dlqq_ai_mcp_server.jar`
 
 > The Chinese README ([README.md](README.md)) is the reference document; this file mirrors its structure and tool detail in English.
@@ -29,12 +29,12 @@ A **Model Context Protocol (MCP) server** written in Java. It provides local too
 
 ### Java
 
-- **Java 17 or newer**
+- **Java 25 or newer**
 - **A full JRE is required.** Trimmed `jlink` images lack `jdk.crypto.ec`, `jdk.zipfs`, `java.net.http`, etc., which breaks PDF, TLS, and zipfs use cases.
 - Generate a full JRE (about 130 MB):
 
 ```cmd
-"<JDK17>\bin\jlink" --module-path "<JDK17>\jmods" --add-modules ALL-MODULE-PATH --output "<target>\jre" --strip-debug --no-man-pages --no-header-files
+"<JDK25>\bin\jlink" --module-path "<JDK25>\jmods" --add-modules ALL-MODULE-PATH --output "<target>\jre" --strip-debug --no-man-pages --no-header-files
 ```
 
 `script\make-jre.bat` does the same when copied into the JDK root (next to `bin` and `jmods`).
@@ -48,7 +48,7 @@ A **Model Context Protocol (MCP) server** written in Java. It provides local too
 
 ## Build
 
-Requirements: Java 17+ and Maven.
+Requirements: Java 25+ and Maven.
 
 ```cmd
 REM Build only (output in target\)
@@ -806,7 +806,7 @@ Call a removed tool:
 
 ## Tech stack
 
-- Java 17, Maven, shaded JAR
+- Java 25, Maven, shaded JAR
 - MCP JSON-RPC 2.0 over stdio and Streamable HTTP (`com.sun.net.httpserver`)
 - Apache PDFBox / POI, Batik, zip4j, commons-compress, usb4java, JNA, Gson, SLF4J
 - Python 3.8+ with `bleak` for BLE
