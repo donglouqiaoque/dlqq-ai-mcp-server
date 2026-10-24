@@ -1,13 +1,14 @@
 # AGENTS.md — dlqq-ai-mcp-server 工程约定
 
 > 本文给 AI 助手（Qwen Code / DeepSeek Harness 等）阅读，包含硬性规则、构建发布方式、结构与工具速查。
-> 完整工具手册见 [README.md](README.md)（英文版：[README.en.md](README.en.md)）。两份文档是**唯一**的说明文档。
+> 完整工具手册见 [README.md](README.md)（英文版：[README.en.md](README.en.md)）。README 与 AGENTS 的中英文版本是**唯一**的说明文档。
+> 英文版规则：[AGENTS.en.md](AGENTS.en.md)。
 
 ## 一、硬性规则（必须遵守）
 
 1. **语言与构建**：Java 25 + Maven。
 2. **工程定位**：面向各类 AI Agent 客户端（DeepSeek Harness、Qwen Code、Claude Code、Cursor、Cline 等）的 MCP 服务器（stdio 传输、JSON-RPC 2.0），入口 `com.donglouqiaoque.dlqqaimcpserver.mcp.MCPServerMain`。
-3. **脚本位置**：构建/发布/部署脚本放工程根目录 `script\`（含 `build.bat`、`build_and_copy.bat`、`start-http.bat`、`make-jre.bat`）；临时脚本放本地临时工作目录（约定见 `AIRES.md`）。不要把 `.bat/.ps1/.sh` 放在这两处之外。
+3. **脚本位置**：构建/发布/部署脚本放工程根目录 `script\`（含 `build.bat`、`build_and_copy.bat`、`start-http.bat`、`make-jre.bat`、`make_python_env.bat`）；临时脚本放本地临时工作目录（约定见 `AIRES.md`）。不要把 `.bat/.ps1/.sh` 放在这两处之外。
 4. **.bat 必须使用英文**：`.bat` 文件**只能出现英文/ASCII 字符，不得出现任何中文**（注释、`echo`、提示语、变量说明一律用英文）。
    原因：cmd 默认代码页（GBK/936）与 UTF-8 混用会导致中文乱码，甚至影响批处理解析。
 5. **产物命名**：JAR 固定名为 **`dlqq_ai_mcp_server.jar`**（历史名 `dlqq_ai_tools.jar` 已弃用）。
@@ -20,9 +21,10 @@
 12. **禁止用脚本批量修改代码**：不允许用 PowerShell / Python / sed / awk 等脚本对源码做批量查找替换或自动改写。所有代码修改必须逐个文件、逐个位置人工确认后用编辑工具完成；确需大范围调整时，先列出清单交由用户确认，再逐项修改。
 13. **禁止使用任何 git 命令**：包括但不限于 `git status`、`git diff`、`git log`、`git checkout/restore/reset`、`git add/commit/push/pull/stash` 等。版本管理由用户本人操作，AI 一律不得执行任何 git 命令（读取与回滚都不允许）。
 14. **禁止使用全限定类名**：代码中不得出现 `new java.xxx.XXX()`、`java.util.List` 这类全限定写法。**能 import 的一律在文件顶部 import，然后使用短类名**；只有无法 import 的情况（同名类冲突、需要显式区分同名的不同包类型、静态导入等）才允许写全限定名，并在该处注释说明原因。注释/文档中的类名描述不算代码，但也不建议加包名。
-15. **README 中英文必须同步**：修改 [README.md](README.md)（中文）时必须同步修改 [README.en.md](README.en.md)（英文），反之亦然；两份 README 的章节、工具数量、工具说明、配置示例必须保持一致，不允许只改其中一份。
+15. **README 与 AGENTS 中英文必须同步**：修改 [README.md](README.md)（中文）时必须同步修改 [README.en.md](README.en.md)（英文），反之亦然；修改 [AGENTS.md](AGENTS.md) 时必须同步修改 [AGENTS.en.md](AGENTS.en.md)。各语言版本的章节、工具数量、工具说明、配置示例必须保持一致，不允许只改其中一份。
 16. **日志必须 UTF-8 且纯英文**：`.dlqq/log/` 下的日志文件必须使用 **UTF-8** 编码写入；日志内容**只能使用英文**，不得出现中文（包括 `logger.info/warn/error/debug` 的提示文本、异常附加说明）。新增或修改日志时必须写英文。
 17. **配置文件必须 UTF-8 且注释纯英文**：`settings.properties` 等配置文件必须使用 **UTF-8** 编码读写；文件内的注释**一律使用英文**，不得写入中文注释；键值内容如含中文（如脚本路径）保持 UTF-8 原样，不做转义。
+18. **禁止 AI 直接执行有副作用的脚本**：下载、安装、删除、解包、批量清理、烧写/下载固件等会造成文件修改、耗时较长或需要管理员权限的脚本，AI **一律不得直接执行**，必须把完整命令交给用户手动执行；AI 只允许做只读检查（测试网络连通性、判断路径/文件是否存在、读取文件内容），不得代用户点确认、不得绕过权限提示。
 
 ## 二、运行环境要求
 
@@ -36,10 +38,11 @@
 - 本机现成脚本 `script\make-jre.bat`：复制到 JDK 根目录（与 `bin`、`jmods` 同级）双击运行，输出 `<JDK>\jre`；部署时把该 `jre\` 与 `start-http.bat`、JAR 放同一目录。
 - 生成时的 `WARNING: Using incubator modules: ...` 属正常现象（`ALL-MODULE-PATH` 含孵化器模块），退出码 0、镜像可用，忽略即可。
 
-### Python（串口/BLE 图形工具）
+### Python（BLE 工具）
 
-- **Python 3.8 或更高版本**，BLE 工具依赖 `bleak` 库。
-- 当前仓库未附带 Python 安装包，需自行安装。
+- **运行时不使用系统 Python**：BLE 工具固定使用随包分发的 `python_env\`（由 `script\make_python_env.bat` 生成，内含解释器、tkinter、Tcl/Tk、bleak）。
+- 部署时把 `python_env\` 放到与 `dlqq_ai_mcp_server.jar` 同级的目录；找不到时 BLE 工具直接报错，不会回退到 PATH 上的 Python。
+- 构建期生成 `python_env` 需要本机有一份完整 CPython（3.10+，带 tkinter），仅构建使用。
 
 ## 三、MCP 客户端配置
 
@@ -143,6 +146,7 @@ use_debug=true
 | `script\build_and_copy.bat` | 构建并复制到发布目录 | debug 或 release 目录 |
 | `script\start-http.bat` | 部署用 HTTP 启动脚本（与 `jre\`、JAR 同目录，默认端口 49129；启动前先要求输入工作区目录，回车=CWD） | 常驻 HTTP 服务 |
 | `script\make-jre.bat` | 生成完整版 JRE（复制到 JDK 根目录执行，输出 `<JDK>\jre`） | `jre\`（约 130 MB） |
+| `script\make_python_env.bat` | 生成 BLE 用的便携 Python（放在 Python 安装目录执行，输出 `<Python目录>\python_env`） | `python_env\`（约 156 MB） |
 
 **发布目录规则**
 
@@ -157,8 +161,10 @@ use_debug=true
 dlqq_ai_mcp_server\
 ├── start-http.bat
 ├── dlqq_ai_mcp_server.jar
-└── jre\                # 由 script\make-jre.bat 生成（完整版）
-    └── bin\java.exe
+├── jre\                # 由 script\make-jre.bat 生成（完整版）
+│   └── bin\java.exe
+└── python_env\         # 由 script\make_python_env.bat 生成（BLE 用，完整版）
+    └── python.exe
 ```
 
 - 默认端口 **49129**；被占用时控制台提示输入新端口，输入的新端口仍被占用会继续提示；**直接回车 = 重试默认端口**；无交互控制台则以退出码 1 结束。
@@ -199,7 +205,7 @@ src/main/resources/
 
 ## 六、工具速查
 
-共 **169** 个工具（156 个常规工具 + 13 个 `dlqq_set_*_script`），实现见 `mcp/tools/`，逐个参数说明见 [README.md](README.md)。
+共 **166** 个工具（153 个常规工具 + 13 个 `dlqq_set_*_script`），实现见 `mcp/tools/`，逐个参数说明见 [README.md](README.md)。
 
 | 分组 | 数量 | 说明 |
 |------|------|------|
@@ -210,7 +216,7 @@ src/main/resources/
 | 搜索 | 4 | 文件/目录/目录内文本/单文件文本 |
 | 对话框 | 3 | 文本输入、确认、文件选择（Swing） |
 | 串口 UART | 17 | 窗口 + 开关串口 + 收发 + 日志（Python 可选） |
-| BLE | 24 | 库管理 4 + 蓝牙 20（Python bleak + Socket） |
+| BLE | 21 | 蓝牙 20 + 脚本释放 1（Python bleak + Socket） |
 | USB | 14 | usb4java，HID/CDC |
 | WiFi | 12 | netsh / nmcli，Java 原生 |
 | 鼠标 / 键盘 | 13 | `java.awt.Robot` 模拟 |

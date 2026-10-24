@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.donglouqiaoque.dlqqaimcpserver.utils.Workspace;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
@@ -91,10 +92,10 @@ public class BleTools {
                 return "错误：无法释放Python脚本";
             }
 
-            // 检查Python
+            // 检查项目自带的 Python 运行时（不使用系统 Python）
             String pythonCmd = findPythonCommand();
             if (pythonCmd == null) {
-                return "错误：未找到Python 3，请先安装Python 3.8+";
+                return "错误：未找到项目的 Python 运行时。请将 python_env 目录放到程序目录（与 dlqq_ai_mcp_server.jar 同级）后重试。";
             }
 
             // 检查bleak
@@ -121,7 +122,7 @@ public class BleTools {
                 buildDate = "unknown";
                 buildTimeStr = "unknown";
             }
-            ProcessBuilder pb = new ProcessBuilder(pythonCmd, scriptPath, 
+            ProcessBuilder pb = new ProcessBuilder(pythonCmd, "-s", "-P", scriptPath, 
                 "--port", String.valueOf(pythonPort), 
                 "--version", versionOnly,
                 "--build-date", buildDate,
@@ -385,24 +386,42 @@ public class BleTools {
     }
 
     /**
-     * 查找Python命令
+     * 查找项目自带的 Python 运行时。
+     * 只使用随包分发的 python_env，不使用系统 Python；找不到返回 null。
      */
     private String findPythonCommand() {
-        String[] commands = {"python3", "python", "py"};
-        for (String cmd : commands) {
-            try {
-                ProcessBuilder pb = new ProcessBuilder(cmd, "--version");
-                pb.redirectErrorStream(true);
-                Process process = pb.start();
-                boolean finished = process.waitFor(3, TimeUnit.SECONDS);
-                if (finished && process.exitValue() == 0) {
-                    return cmd;
-                }
-            } catch (Exception e) {
-                // 尝试下一个
+        for (File base : getPythonBaseDirs()) {
+            File exe = new File(base, "python_env" + File.separator + "python.exe");
+            if (exe.isFile()) {
+                System.err.println("[BleTools] Using bundled Python: " + exe.getAbsolutePath());
+                return exe.getAbsolutePath();
             }
         }
+        System.err.println("[BleTools] Bundled Python not found (python_env/python.exe)");
         return null;
+    }
+
+    /**
+     * Python 运行时的候选父目录：程序目录、进程工作目录、工作区。
+     */
+    private List<File> getPythonBaseDirs() {
+        List<File> dirs = new ArrayList<>();
+        try {
+            File codeSource = new File(BleTools.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            File appDir = codeSource.isFile() ? codeSource.getParentFile() : codeSource;
+            if (appDir != null) {
+                dirs.add(appDir);
+            }
+        } catch (Exception e) {
+            // ignore and fall back to the other locations
+        }
+        dirs.add(new File(System.getProperty("user.dir")));
+        try {
+            dirs.add(Workspace.getRoot().toFile());
+        } catch (Exception e) {
+            // workspace is not available in some contexts
+        }
+        return dirs;
     }
 
     /**
@@ -410,7 +429,7 @@ public class BleTools {
      */
     private boolean checkBleak(String pythonCmd, String pythonDir) {
         try {
-            ProcessBuilder pb = new ProcessBuilder(pythonCmd, "-c", "import bleak; print('ok')");
+            ProcessBuilder pb = new ProcessBuilder(pythonCmd, "-s", "-P", "-c", "import bleak; print('ok')");
             pb.directory(new File(pythonDir));
             pb.redirectErrorStream(true);
             Process process = pb.start();

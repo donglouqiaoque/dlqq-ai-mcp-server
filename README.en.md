@@ -3,7 +3,7 @@
 A **Model Context Protocol (MCP) server** written in Java. It provides local tool capabilities to AI agents (DeepSeek Harness, Qwen Code, Claude Code, Cursor, Cline, VS Code, Windsurf, …): files, serial ports, BLE, USB, Wi-Fi, Office, ZIP, screenshots, image conversion, and more.
 
 - **Transport**: stdio (default) and Streamable HTTP
-- **Tools**: 169 (156 regular tools + 13 `dlqq_set_*_script` helpers)
+- **Tools**: 166 (153 regular tools + 13 `dlqq_set_*_script` helpers)
 - **Runtime**: Java 25+ (**full JRE required**, see below)
 - **JAR name**: `dlqq_ai_mcp_server.jar`
 
@@ -41,10 +41,10 @@ A **Model Context Protocol (MCP) server** written in Java. It provides local too
 
 - `WARNING: Using incubator modules: ...` is **normal** (`ALL-MODULE-PATH` includes incubator modules); the exit code is 0 and the JRE works.
 
-### Python (serial/BLE GUI tools)
+### Python (BLE tool)
 
-- **Python 3.8+**, with `bleak` for BLE
-- Python is not bundled with this repository
+- **No system Python required**: the BLE tool always uses the bundled `python_env\` (interpreter, tkinter, Tcl/Tk and bleak included)
+- Ship `python_env\` next to `dlqq_ai_mcp_server.jar`; if it is missing the BLE tool fails with an explicit error and never falls back to a system Python
 
 ## Build
 
@@ -462,7 +462,7 @@ All settings live in `<workspace>/.dlqq/settings/settings.properties` (the works
 
 ### BLE
 
-1. `dlqq_ble_lib_has` / `dlqq_ble_lib_install` prepare `bleak`; `dlqq_ble_release_script` extracts `ble_tools.py` to `.dlqq/script/python`.
+1. `python_env` (bundled) provides the interpreter and `bleak`; `dlqq_ble_release_script` extracts `ble_tools.py` to `.dlqq/script/python`.
 2. `dlqq_run_ble(port)` opens the GUI; `dlqq_ble_scan` then `dlqq_ble_get_devices`.
 3. `dlqq_ble_connect(device_address)`, `dlqq_ble_discover`, then read/write/subscribe with service and characteristic UUIDs.
 4. Logs are read with the same three modes as UART; `dlqq_ble_set_buffer_size` controls memory (default 5 MB).
@@ -597,13 +597,10 @@ Parameter lists below: `name` = required, `[name]` = optional. Path parameters a
 | `dlqq_exit_uart` | `port`* | Close window and process |
 | `dlqq_rerun_uart` | `port`* | Restart the tool |
 
-### BLE library tools (4)
+### BLE script tools
 
 | Tool | Parameters | Notes |
 |------|------------|-------|
-| `dlqq_ble_lib_has` | none | Check `bleak` install/version |
-| `dlqq_ble_lib_install` | none | Install `bleak` |
-| `dlqq_ble_lib_update` | none | Check/update to latest |
 | `dlqq_ble_release_script` | none | Release `ble_tools.py` into `.dlqq/script/python` |
 
 ### BLE tools (20)
@@ -809,7 +806,7 @@ Call a removed tool:
 - Java 25, Maven, shaded JAR
 - MCP JSON-RPC 2.0 over stdio and Streamable HTTP (`com.sun.net.httpserver`)
 - Apache PDFBox / POI, Batik, zip4j, commons-compress, usb4java, JNA, Gson, SLF4J
-- Python 3.8+ with `bleak` for BLE
+- Python 3.10+ (build time only) to generate `python_env`; runtime uses the bundled `python_env\`
 
 ## Project structure
 

@@ -90,9 +90,8 @@ public class AITools {
         registerRerunUartTool(server);            // dlqq_rerun_uart
 
         // ========== BLE库管理工具 (30-33) ==========
-        registerBleLibHasTool(server);          // dlqq_ble_lib_has
-        registerBleLibInstallTool(server);      // dlqq_ble_lib_install
-        registerBleLibUpdateTool(server);       // dlqq_ble_lib_update
+        // dlqq_ble_lib_has / dlqq_ble_lib_install / dlqq_ble_lib_update 已移除：
+        // Python 运行时固定使用随包分发的 python_env，不再由 AI 查询或安装库。
         registerBleReleaseScriptTool(server);   // dlqq_ble_release_script
 
         // ========== BLE蓝牙工具 (34-45) ==========

@@ -22,7 +22,7 @@
 
 ## 工具列表
 
-本MCP服务器提供 **169** 个工具（156 个常规工具 + 13 个 `dlqq_set_*_script` 脚本路径设置工具）。
+本MCP服务器提供 **166** 个工具（153 个常规工具 + 13 个 `dlqq_set_*_script` 脚本路径设置工具）。
 > 说明：分组标题中的序号为历史遗留编号，实际工具数以各分组表格为准。
 
 产物 JAR 名为 **`dlqq_ai_mcp_server.jar`**（早期版本叫 `dlqq_ai_tools.jar`）。
@@ -106,13 +106,10 @@
 | `dlqq_exit_uart` | 退出串口工具（关闭窗口及进程） |
 | `dlqq_rerun_uart` | 重新启动串口工具（先关闭再启动，用于刷新窗口） |
 
-### BLE库管理工具 (49-52)
+### BLE脚本管理工具
 
 | 工具名称 | 描述 |
 |---------|------|
-| `dlqq_ble_lib_has` | 检查Python BLE库（bleak）是否已安装 |
-| `dlqq_ble_lib_install` | 自动安装Python BLE依赖库（bleak） |
-| `dlqq_ble_lib_update` | 检查并更新Python BLE库到最新版本 |
 | `dlqq_ble_release_script` | 释放BLE Python脚本到项目目录 |
 
 ### BLE蓝牙工具 (53-72)
@@ -516,10 +513,10 @@ pause
 - 也可以直接用完整 JDK 运行，无需单独生成 JRE：`"<JDK25>\bin\java" -Dfile.encoding=UTF-8 -jar dlqq_ai_mcp_server.jar`
 - **执行时出现警告属正常现象**：`WARNING: Using incubator modules: jdk.incubator.vector`（JDK 25 自带且仅含 `jdk.incubator.vector`）只是提示 `ALL-MODULE-PATH` 把 JDK 自带的孵化器模块也打包进了镜像，这些 API 尚属实验性；jlink 退出码仍为 0，生成结果可正常使用，**忽略即可**。
 
-#### Python运行环境（用于串口/BLE工具）
+#### Python运行环境（BLE工具）
 
-- **需要 Python 3.8 或更高版本**（BLE 工具依赖 `bleak` 库）
-- 当前仓库未附带 Python 安装包，请自行安装
+- **不需要安装系统 Python**：BLE 工具固定使用随包分发的 `python_env\`（内含解释器、tkinter、Tcl/Tk、bleak）
+- 部署时把 `python_env\` 放到与 `dlqq_ai_mcp_server.jar` 同级的目录即可；找不到 `python_env` 时 BLE 工具会直接报错，不会回退到系统 Python
 
 ### 1. 编译与打包
 
@@ -2484,7 +2481,7 @@ endlocal
 ## 技术栈
 
 - **Java 25+**（必需，须使用完整版 JRE，见“运行环境要求”）
-- **Python 3.8+**（串口/BLE 工具必需，需自行安装）
+- **Python 3.10+（仅构建期）**：仅用于生成 `python_env`；运行时使用随包分发的 `python_env\`，目标机器无需安装 Python
 - MCP协议（Model Context Protocol）
 - Maven构建工具
 - 依赖：
